@@ -1,199 +1,610 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Job Scout — automated job search, delivered to your inbox</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job Scout — For friends &amp; invitees</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { darkMode: 'class' };
+  // Stop the browser from opening dropped files (the old form's bug).
+  window.addEventListener('dragover', function (e) { e.preventDefault(); }, false);
+  window.addEventListener('drop', function (e) { e.preventDefault(); }, false);
+</script>
 <style>
-  :root{--ink:#1a1a1a;--cream:#faf7f2;--accent:#2f6fed;--ok:#1e9e5a;--err:#d64545;--muted:#6b6b6b;--line:#e4ded4}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);line-height:1.5}
-  .wrap{max-width:640px;margin:0 auto;padding:48px 20px 80px}
-  h1{font-size:2rem;letter-spacing:-.02em;margin-bottom:8px}
-  .sub{color:var(--muted);margin-bottom:36px}
-  form{background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
-  fieldset{border:none;margin-bottom:26px}
-  legend{font-weight:600;font-size:.95rem;margin-bottom:10px}
-  label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 5px}
-  input[type=text],input[type=email],input[type=password],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:.95rem;background:#fff;font-family:inherit}
-  input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
-  textarea{min-height:110px;resize:vertical}
-  .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
-  .drop{border:2px dashed var(--line);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:.15s}
-  .drop:hover,.drop.drag{border-color:var(--accent);background:#f4f8ff}
-  .drop.done{border-color:var(--ok);background:#f2fbf6}
-  .drop strong{color:var(--accent)}
-  .radio-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
-  .chip{position:relative}
-  .chip input{position:absolute;opacity:0;inset:0;cursor:pointer}
-  .chip span{display:inline-block;padding:8px 14px;border:1px solid var(--line);border-radius:999px;font-size:.85rem;cursor:pointer;user-select:none}
-  .chip input:checked + span{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:520px){.grid2{grid-template-columns:1fr}}
-  button[type=submit]{width:100%;padding:14px;background:var(--ink);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:6px}
-  button[type=submit]:hover{background:#000}
-  button[type=submit]:disabled{background:#9a9a9a;cursor:not-allowed}
-  .status{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:.9rem;display:none}
-  .status.ok{display:block;background:#e9f8f0;color:var(--ok)}
-  .status.err{display:block;background:#fdeeee;color:var(--err)}
-  .foot{margin-top:22px;font-size:.78rem;color:var(--muted);text-align:center}
+  .range-thumb::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 20px; height: 20px; border-radius: 9999px;
+    background: #0284C7; border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(2,132,199,.5);
+    cursor: pointer; pointer-events: auto;
+  }
+  .range-thumb::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 9999px;
+    background: #0284C7; border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(2,132,199,.5);
+    cursor: pointer; pointer-events: auto;
+  }
+  .dark .range-thumb::-webkit-slider-thumb { border-color: #0f172a; }
+  .dark .range-thumb::-moz-range-thumb { border-color: #0f172a; }
 </style>
 </head>
-<body>
-<div class="wrap">
-  <h1>🔎 Job Scout</h1>
-  <p class="sub">Upload a resume, set your preferences, and an AI agent will scan job boards on a schedule and email you only <em>new</em> matching postings. No spam, no repeats — no news is good news. <strong>Invitation only.</strong></p>
+<body class="bg-slate-50 dark:bg-slate-950 transition-colors">
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-  <form id="scoutForm">
-    <fieldset>
-      <legend>0 · Access code</legend>
-      <input type="password" id="accessCode" required placeholder="Enter your invite code" autocomplete="off">
-      <p class="hint">Job Scout is invite-only. Ask Ed (ed@uxed.me) for a code.</p>
-    </fieldset>
-
-    <fieldset>
-      <legend>1 · Who is this for?</legend>
-      <div class="grid2">
-        <div><label for="name">Full name</label><input type="text" id="name" required placeholder="Juan Pablo Sánchez"></div>
-        <div><label for="email">Email for alerts</label><input type="email" id="email" required placeholder="you@example.com"></div>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>2 · Resume</legend>
-      <div class="drop" id="drop">
-        <p><strong>Choose a PDF</strong> or drag it here</p>
-        <p class="hint" id="dropHint">Parsed locally in your browser — the file itself never leaves your computer.</p>
-        <input type="file" id="pdfFile" accept="application/pdf" hidden>
-      </div>
-      <label for="resumeText">Resume text (auto-filled from PDF — or paste it)</label>
-      <textarea id="resumeText" required placeholder="Your resume text appears here after choosing a PDF…"></textarea>
-    </fieldset>
-
-    <fieldset>
-      <legend>3 · What are you looking for?</legend>
-      <label for="roles">Target roles / keywords</label>
-      <input type="text" id="roles" required placeholder="e.g. Production Manager, Operations Manager, Supply Chain">
-      <label for="regions">Region(s) of interest</label>
-      <input type="text" id="regions" required placeholder="e.g. Tijuana, Mexico — or CDMX, Guadalajara">
-      <label>Remote preference</label>
-      <div class="radio-row">
-        <label class="chip"><input type="radio" name="remote" value="Remote within country" required><span>Remote (my country)</span></label>
-        <label class="chip"><input type="radio" name="remote" value="Remote anywhere"><span>Remote anywhere</span></label>
-        <label class="chip"><input type="radio" name="remote" value="On-site/hybrid only"><span>On-site / hybrid</span></label>
-        <label class="chip"><input type="radio" name="remote" value="Either"><span>Either works</span></label>
-      </div>
-      <div class="grid2">
-        <div>
-          <label for="salary">Minimum salary (optional)</label>
-          <input type="text" id="salary" placeholder="e.g. $60,000 MXN/mo or $85k USD/yr">
-        </div>
-        <div>
-          <label for="seniority">Seniority</label>
-          <select id="seniority" required>
-            <option value="" disabled selected>Select…</option>
-            <option>Entry</option><option>Mid</option><option>Senior</option>
-            <option>Manager+</option><option>Director+</option>
-          </select>
-        </div>
-      </div>
-    </fieldset>
-
-    <fieldset>
-      <legend>4 · How often do you want alerts?</legend>
-      <div class="radio-row">
-        <label class="chip"><input type="radio" name="frequency" value="3x daily" required><span>3× daily — catch everything fast</span></label>
-        <label class="chip"><input type="radio" name="frequency" value="Daily"><span>Once a day</span></label>
-        <label class="chip"><input type="radio" name="frequency" value="Weekly"><span>Weekly digest</span></label>
-      </div>
-      <p class="hint">Whatever you pick, you only get an email when there are new postings you haven't been sent before. New signups are reviewed before activation.</p>
-    </fieldset>
-
-    <button type="submit" id="submitBtn">Start scouting →</button>
-    <div class="status" id="status"></div>
-  </form>
-  <p class="foot">Powered by a Claude agent · resumes are processed only to match you with jobs</p>
-</div>
-
-<script>
 const HOOK_URL = "https://hooks.zapier.com/hooks/catch/28143899/4uui3nl/";
 const CODE_HASH = "f91bcc6f506c036fbf0829093b4a283739b1cf2e8574d19ed0f44fd5d220e913";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-const drop = document.getElementById("drop"), fileInput = document.getElementById("pdfFile"),
-      resumeText = document.getElementById("resumeText"), dropHint = document.getElementById("dropHint");
-
-drop.addEventListener("click", () => fileInput.click());
-["dragover","dragenter"].forEach(e => drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.add("drag");}));
-["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.remove("drag");}));
-drop.addEventListener("drop", ev => { if (ev.dataTransfer.files[0]) parsePdf(ev.dataTransfer.files[0]); });
-fileInput.addEventListener("change", () => { if (fileInput.files[0]) parsePdf(fileInput.files[0]); });
-
-async function parsePdf(file){
-  if (file.type !== "application/pdf") { dropHint.textContent = "That's not a PDF — try again or paste the text below."; return; }
-  dropHint.textContent = "Reading " + file.name + "…";
-  try {
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
-    let out = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const tc = await page.getTextContent();
-      out.push(tc.items.map(it => it.str).join(" "));
-    }
-    resumeText.value = out.join("
-
-").replace(/s{3,}/g, "  ").trim();
-    drop.classList.add("done");
-    dropHint.textContent = "✓ " + file.name + " parsed (" + pdf.numPages + " page" + (pdf.numPages>1?"s":"") + "). Review the text below.";
-  } catch(err) {
-    dropHint.textContent = "Couldn't read that PDF — paste your resume text below instead.";
+/* ---------------- geo data: US + Mexico ---------------- */
+const GEO = {
+  "United States": {
+    "Alabama":["Birmingham","Huntsville","Montgomery","Mobile"],
+    "Alaska":["Anchorage","Fairbanks","Juneau"],
+    "Arizona":["Phoenix","Tucson","Scottsdale","Tempe","Mesa"],
+    "Arkansas":["Little Rock","Fayetteville","Bentonville"],
+    "California":["Los Angeles","San Francisco","San Diego","San Jose","Sacramento","Oakland","Irvine","Santa Monica","Palo Alto","Mountain View"],
+    "Colorado":["Denver","Boulder","Colorado Springs","Fort Collins"],
+    "Connecticut":["Hartford","Stamford","New Haven"],
+    "Delaware":["Wilmington","Dover"],
+    "District of Columbia":["Washington"],
+    "Florida":["Miami","Orlando","Tampa","Jacksonville","Fort Lauderdale","St. Petersburg"],
+    "Georgia":["Atlanta","Savannah","Athens","Alpharetta"],
+    "Hawaii":["Honolulu"],
+    "Idaho":["Boise"],
+    "Illinois":["Chicago","Naperville","Evanston","Springfield"],
+    "Indiana":["Indianapolis","Bloomington","Fort Wayne"],
+    "Iowa":["Des Moines","Iowa City","Cedar Rapids"],
+    "Kansas":["Wichita","Overland Park","Kansas City"],
+    "Kentucky":["Louisville","Lexington"],
+    "Louisiana":["New Orleans","Baton Rouge"],
+    "Maine":["Portland","Augusta"],
+    "Maryland":["Baltimore","Bethesda","Columbia","Annapolis"],
+    "Massachusetts":["Boston","Cambridge","Somerville","Worcester"],
+    "Michigan":["Detroit","Ann Arbor","Grand Rapids","Lansing"],
+    "Minnesota":["Minneapolis","St. Paul","Rochester"],
+    "Mississippi":["Jackson","Gulfport"],
+    "Missouri":["St. Louis","Kansas City","Columbia"],
+    "Montana":["Billings","Bozeman","Missoula"],
+    "Nebraska":["Omaha","Lincoln"],
+    "Nevada":["Las Vegas","Reno","Henderson"],
+    "New Hampshire":["Manchester","Nashua","Concord"],
+    "New Jersey":["Newark","Jersey City","Hoboken","Princeton"],
+    "New Mexico":["Albuquerque","Santa Fe"],
+    "New York":["New York City","Brooklyn","Buffalo","Rochester","Albany","White Plains"],
+    "North Carolina":["Charlotte","Raleigh","Durham","Asheville"],
+    "North Dakota":["Fargo","Bismarck"],
+    "Ohio":["Columbus","Cleveland","Cincinnati","Dayton"],
+    "Oklahoma":["Oklahoma City","Tulsa"],
+    "Oregon":["Portland","Eugene","Bend","Salem"],
+    "Pennsylvania":["Philadelphia","Pittsburgh","Harrisburg","Allentown"],
+    "Rhode Island":["Providence"],
+    "South Carolina":["Charleston","Columbia","Greenville"],
+    "South Dakota":["Sioux Falls","Rapid City"],
+    "Tennessee":["Nashville","Memphis","Knoxville","Chattanooga"],
+    "Texas":["Austin","Dallas","Houston","San Antonio","Fort Worth","Plano","El Paso"],
+    "Utah":["Salt Lake City","Provo","Lehi","Ogden"],
+    "Vermont":["Burlington","Montpelier"],
+    "Virginia":["Arlington","Richmond","Alexandria","Virginia Beach","Reston"],
+    "Washington":["Seattle","Bellevue","Redmond","Tacoma","Spokane"],
+    "West Virginia":["Charleston","Morgantown"],
+    "Wisconsin":["Milwaukee","Madison","Green Bay"],
+    "Wyoming":["Cheyenne","Jackson"]
+  },
+  "Mexico": {
+    "Aguascalientes":["Aguascalientes"],
+    "Baja California":["Tijuana","Mexicali","Ensenada"],
+    "Baja California Sur":["La Paz","Cabo San Lucas","San José del Cabo"],
+    "Campeche":["Campeche"],
+    "Chiapas":["Tuxtla Gutiérrez","San Cristóbal de las Casas"],
+    "Chihuahua":["Chihuahua","Ciudad Juárez"],
+    "Ciudad de México":["Ciudad de México"],
+    "Coahuila":["Saltillo","Torreón"],
+    "Colima":["Colima","Manzanillo"],
+    "Durango":["Durango"],
+    "Estado de México":["Toluca","Naucalpan","Tlalnepantla"],
+    "Guanajuato":["León","Guanajuato","Irapuato","Celaya"],
+    "Guerrero":["Acapulco","Chilpancingo"],
+    "Hidalgo":["Pachuca"],
+    "Jalisco":["Guadalajara","Zapopan","Puerto Vallarta","Tlaquepaque"],
+    "Michoacán":["Morelia","Uruapan"],
+    "Morelos":["Cuernavaca"],
+    "Nayarit":["Tepic","Nuevo Vallarta"],
+    "Nuevo León":["Monterrey","San Pedro Garza García","Apodaca"],
+    "Oaxaca":["Oaxaca de Juárez","Puerto Escondido"],
+    "Puebla":["Puebla","Cholula"],
+    "Querétaro":["Querétaro","San Juan del Río"],
+    "Quintana Roo":["Cancún","Playa del Carmen","Tulum","Chetumal"],
+    "San Luis Potosí":["San Luis Potosí"],
+    "Sinaloa":["Culiacán","Mazatlán"],
+    "Sonora":["Hermosillo","Nogales"],
+    "Tabasco":["Villahermosa"],
+    "Tamaulipas":["Reynosa","Tampico","Matamoros"],
+    "Tlaxcala":["Tlaxcala"],
+    "Veracruz":["Veracruz","Xalapa","Coatzacoalcos"],
+    "Yucatán":["Mérida","Valladolid"],
+    "Zacatecas":["Zacatecas"]
   }
-}
+};
 
-async function sha256Hex(str){
+const ROLE_KEYWORDS = [
+  "Product Designer","UX Designer","UI Designer","UX Researcher","Design Lead","Design Manager",
+  "Interaction Designer","Visual Designer","Service Designer","Content Designer","Design Systems",
+  "Product Manager","Program Manager","Project Manager","Engineering Manager",
+  "Software Engineer","Frontend Engineer","Front-End Engineer","Backend Engineer","Full Stack",
+  "Data Scientist","Data Analyst","Data Engineer","Machine Learning","AI Engineer",
+  "DevOps","Site Reliability","QA Engineer","Security Engineer","Mobile Engineer",
+  "Marketing Manager","Growth","Sales Engineer","Account Executive","Customer Success",
+  "Technical Writer","Researcher","Recruiter","Operations Manager","Financial Analyst",
+  "Accountant","HR ","People Ops","Executive Assistant","Copywriter","Art Director","Creative Director"
+];
+
+/* ---------------- helpers ---------------- */
+async function sha256Hex(str) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-document.getElementById("scoutForm").addEventListener("submit", async ev => {
-  ev.preventDefault();
-  const btn = document.getElementById("submitBtn"), status = document.getElementById("status");
-  const code = document.getElementById("accessCode").value.trim().toUpperCase();
-  status.className = "status";
-  const hash = await sha256Hex(code);
-  if (hash !== CODE_HASH) {
-    status.className = "status err";
-    status.textContent = "That access code isn't valid. Double-check it, or ask Ed for an invite.";
-    return;
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve; s.onerror = () => reject(new Error("Failed to load " + src));
+    document.head.appendChild(s);
+  });
+}
+
+async function extractPdf(file) {
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const data = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+  let text = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(" ") + "\n";
   }
-  const payload = {
-    access_code: code,
-    name: document.getElementById("name").value.trim(),
-    email: document.getElementById("email").value.trim(),
-    resume_text: resumeText.value.trim(),
-    target_roles: document.getElementById("roles").value.trim(),
-    regions: document.getElementById("regions").value.trim(),
-    remote: (document.querySelector('input[name="remote"]:checked')||{}).value || "",
-    min_salary: document.getElementById("salary").value.trim(),
-    seniority: document.getElementById("seniority").value,
-    frequency: (document.querySelector('input[name="frequency"]:checked')||{}).value || "",
-    submitted_at: new Date().toISOString()
-  };
-  btn.disabled = true; btn.textContent = "Submitting…";
-  try {
-    const res = await fetch(HOOK_URL, { method: "POST", body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    status.className = "status ok";
-    status.textContent = "✓ You're in! Your profile is pending a quick review — once approved, alerts start on the next scheduled run, sent from ed@uxed.me. Add that address to your contacts so nothing lands in spam.";
-    btn.textContent = "Submitted ✓";
-  } catch(err) {
-    status.className = "status err";
-    status.textContent = "Something went wrong submitting (" + err.message + "). Please try again, or email ed@uxed.me directly.";
-    btn.disabled = false; btn.textContent = "Start scouting →";
+  return text.trim();
+}
+
+async function extractDocx(file) {
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await window.mammoth.extractRawText({ arrayBuffer });
+  return (result?.value || "").trim();
+}
+
+function extractKeywords(text) {
+  const found = [];
+  const lower = (text || "").toLowerCase();
+  for (const kw of ROLE_KEYWORDS) {
+    if (lower.includes(kw.toLowerCase()) && !found.includes(kw.trim())) found.push(kw.trim());
+    if (found.length >= 5) break;
   }
-});
+  return found;
+}
+
+const fmtMoney = n => "$" + (n / 1000) + "k";
+
+/* ---------------- small components ---------------- */
+function Field({ label, children, hint }) {
+  return (
+    <div className="mb-5">
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{label}</label>
+      {children}
+      {hint && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+const inputCls = "w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition";
+
+function Autocomplete({ value, onChange, options, placeholder, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const wrapRef = useRef(null);
+
+  const filtered = useMemo(() => {
+    const opts = options ?? [];
+    const q = (value || "").toLowerCase().trim();
+    if (!q) return opts.slice(0, 50);
+    return opts.filter(o => o?.toLowerCase()?.includes(q)).slice(0, 50);
+  }, [options, value]);
+
+  useEffect(() => {
+    const onDoc = e => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const pick = v => { onChange(v); setOpen(false); setHi(-1); };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        className={inputCls + (disabled ? " opacity-50 cursor-not-allowed" : "")}
+        value={value || ""}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={e => { onChange(e.target.value); setOpen(true); setHi(-1); }}
+        onFocus={() => !disabled && setOpen(true)}
+        onKeyDown={e => {
+          if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi(h => Math.min(h + 1, filtered.length - 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
+          else if (e.key === "Enter" && open && hi >= 0 && filtered[hi]) { e.preventDefault(); pick(filtered[hi]); }
+          else if (e.key === "Escape") setOpen(false);
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 mt-1 w-full max-h-52 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg text-sm">
+          {filtered.map((o, i) => (
+            <li key={o + i}
+              className={"px-3.5 py-2 cursor-pointer " + (i === hi ? "bg-sky-100 dark:bg-sky-900/40 text-sky-900 dark:text-sky-200" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")}
+              onMouseEnter={() => setHi(i)}
+              onMouseDown={e => { e.preventDefault(); pick(o); }}>
+              {o}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SalarySlider({ min, max, onChange }) {
+  const LO = 50000, HI = 300000, STEP = 5000;
+  const pct = v => ((v - LO) / (HI - LO)) * 100;
+  return (
+    <div className="pt-1">
+      <div className="flex justify-between mb-2 text-sm font-semibold text-sky-700 dark:text-sky-400">
+        <span>{fmtMoney(min)}</span>
+        <span className="text-slate-400 dark:text-slate-500 font-normal">to</span>
+        <span>{fmtMoney(max)}{max >= HI ? "+" : ""}</span>
+      </div>
+      <div className="relative h-5">
+        <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />
+        <div className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-sky-600"
+             style={{ left: pct(min) + "%", width: (pct(max) - pct(min)) + "%" }} />
+        <input type="range" min={LO} max={HI} step={STEP} value={min}
+          onChange={e => onChange(Math.min(+e.target.value, max - STEP), max)}
+          className="range-thumb absolute w-full h-5 appearance-none bg-transparent pointer-events-none" />
+        <input type="range" min={LO} max={HI} step={STEP} value={max}
+          onChange={e => onChange(min, Math.max(+e.target.value, min + STEP))}
+          className="range-thumb absolute w-full h-5 appearance-none bg-transparent pointer-events-none" />
+      </div>
+      <div className="flex justify-between mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+        <span>$50k</span><span>$300k+</span>
+      </div>
+    </div>
+  );
+}
+
+function SegmentGroup({ options, value, onChange, cols }) {
+  return (
+    <div className={"grid gap-2 " + (cols === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4")}>
+      {options.map(o => (
+        <button key={o} type="button" onClick={() => onChange(o)}
+          className={"rounded-lg border px-3 py-2.5 text-sm font-medium transition " +
+            (value === o
+              ? "border-sky-600 bg-sky-600 text-white shadow-sm"
+              : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-sky-400 dark:hover:border-sky-600")}>
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------- dropzone ---------------- */
+function Dropzone({ onFile, status, fileName, error }) {
+  const inputRef = useRef(null);
+  const [drag, setDrag] = useState(false);
+
+  const handleFiles = useCallback(files => {
+    const f = files?.[0];
+    if (f) onFile(f);
+  }, [onFile]);
+
+  return (
+    <div
+      role="button" tabIndex={0}
+      onClick={() => inputRef.current?.click()}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputRef.current?.click(); } }}
+      onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setDrag(true); }}
+      onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDrag(true); }}
+      onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setDrag(false); }}
+      onDrop={e => { e.preventDefault(); e.stopPropagation(); setDrag(false); handleFiles(e.dataTransfer?.files); }}
+      className={"cursor-pointer rounded-xl border-2 border-dashed px-6 py-8 text-center transition select-none " +
+        (drag
+          ? "border-sky-500 bg-sky-50 dark:bg-sky-950/40"
+          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-sky-400 dark:hover:border-sky-600")}>
+      <input ref={inputRef} type="file" accept=".pdf,.docx,.txt" className="hidden"
+        onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
+      {status === "analyzing" ? (
+        <div className="flex items-center justify-center gap-3 text-sky-700 dark:text-sky-400">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          <span className="text-sm font-medium">Analyzing resume…</span>
+        </div>
+      ) : status === "done" ? (
+        <div className="text-sm">
+          <span className="inline-flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
+            {fileName}
+          </span>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Resume parsed. Click or drop to replace.</p>
+        </div>
+      ) : (
+        <div>
+          <svg className="mx-auto h-8 w-8 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+          <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300">Drop your resume here, or click to browse</p>
+          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">PDF, DOCX, or TXT</p>
+        </div>
+      )}
+      {error && <p className="mt-2 text-xs font-medium text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+/* ---------------- app ---------------- */
+function App() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
+
+  const [accessCode, setAccessCode] = useState("");
+  const [codeValid, setCodeValid] = useState(null); // null | true | false
+  const [name, setName] = useState("Randy Marsh");
+  const [email, setEmail] = useState("randy.marsh@tegridy.com");
+  const [resumeText, setResumeText] = useState("");
+  const [resumeStatus, setResumeStatus] = useState("idle"); // idle | analyzing | done
+  const [resumeName, setResumeName] = useState("");
+  const [resumeError, setResumeError] = useState("");
+  const [roles, setRoles] = useState("");
+  const [country, setCountry] = useState("United States");
+  const [state, setState] = useState("");
+  const [city, setCity] = useState("");
+  const [remote, setRemote] = useState("Any");
+  const [salMin, setSalMin] = useState(100000);
+  const [salMax, setSalMax] = useState(200000);
+  const [seniority, setSeniority] = useState("Any");
+  const [frequency, setFrequency] = useState("Daily");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [done, setDone] = useState(false);
+
+  // live access-code check
+  useEffect(() => {
+    let alive = true;
+    if (!accessCode) { setCodeValid(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const h = await sha256Hex(accessCode.trim());
+        if (alive) setCodeValid(h === CODE_HASH);
+      } catch { if (alive) setCodeValid(false); }
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [accessCode]);
+
+  const states = useMemo(() => Object.keys(GEO?.[country] ?? {}), [country]);
+  const cities = useMemo(() => GEO?.[country]?.[state] ?? [], [country, state]);
+
+  const onFile = useCallback(async file => {
+    setResumeError("");
+    const ext = (file?.name?.split(".").pop() || "").toLowerCase();
+    if (!["pdf", "docx", "txt"].includes(ext)) {
+      setResumeError("Unsupported file type — please use .pdf, .docx, or .txt");
+      return;
+    }
+    setResumeStatus("analyzing");
+    setResumeName(file.name);
+    const started = Date.now();
+    try {
+      let text = "";
+      if (ext === "pdf") text = await extractPdf(file);
+      else if (ext === "docx") text = await extractDocx(file);
+      else text = (await file.text()).trim();
+
+      const kws = extractKeywords(text);
+      const wait = Math.max(0, 1500 - (Date.now() - started));
+      setTimeout(() => {
+        setResumeText(text);
+        if (kws.length) setRoles(prev => prev ? prev : kws.join(", "));
+        setResumeStatus("done");
+      }, wait);
+    } catch (err) {
+      console.error("Resume extraction failed:", err);
+      setResumeStatus("idle");
+      setResumeError("Could not read that file. Try a different format.");
+    }
+  }, []);
+
+  const canSubmit = codeValid === true && name.trim() && email.trim() && !submitting;
+
+  async function submit() {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setSubmitError("");
+    const regions = [city, state, country].filter(Boolean).join(", ");
+    const payload = {
+      access_code: accessCode.trim(),
+      name: name.trim(),
+      email: email.trim(),
+      resume_text: resumeText,
+      target_roles: roles.trim(),
+      regions,
+      remote,
+      min_salary: salMin,
+      seniority,
+      frequency,
+      submitted_at: new Date().toISOString()
+    };
+    try {
+      const res = await fetch(HOOK_URL, { method: "POST", body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      setDone(true);
+    } catch (err) {
+      console.error("Submit failed:", err);
+      setSubmitError("Something went wrong sending your info. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function reset() {
+    setAccessCode(""); setCodeValid(null);
+    setName("Randy Marsh"); setEmail("randy.marsh@tegridy.com");
+    setResumeText(""); setResumeStatus("idle"); setResumeName(""); setResumeError("");
+    setRoles(""); setCountry("United States"); setState(""); setCity("");
+    setRemote("Any"); setSalMin(100000); setSalMax(200000);
+    setSeniority("Any"); setFrequency("Daily");
+    setSubmitError(""); setDone(false);
+  }
+
+  return (
+    <div className="min-h-screen py-10 px-4">
+      <div className="mx-auto max-w-xl">
+        {/* header */}
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow">
+                <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Job Scout</h1>
+            </div>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">For friends &amp; invitees</p>
+          </div>
+          <button type="button" onClick={() => setDark(d => !d)} aria-label="Toggle dark mode"
+            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition">
+            {dark ? (
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1.5M12 19.5V21M4.2 4.2l1.06 1.06M18.74 18.74l1.06 1.06M3 12h1.5M19.5 12H21M4.2 19.8l1.06-1.06M18.74 5.26l1.06-1.06M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            ) : (
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 15A9.75 9.75 0 019 2.25 9.75 9.75 0 1021.75 15z" /></svg>
+            )}
+          </button>
+        </div>
+
+        {done ? (
+          /* success view */
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center shadow-sm">
+            <div className="mx-auto h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+              <svg className="h-7 w-7 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <h2 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">Agent deployed 🎯</h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Your scout is set up. Watch your inbox — matching roles will start arriving on your chosen schedule.
+            </p>
+            <button type="button" onClick={reset}
+              className="mt-6 rounded-lg bg-sky-600 hover:bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white transition shadow-sm">
+              Set up another
+            </button>
+          </div>
+        ) : (
+          /* form */
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm">
+            <Field label="Access token">
+              <div className="relative">
+                <input className={inputCls + " pr-10 font-mono tracking-wide"} value={accessCode}
+                  placeholder="SCOUT-XXXX-XXXX"
+                  onChange={e => setAccessCode(e.target.value)} autoComplete="off" spellCheck="false" />
+                {codeValid !== null && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {codeValid
+                      ? <svg className="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
+                      : <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.7 7.3a1 1 0 00-1.4 1.4L8.6 10l-1.3 1.3a1 1 0 101.4 1.4L10 11.4l1.3 1.3a1 1 0 001.4-1.4L11.4 10l1.3-1.3a1 1 0 00-1.4-1.4L10 8.6 8.7 7.3z" clipRule="evenodd" /></svg>}
+                  </span>
+                )}
+              </div>
+              {codeValid === false && <p className="mt-1 text-xs font-medium text-red-500">That token doesn't match. Check your invite.</p>}
+            </Field>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Name">
+                <input className={inputCls} value={name} onChange={e => setName(e.target.value)} />
+              </Field>
+              <Field label="Email">
+                <input className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} />
+              </Field>
+            </div>
+
+            <Field label="Resume" hint="We extract the text to match you with roles — the file itself never leaves your browser.">
+              <Dropzone onFile={onFile} status={resumeStatus} fileName={resumeName} error={resumeError} />
+            </Field>
+
+            <Field label="Target roles / keywords" hint="Auto-filled from your resume — edit freely. Comma-separated.">
+              <input className={inputCls} value={roles} onChange={e => setRoles(e.target.value)}
+                placeholder="e.g. Product Designer, UX Researcher" />
+            </Field>
+
+            <Field label="Location">
+              <div className="grid sm:grid-cols-3 gap-3">
+                <Autocomplete value={country} placeholder="Country"
+                  options={Object.keys(GEO)}
+                  onChange={v => { setCountry(v); setState(""); setCity(""); }} />
+                <Autocomplete value={state} placeholder="State"
+                  options={states}
+                  onChange={v => { setState(v); setCity(""); }} />
+                <Autocomplete value={city} placeholder="City"
+                  options={cities}
+                  onChange={setCity}
+                  disabled={!state} />
+              </div>
+            </Field>
+
+            <Field label="Work setting">
+              <SegmentGroup options={["Remote Only", "Hybrid", "Onsite", "Any"]} value={remote} onChange={setRemote} />
+            </Field>
+
+            <Field label="Salary range">
+              <SalarySlider min={salMin} max={salMax} onChange={(a, b) => { setSalMin(a); setSalMax(b); }} />
+            </Field>
+
+            <Field label="Seniority">
+              <SegmentGroup options={["Entry", "Mid", "Senior", "Any"]} value={seniority} onChange={setSeniority} />
+            </Field>
+
+            <Field label="Alert frequency">
+              <SegmentGroup cols={3} options={["3x daily", "Daily", "Weekly"]} value={frequency} onChange={setFrequency} />
+            </Field>
+
+            {submitError && (
+              <p className="mb-4 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-3.5 py-2.5 text-sm text-red-600 dark:text-red-400">{submitError}</p>
+            )}
+
+            <button type="button" onClick={submit} disabled={!canSubmit}
+              className={"w-full rounded-xl py-3.5 text-sm font-bold tracking-wide transition shadow-sm " +
+                (canSubmit
+                  ? "bg-gradient-to-r from-sky-600 to-blue-600 text-white hover:from-sky-700 hover:to-blue-700"
+                  : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed")}>
+              {submitting ? "Deploying…" : "Save & Deploy Agent"}
+            </button>
+            {codeValid !== true && (
+              <p className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">Enter a valid access token to deploy.</p>
+            )}
+          </div>
+        )}
+
+        <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-600">
+          Invite-only · Job Scout quietly checks the boards so you don't have to.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
 </body>
 </html>
