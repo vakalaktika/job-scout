@@ -1,176 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Scout — automated job search, delivered to your inbox</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <style>
-      :root{--ink:#1a1a1a;--cream:#faf7f2;--accent:#2f6fed;--ok:#1e9e5a;--err:#d64545;--muted:#6b6b6b;--line:#e4ded4}
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);line-height:1.5}
-      .wrap{max-width:640px;margin:0 auto;padding:48px 20px 80px}
-      h1{font-size:2rem;letter-spacing:-.02em;margin-bottom:8px}
-      .sub{color:var(--muted);margin-bottom:36px}
-      form{background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
-      fieldset{border:none;margin-bottom:26px}
-      legend{font-weight:600;font-size:.95rem;margin-bottom:10px}
-      label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 5px}
-      input[type=text],input[type=email],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:.95rem;background:#fff;font-family:inherit}
-      input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
-      textarea{min-height:110px;resize:vertical}
-      .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
-      .drop{border:2px dashed var(--line);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:.15s}
-      .drop:hover,.drop.drag{border-color:var(--accent);background:#f4f8ff}
-      .drop.done{border-color:var(--ok);background:#f2fbf6}
-      .drop strong{color:var(--accent)}
-      .radio-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
-      .chip{position:relative}
-      .chip input{position:absolute;opacity:0;inset:0;cursor:pointer}
-      .chip span{display:inline-block;padding:8px 14px;border:1px solid var(--line);border-radius:999px;font-size:.85rem;cursor:pointer;user-select:none}
-      .chip input:checked + span{background:var(--ink);color:#fff;border-color:var(--ink)}
-      .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-      @media(max-width:520px){.grid2{grid-template-columns:1fr}}
-      button[type=submit]{width:100%;padding:14px;background:var(--ink);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:6px}
-      button[type=submit]:hover{background:#000}
-      button[type=submit]:disabled{background:#9a9a9a;cursor:not-allowed}
-      .status{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:.9rem;display:none}
-      .status.ok{display:block;background:#e9f8f0;color:var(--ok)}
-      .status.err{display:block;background:#fdeeee;color:var(--err)}
-      .foot{margin-top:22px;font-size:.78rem;color:var(--muted);text-align:center}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-        <h1>🔎 Job Scout</h1>
-      <p class="sub">Upload a resume, set your preferences, and an AI agent will scan job boards on a schedule and email you only <em>new</em> matching postings. No spam, no repeats — no news is good news.</p>p>
-    
-      <form id="scoutForm">
-          <fieldset>
-                  <legend>1 · Who is this for?</legend>
-                <div class="grid2">
-                        <div><label for="name">Full name</label>label><input type="text" id="name" required placeholder="Juan Pablo Sánchez"></div>
-                        <div><label for="email">Email for alerts</label>label><input type="email" id="email" required placeholder="you@example.com"></div>
-                </div>
-          </fieldset>fieldset>
-    
-        <fieldset>
-          <legend>2 · Resume</legend>
-          <div class="drop" id="drop">
-                    <p><strong>Choose a PDF</strong> or drag it here</p>
-                  <p class="hint" id="dropHint">Parsed locally in your browser — the file itself never leaves your computer.</p>
-                  <input type="file" id="pdfFile" accept="application/pdf" hidden>
-          </div>
-              <label for="resumeText">Resume text (auto-filled from PDF — or paste it)</label>label>
-              <textarea id="resumeText" required placeholder="Your resume text appears here after choosing a PDF…"></textarea>
-        </fieldset>fieldset>
-      
-          <fieldset>
-                  <legend>3 · What are you looking for?</legend>
-                <label for="roles">Target roles / keywords</label>label>
-                <input type="text" id="roles" required placeholder="e.g. Production Manager, Operations Manager, Supply Chain">
-                <label for="regions">Region(s) of interest</label>label>
-                <input type="text" id="regions" required placeholder="e.g. Tijuana, Mexico — or CDMX, Guadalajara">
-                <label>Remote preference</label>
-                <div class="radio-row">
-                        <label class="chip"><input type="radio" name="remote" value="Remote within country" required><span>Remote (my country)</span></label>
-                        <label class="chip"><input type="radio" name="remote" value="Remote anywhere"><span>Remote anywhere</span></label>
-                        <label class="chip"><input type="radio" name="remote" value="On-site/hybrid only"><span>On-site / hybrid</span></label>
-                        <label class="chip"><input type="radio" name="remote" value="Either"><span>Either works</span></label>
-                </div>
-                <div class="grid2">
-                        <div>
-                                  <label for="salary">Minimum salary (optional)</label>
-                                  <input type="text" id="salary" placeholder="e.g. $60,000 MXN/mo or $85k USD/yr">
-                        </div>
-                        <div>
-                                  <label for="seniority">Seniority</label>
-                                  <select id="seniority" required>
-                                              <option value="" disabled selected>Select…</option>option>
-                                              <option>Entry</option><option>Mid</option><option>Senior</option>
-                                              <option>Manager+</option><option>Director+</option>
-                                  </select>select>
-                        </div>
-                </div>
-          </fieldset>
-      
-          <fieldset>
-                <legend>4 · How often do you want alerts?</legend>
-                <div class="radio-row">
-                        <label class="chip"><input type="radio" name="frequency" value="3x daily" required><span>3× daily — catch everything fast</span></label>
-                        <label class="chip"><input type="radio" name="frequency" value="Daily"><span>Once a day</span></label>
-                        <label class="chip"><input type="radio" name="frequency" value="Weekly"><span>Weekly digest</span></label>
-                </div>
-                <p class="hint">Whatever you pick, you only get an email when there are new postings you haven't been sent before.</p>p>
-          </fieldset>
-      
-          <button type="submit" id="submitBtn">Start scouting →</button>button>
-          <div class="status" id="status"></div>
-      </form>form>
-      <p class="foot">Powered by a Claude agent · resumes are processed only to match you with jobs</p>
-    </div>
-  
-  <script>
-    const HOOK_URL = "https://hooks.zapier.com/hooks/catch/28143899/4uui3nl/";
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Scout — automated job search, delivered to your inbox</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{--ink:#1a1a1a;--cream:#faf7f2;--accent:#2f6fed;--ok:#1e9e5a;--err:#d64545;--muted:#6b6b6b;--line:#e4ded4}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);line-height:1.5}
+  .wrap{max-width:640px;margin:0 auto;padding:48px 20px 80px}
+  h1{font-size:2rem;letter-spacing:-.02em;margin-bottom:8px}
+  .sub{color:var(--muted);margin-bottom:36px}
+  form{background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px}
+  fieldset{border:none;margin-bottom:26px}
+  legend{font-weight:600;font-size:.95rem;margin-bottom:10px}
+  label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 5px}
+  input[type=text],input[type=email],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:.95rem;background:#fff;font-family:inherit}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  textarea{min-height:110px;resize:vertical}
+  .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:.15s}
+  .drop:hover,.drop.drag{border-color:var(--accent);background:#f4f8ff}
+  .drop.done{border-color:var(--ok);background:#f2fbf6}
+  .drop strong{color:var(--accent)}
+  .radio-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{position:relative}
+  .chip input{position:absolute;opacity:0;inset:0;cursor:pointer}
+  .chip span{display:inline-block;padding:8px 14px;border:1px solid var(--line);border-radius:999px;font-size:.85rem;cursor:pointer;user-select:none}
+  .chip input:checked + span{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:520px){.grid2{grid-template-columns:1fr}}
+  button[type=submit]{width:100%;padding:14px;background:var(--ink);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:6px}
+  button[type=submit]:hover{background:#000}
+  button[type=submit]:disabled{background:#9a9a9a;cursor:not-allowed}
+  .status{margin-top:14px;padding:12px 14px;border-radius:8px;font-size:.9rem;display:none}
+  .status.ok{display:block;background:#e9f8f0;color:var(--ok)}
+  .status.err{display:block;background:#fdeeee;color:var(--err)}
+  .foot{margin-top:22px;font-size:.78rem;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔎 Job Scout</h1>
+  <p class="sub">Upload a resume, set your preferences, and an AI agent will scan job boards on a schedule and email you only <em>new</em> matching postings. No spam, no repeats — no news is good news.</p>
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    const drop = document.getElementById("drop"), fileInput = document.getElementById("pdfFile"),
-            resumeText = document.getElementById("resumeText"), dropHint = document.getElementById("dropHint");
+  <form id="scoutForm">
+    <fieldset>
+      <legend>1 · Who is this for?</legend>
+      <div class="grid2">
+        <div><label for="name">Full name</label><input type="text" id="name" required placeholder="Juan Pablo Sánchez"></div>
+        <div><label for="email">Email for alerts</label><input type="email" id="email" required placeholder="you@example.com"></div>
+      </div>
+    </fieldset>
 
-    drop.addEventListener("click", () => fileInput.click());
-    ["dragover","dragenter"].forEach(e => drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.add("drag");}));
-    ["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.remove("drag");}));
-    drop.addEventListener("drop", ev => { if (ev.dataTransfer.files[0]) parsePdf(ev.dataTransfer.files[0]); });
-    fileInput.addEventListener("change", () => { if (fileInput.files[0]) parsePdf(fileInput.files[0]); });
+    <fieldset>
+      <legend>2 · Resume</legend>
+      <div class="drop" id="drop">
+        <p><strong>Choose a PDF</strong> or drag it here</p>
+        <p class="hint" id="dropHint">Parsed locally in your browser — the file itself never leaves your computer.</p>
+        <input type="file" id="pdfFile" accept="application/pdf" hidden>
+      </div>
+      <label for="resumeText">Resume text (auto-filled from PDF — or paste it)</label>
+      <textarea id="resumeText" required placeholder="Your resume text appears here after choosing a PDF…"></textarea>
+    </fieldset>
 
-    async function parsePdf(file){
-        if (file.type !== "application/pdf") { dropHint.textContent = "That's not a PDF — try again or paste the text below."; return; }
-        dropHint.textContent = "Reading " + file.name + "…";
-        try {
-              const buf = await file.arrayBuffer();
-              const pdf = await pdfjsLib.getDocument({data: buf}).promise;
-              let out = [];
-              for (let i = 1; i <= pdf.numPages; i++) {
-                      const page = await pdf.getPage(i);
-                      const tc = await page.getTextContent();
-                      out.push(tc.items.map(it => it.str).join(" "));
-              }
-              resumeText.value = out.join("\n\n").replace(/\s{3,}/g, "  ").trim();
-              drop.classList.add("done");
-              dropHint.textContent = "✓ " + file.name + " parsed (" + pdf.numPages + " page" + (pdf.numPages>1?"s":"") + "). Review the text below.";
-        } catch(err) {
-              dropHint.textContent = "Couldn't read that PDF — paste your resume text below instead.";
-        }
+    <fieldset>
+      <legend>3 · What are you looking for?</legend>
+      <label for="roles">Target roles / keywords</label>
+      <input type="text" id="roles" required placeholder="e.g. Production Manager, Operations Manager, Supply Chain">
+      <label for="regions">Region(s) of interest</label>
+      <input type="text" id="regions" required placeholder="e.g. Tijuana, Mexico — or CDMX, Guadalajara">
+      <label>Remote preference</label>
+      <div class="radio-row">
+        <label class="chip"><input type="radio" name="remote" value="Remote within country" required><span>Remote (my country)</span></label>
+        <label class="chip"><input type="radio" name="remote" value="Remote anywhere"><span>Remote anywhere</span></label>
+        <label class="chip"><input type="radio" name="remote" value="On-site/hybrid only"><span>On-site / hybrid</span></label>
+        <label class="chip"><input type="radio" name="remote" value="Either"><span>Either works</span></label>
+      </div>
+      <div class="grid2">
+        <div>
+          <label for="salary">Minimum salary (optional)</label>
+          <input type="text" id="salary" placeholder="e.g. $60,000 MXN/mo or $85k USD/yr">
+        </div>
+        <div>
+          <label for="seniority">Seniority</label>
+          <select id="seniority" required>
+            <option value="" disabled selected>Select…</option>
+            <option>Entry</option><option>Mid</option><option>Senior</option>
+            <option>Manager+</option><option>Director+</option>
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>4 · How often do you want alerts?</legend>
+      <div class="radio-row">
+        <label class="chip"><input type="radio" name="frequency" value="3x daily" required><span>3× daily — catch everything fast</span></label>
+        <label class="chip"><input type="radio" name="frequency" value="Daily"><span>Once a day</span></label>
+        <label class="chip"><input type="radio" name="frequency" value="Weekly"><span>Weekly digest</span></label>
+      </div>
+      <p class="hint">Whatever you pick, you only get an email when there are new postings you haven't been sent before.</p>
+    </fieldset>
+
+    <button type="submit" id="submitBtn">Start scouting →</button>
+    <div class="status" id="status"></div>
+  </form>
+  <p class="foot">Powered by a Claude agent · resumes are processed only to match you with jobs</p>
+</div>
+
+<script>
+const HOOK_URL = "https://hooks.zapier.com/hooks/catch/28143899/4uui3nl/";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const drop = document.getElementById("drop"), fileInput = document.getElementById("pdfFile"),
+      resumeText = document.getElementById("resumeText"), dropHint = document.getElementById("dropHint");
+
+drop.addEventListener("click", () => fileInput.click());
+["dragover","dragenter"].forEach(e => drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.add("drag");}));
+["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => {ev.preventDefault(); drop.classList.remove("drag");}));
+drop.addEventListener("drop", ev => { if (ev.dataTransfer.files[0]) parsePdf(ev.dataTransfer.files[0]); });
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) parsePdf(fileInput.files[0]); });
+
+async function parsePdf(file){
+  if (file.type !== "application/pdf") { dropHint.textContent = "That's not a PDF — try again or paste the text below."; return; }
+  dropHint.textContent = "Reading " + file.name + "…";
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    let out = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      out.push(tc.items.map(it => it.str).join(" "));
     }
+    resumeText.value = out.join("
 
-    document.getElementById("scoutForm").addEventListener("submit", async ev => {
-        ev.preventDefault();
-        const btn = document.getElementById("submitBtn"), status = document.getElementById("status");
-        const payload = {
-              name: document.getElementById("name").value.trim(),
-              email: document.getElementById("email").value.trim(),
-              resume_text: resumeText.value.trim(),
-              target_roles: document.getElementById("roles").value.trim(),
-              regions: document.getElementById("regions").value.trim(),
-              remote: (document.querySelector('input[name="remote"]:checked')||{}).value || "",
-              min_salary: document.getElementById("salary").value.trim(),
-              seniority: document.getElementById("seniority").value,
-              frequency: (document.querySelector('input[name="frequency"]:checked')||{}).value || "",
-              submitted_at: new Date().toISOString()
-        };
-        btn.disabled = true; btn.textContent = "Submitting…"; status.className = "status";
-        try {
-              const res = await fetch(HOOK_URL, { method: "POST", body: JSON.stringify(payload) });
-              if (!res.ok) throw new Error("HTTP " + res.status);
-              status.className = "status ok";
-              status.textContent = "✓ You're in! The scout starts on the next scheduled run. Alerts will come from ed@uxed.me — add it to your contacts so nothing lands in spam.";
-              btn.textContent = "Submitted ✓";
-        } catch(err) {
-              status.className = "status err";
-              status.textContent = "Something went wrong submitting (" + err.message + "). Please try again, or email ed@uxed.me directly.";
-              btn.disabled = false; btn.textContent = "Start scouting →";
-        }
-    });
-  </script>
-  </body>
+").replace(/s{3,}/g, "  ").trim();
+    drop.classList.add("done");
+    dropHint.textContent = "✓ " + file.name + " parsed (" + pdf.numPages + " page" + (pdf.numPages>1?"s":"") + "). Review the text below.";
+  } catch(err) {
+    dropHint.textContent = "Couldn't read that PDF — paste your resume text below instead.";
+  }
+}
+
+document.getElementById("scoutForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const btn = document.getElementById("submitBtn"), status = document.getElementById("status");
+  const payload = {
+    name: document.getElementById("name").value.trim(),
+    email: document.getElementById("email").value.trim(),
+    resume_text: resumeText.value.trim(),
+    target_roles: document.getElementById("roles").value.trim(),
+    regions: document.getElementById("regions").value.trim(),
+    remote: (document.querySelector('input[name="remote"]:checked')||{}).value || "",
+    min_salary: document.getElementById("salary").value.trim(),
+    seniority: document.getElementById("seniority").value,
+    frequency: (document.querySelector('input[name="frequency"]:checked')||{}).value || "",
+    submitted_at: new Date().toISOString()
+  };
+  btn.disabled = true; btn.textContent = "Submitting…"; status.className = "status";
+  try {
+    const res = await fetch(HOOK_URL, { method: "POST", body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    status.className = "status ok";
+    status.textContent = "✓ You're in! The scout starts on the next scheduled run. Alerts will come from ed@uxed.me — add it to your contacts so nothing lands in spam.";
+    btn.textContent = "Submitted ✓";
+  } catch(err) {
+    status.className = "status err";
+    status.textContent = "Something went wrong submitting (" + err.message + "). Please try again, or email ed@uxed.me directly.";
+    btn.disabled = false; btn.textContent = "Start scouting →";
+  }
+});
+</script>
+</body>
 </html>
