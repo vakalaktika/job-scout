@@ -16,7 +16,7 @@
   fieldset{border:none;margin-bottom:26px}
   legend{font-weight:600;font-size:.95rem;margin-bottom:10px}
   label{display:block;font-size:.85rem;font-weight:600;margin:14px 0 5px}
-  input[type=text],input[type=email],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:.95rem;background:#fff;font-family:inherit}
+  input[type=text],input[type=email],input[type=password],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:.95rem;background:#fff;font-family:inherit}
   input:focus,textarea:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
   textarea{min-height:110px;resize:vertical}
   .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
@@ -43,9 +43,15 @@
 <body>
 <div class="wrap">
   <h1>🔎 Job Scout</h1>
-  <p class="sub">Upload a resume, set your preferences, and an AI agent will scan job boards on a schedule and email you only <em>new</em> matching postings. No spam, no repeats — no news is good news.</p>
+  <p class="sub">Upload a resume, set your preferences, and an AI agent will scan job boards on a schedule and email you only <em>new</em> matching postings. No spam, no repeats — no news is good news. <strong>Invitation only.</strong></p>
 
   <form id="scoutForm">
+    <fieldset>
+      <legend>0 · Access code</legend>
+      <input type="password" id="accessCode" required placeholder="Enter your invite code" autocomplete="off">
+      <p class="hint">Job Scout is invite-only. Ask Ed (ed@uxed.me) for a code.</p>
+    </fieldset>
+
     <fieldset>
       <legend>1 · Who is this for?</legend>
       <div class="grid2">
@@ -101,7 +107,7 @@
         <label class="chip"><input type="radio" name="frequency" value="Daily"><span>Once a day</span></label>
         <label class="chip"><input type="radio" name="frequency" value="Weekly"><span>Weekly digest</span></label>
       </div>
-      <p class="hint">Whatever you pick, you only get an email when there are new postings you haven't been sent before.</p>
+      <p class="hint">Whatever you pick, you only get an email when there are new postings you haven't been sent before. New signups are reviewed before activation.</p>
     </fieldset>
 
     <button type="submit" id="submitBtn">Start scouting →</button>
@@ -112,6 +118,7 @@
 
 <script>
 const HOOK_URL = "https://hooks.zapier.com/hooks/catch/28143899/4uui3nl/";
+const CODE_HASH = "f91bcc6f506c036fbf0829093b4a283739b1cf2e8574d19ed0f44fd5d220e913";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 const drop = document.getElementById("drop"), fileInput = document.getElementById("pdfFile"),
@@ -145,10 +152,24 @@ async function parsePdf(file){
   }
 }
 
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 document.getElementById("scoutForm").addEventListener("submit", async ev => {
   ev.preventDefault();
   const btn = document.getElementById("submitBtn"), status = document.getElementById("status");
+  const code = document.getElementById("accessCode").value.trim().toUpperCase();
+  status.className = "status";
+  const hash = await sha256Hex(code);
+  if (hash !== CODE_HASH) {
+    status.className = "status err";
+    status.textContent = "That access code isn't valid. Double-check it, or ask Ed for an invite.";
+    return;
+  }
   const payload = {
+    access_code: code,
     name: document.getElementById("name").value.trim(),
     email: document.getElementById("email").value.trim(),
     resume_text: resumeText.value.trim(),
@@ -160,12 +181,12 @@ document.getElementById("scoutForm").addEventListener("submit", async ev => {
     frequency: (document.querySelector('input[name="frequency"]:checked')||{}).value || "",
     submitted_at: new Date().toISOString()
   };
-  btn.disabled = true; btn.textContent = "Submitting…"; status.className = "status";
+  btn.disabled = true; btn.textContent = "Submitting…";
   try {
     const res = await fetch(HOOK_URL, { method: "POST", body: JSON.stringify(payload) });
     if (!res.ok) throw new Error("HTTP " + res.status);
     status.className = "status ok";
-    status.textContent = "✓ You're in! The scout starts on the next scheduled run. Alerts will come from ed@uxed.me — add it to your contacts so nothing lands in spam.";
+    status.textContent = "✓ You're in! Your profile is pending a quick review — once approved, alerts start on the next scheduled run, sent from ed@uxed.me. Add that address to your contacts so nothing lands in spam.";
     btn.textContent = "Submitted ✓";
   } catch(err) {
     status.className = "status err";
