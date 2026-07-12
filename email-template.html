@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<!--
+  Job Scout — match-alert email template
+  Used by the dispatcher routine (trig_01LZtNUf7LVFzw3C2Fyy9QEw).
+  The dispatcher fetches this file, fills the {{PLACEHOLDERS}}, and repeats
+  the block between JOB_CARD_START / JOB_CARD_END once per posting.
+
+  Placeholders (per email):
+    {{HEADLINE}}      e.g. "2 new matches for you"
+    {{RUN_DATE}}      e.g. "Sunday, July 12, 2026"
+    {{FIRST_NAME}}    candidate first name
+    {{JOB_CARDS}}     the repeated job-card blocks
+
+  Placeholders (per job card):
+    {{TITLE}}         exact job title
+    {{URL}}           direct link to the posting
+    {{COMPANY}}       company name
+    {{META_LINE}}     "San Diego, CA (Remote) &nbsp;·&nbsp; $170k–$200k &nbsp;·&nbsp; LinkedIn"
+                      (omit salary segment if not listed)
+    {{MATCH_REASON}}  one sentence on why it fits their profile
+    {{POSTED_LABEL}}  "Posted today" / "Posted yesterday" / "Posted 3 days ago" /
+                      "Posted Jul 3 (9 days ago)" / "Posted date not listed"
+    {{POSTED_BG}} / {{POSTED_FG}}  freshness pill colors:
+        0–2 days:   bg #dcfce7  fg #15803d   (green — fresh)
+        3–7 days:   bg #fef3c7  fg #b45309   (amber — recent)
+        8+  days:   bg #f1f5f9  fg #64748b   (slate — older)
+        unknown:    bg #f1f5f9  fg #94a3b8
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Job Scout — new matches</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f5f9; -webkit-text-size-adjust:100%;">
+  <!-- preheader (hidden preview text) -->
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">{{HEADLINE}} — freshest first, with posting dates.</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:100%;">
+
+          <!-- header -->
+          <tr>
+            <td style="padding:0 8px 16px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:700; letter-spacing:2px; color:#0369a1; text-transform:uppercase;">
+                    Job&nbsp;Scout
+                  </td>
+                  <td align="right" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; color:#64748b;">
+                    {{RUN_DATE}}
+                  </td>
+                </tr>
+              </table>
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:22px; font-weight:700; color:#0f172a; padding-top:12px;">
+                {{HEADLINE}}
+              </div>
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; color:#475569; padding-top:4px;">
+                Hi {{FIRST_NAME}} — sorted freshest first. Posting dates are on each card.
+              </div>
+            </td>
+          </tr>
+
+          {{JOB_CARDS}}
+
+          <!-- JOB_CARD_START -->
+          <tr>
+            <td style="padding:0 0 14px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border:1px solid #e2e8f0; border-radius:12px;">
+                <tr>
+                  <td style="padding:20px 24px 0 24px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; color:#0369a1; text-transform:uppercase; letter-spacing:0.5px;">
+                          {{COMPANY}}
+                        </td>
+                        <td align="right">
+                          <span style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; font-weight:600; color:{{POSTED_FG}}; background-color:{{POSTED_BG}}; border-radius:999px; padding:3px 10px; white-space:nowrap;">
+                            {{POSTED_LABEL}}
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; line-height:1.3;">
+                    <a href="{{URL}}" style="color:#0f172a; text-decoration:none;">{{TITLE}}</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; color:#64748b;">
+                    {{META_LINE}}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; color:#334155;">
+                    {{MATCH_REASON}}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:16px 24px 20px 24px;">
+                    <a href="{{URL}}" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; background-color:#0284c7; border-radius:8px; padding:10px 20px; text-decoration:none;">
+                      View posting&nbsp;&rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- JOB_CARD_END -->
+
+          <!-- footer -->
+          <tr>
+            <td style="padding:10px 8px 0 8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#94a3b8;">
+              You get Job Scout alerts because you signed up with an invite code.
+              Only jobs we haven't sent you before make it into these emails.<br>
+              Need a break or found a role?
+              <a href="https://vakalaktika.github.io/job-scout/" style="color:#0369a1;">Pause your agent</a> with your invite code.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
