@@ -4,35 +4,96 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Job Scout — For friends &amp; invitees</title>
+<meta name="description" content="Invite-only job alerts. A scout that quietly checks the boards so you don't have to." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23226551'/%3E%3Cpath d='M20.5 20.5 25 25M13.8 20a6.2 6.2 0 1 1 0-12.4 6.2 6.2 0 0 1 0 12.4Z' stroke='%23faf9f7' stroke-width='2.4' stroke-linecap='round' fill='none'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  tailwind.config = { darkMode: 'class' };
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['Fraunces', 'Georgia', 'serif'],
+          sans: ['Outfit', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+        },
+        colors: {
+          pine: {
+            50:  '#f0f6f3',
+            100: '#ddece5',
+            200: '#b9d8cb',
+            300: '#8cbcaa',
+            400: '#579a83',
+            500: '#347c65',
+            600: '#226551',
+            700: '#1b5343',
+            800: '#174237',
+            900: '#13362d',
+            950: '#0a1f1a',
+          },
+        },
+      },
+    },
+  };
   // Stop the browser from opening dropped files (the old form's bug).
   window.addEventListener('dragover', function (e) { e.preventDefault(); }, false);
   window.addEventListener('drop', function (e) { e.preventDefault(); }, false);
 </script>
 <style>
+  /* dual-thumb salary slider */
   .range-thumb::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
     width: 20px; height: 20px; border-radius: 9999px;
-    background: #0284C7; border: 3px solid #fff;
-    box-shadow: 0 1px 4px rgba(2,132,199,.5);
+    background: #226551; border: 3px solid #fffdfb;
+    box-shadow: 0 1px 4px rgba(19, 54, 45, .45);
     cursor: pointer; pointer-events: auto;
   }
   .range-thumb::-moz-range-thumb {
     width: 20px; height: 20px; border-radius: 9999px;
-    background: #0284C7; border: 3px solid #fff;
-    box-shadow: 0 1px 4px rgba(2,132,199,.5);
+    background: #226551; border: 3px solid #fffdfb;
+    box-shadow: 0 1px 4px rgba(19, 54, 45, .45);
     cursor: pointer; pointer-events: auto;
   }
-  .dark .range-thumb::-webkit-slider-thumb { border-color: #0f172a; }
-  .dark .range-thumb::-moz-range-thumb { border-color: #0f172a; }
+  .dark .range-thumb::-webkit-slider-thumb { border-color: #1c1917; background: #579a83; }
+  .dark .range-thumb::-moz-range-thumb { border-color: #1c1917; background: #579a83; }
+
+  /* film grain — breaks digital flatness without stealing attention */
+  .grain::after {
+    content: ""; position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    opacity: .05; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+  }
+  .dark .grain::after { mix-blend-mode: overlay; opacity: .07; }
+
+  /* staggered entry — cards and fields rise in, never everything at once */
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .stagger > * { animation: rise .55s cubic-bezier(.22, 1, .36, 1) both; }
+  .stagger > *:nth-child(1) { animation-delay: .02s; }
+  .stagger > *:nth-child(2) { animation-delay: .07s; }
+  .stagger > *:nth-child(3) { animation-delay: .12s; }
+  .stagger > *:nth-child(4) { animation-delay: .17s; }
+  .stagger > *:nth-child(5) { animation-delay: .22s; }
+  .stagger > *:nth-child(6) { animation-delay: .27s; }
+  .stagger > *:nth-child(7) { animation-delay: .32s; }
+  .stagger > *:nth-child(8) { animation-delay: .37s; }
+  .stagger > *:nth-child(9) { animation-delay: .42s; }
+  .stagger > *:nth-child(10) { animation-delay: .47s; }
+  .stagger > *:nth-child(11) { animation-delay: .52s; }
+
+  h1, h2 { text-wrap: balance; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stagger > * { animation: none; }
+    * { transition-duration: .01ms !important; }
+  }
 </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 transition-colors">
+<body class="grain font-sans bg-stone-50 dark:bg-stone-950 transition-colors">
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
@@ -40,7 +101,7 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 const HOOK_URL = "https://job-scout-intake.vakalaktika.workers.dev/";
 
 /* ---------------- access-code validation ----------------
-   Typo-catching checksum only — real authorization happens server-side in the Zap.
+   Typo-catching checksum only — real authorization happens server-side.
    Canonical algorithm: MUST match the admin invite generator exactly. */
 const CODE_AB = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 31 chars, no 0/O/1/I/L
 function codeChecksum(x) {
@@ -162,17 +223,17 @@ const ROLE_KEYWORDS = [
 /* ---------------- helpers ---------------- */
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    if (document.querySelector('script[src="' + src + '"]')) return resolve();
     const s = document.createElement("script");
-    s.src = src; s.onload = resolve; s.onerror = () => reject(new Error("Failed to load " + src));
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("Failed to load " + src));
     document.head.appendChild(s);
   });
 }
-
 async function extractPdf(file) {
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
-  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   const data = await file.arrayBuffer();
   const pdf = await window.pdfjsLib.getDocument({ data }).promise;
   let text = "";
@@ -183,19 +244,16 @@ async function extractPdf(file) {
   }
   return text.trim();
 }
-
 async function extractDocx(file) {
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
   const arrayBuffer = await file.arrayBuffer();
   const result = await window.mammoth.extractRawText({ arrayBuffer });
   return (result?.value || "").trim();
 }
-
 function extractEmail(text) {
   const m = (text || "").match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
   return m ? m[0] : "";
 }
-
 function extractName(text) {
   // Resumes almost always start with the person's name: grab 2-4 leading capitalized words.
   const head = (text || "").trim().slice(0, 120);
@@ -206,7 +264,6 @@ function extractName(text) {
   if (/resume|curriculum|vitae|@/i.test(candidate) || candidate.length > 40) return "";
   return candidate;
 }
-
 function extractKeywords(text) {
   const found = [];
   const lower = (text || "").toLowerCase();
@@ -216,42 +273,37 @@ function extractKeywords(text) {
   }
   return found;
 }
-
 const fmtMoney = n => "$" + (n / 1000) + "k";
 
 /* ---------------- small components ---------------- */
 function Field({ label, children, hint }) {
   return (
-    <div className="mb-5">
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{label}</label>
+    <div className="mb-6">
+      <label className="block text-[13px] font-semibold tracking-wide text-stone-700 dark:text-stone-300 mb-1.5">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1.5 text-xs leading-relaxed text-stone-400 dark:text-stone-500">{hint}</p>}
     </div>
   );
 }
 
-const inputCls = "w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition";
+const inputCls = "w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 px-3.5 py-2.5 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-600 focus:outline-none focus:ring-2 focus:ring-pine-500 focus:border-pine-500 transition duration-200";
 
 function Autocomplete({ value, onChange, options, placeholder, disabled }) {
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(-1);
   const wrapRef = useRef(null);
-
   const filtered = useMemo(() => {
     const opts = options ?? [];
     const q = (value || "").toLowerCase().trim();
     if (!q) return opts.slice(0, 50);
     return opts.filter(o => o?.toLowerCase()?.includes(q)).slice(0, 50);
   }, [options, value]);
-
   useEffect(() => {
     const onDoc = e => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
-
   const pick = v => { onChange(v); setOpen(false); setHi(-1); };
-
   return (
     <div ref={wrapRef} className="relative">
       <input
@@ -269,12 +321,12 @@ function Autocomplete({ value, onChange, options, placeholder, disabled }) {
         }}
       />
       {open && filtered.length > 0 && (
-        <ul className="absolute z-20 mt-1 w-full max-h-52 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg text-sm">
+        <ul className="absolute z-20 mt-1 w-full max-h-52 overflow-auto rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 shadow-lg shadow-stone-900/10 text-sm">
           {filtered.map((o, i) => (
             <li key={o + i}
-              className={"px-3.5 py-2 cursor-pointer " + (i === hi ? "bg-sky-100 dark:bg-sky-900/40 text-sky-900 dark:text-sky-200" : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800")}
-              onMouseEnter={() => setHi(i)}
-              onMouseDown={e => { e.preventDefault(); pick(o); }}>
+                className={"px-3.5 py-2 cursor-pointer " + (i === hi ? "bg-pine-50 dark:bg-pine-950 text-pine-800 dark:text-pine-200" : "text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800")}
+                onMouseEnter={() => setHi(i)}
+                onMouseDown={e => { e.preventDefault(); pick(o); }}>
               {o}
             </li>
           ))}
@@ -289,38 +341,40 @@ function SalarySlider({ min, max, onChange }) {
   const pct = v => ((v - LO) / (HI - LO)) * 100;
   return (
     <div className="pt-1">
-      <div className="flex justify-between mb-2 text-sm font-semibold text-sky-700 dark:text-sky-400">
+      <div className="flex justify-between mb-2 text-sm font-semibold tabular-nums text-pine-700 dark:text-pine-300">
         <span>{fmtMoney(min)}</span>
-        <span className="text-slate-400 dark:text-slate-500 font-normal">to</span>
+        <span className="text-stone-400 dark:text-stone-500 font-normal">to</span>
         <span>{fmtMoney(max)}{max >= HI ? "+" : ""}</span>
       </div>
       <div className="relative h-5">
-        <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700" />
-        <div className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-sky-600"
+        <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-stone-200 dark:bg-stone-700" />
+        <div className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-pine-600 dark:bg-pine-400"
              style={{ left: pct(min) + "%", width: (pct(max) - pct(min)) + "%" }} />
         <input type="range" min={LO} max={HI} step={STEP} value={min}
-          onChange={e => onChange(Math.min(+e.target.value, max - STEP), max)}
-          className="range-thumb absolute w-full h-5 appearance-none bg-transparent pointer-events-none" />
+               onChange={e => onChange(Math.min(+e.target.value, max - STEP), max)}
+               className="range-thumb absolute w-full h-5 appearance-none bg-transparent pointer-events-none" />
         <input type="range" min={LO} max={HI} step={STEP} value={max}
-          onChange={e => onChange(min, Math.max(+e.target.value, min + STEP))}
-          className="range-thumb absolute w-full h-5 appearance-none bg-transparent pointer-events-none" />
+               onChange={e => onChange(min, Math.max(+e.target.value, min + STEP))}
+               className="range-thumb absolute w-full h-5 appearance-none bg-transparent pointer-events-none" />
       </div>
-      <div className="flex justify-between mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+      <div className="flex justify-between mt-1.5 text-xs tabular-nums text-stone-400 dark:text-stone-500">
         <span>$50k</span><span>$300k+</span>
       </div>
     </div>
   );
 }
 
-function SegmentGroup({ options, value, onChange, cols }) {
+function SegmentGroup({ options, value, onChange, cols, tone }) {
+  const activeCls = tone === "amber"
+    ? "border-amber-600 bg-amber-600 text-white shadow-sm"
+    : "border-stone-900 bg-stone-900 text-stone-50 dark:border-stone-100 dark:bg-stone-100 dark:text-stone-900 shadow-sm";
   return (
     <div className={"grid gap-2 " + (cols === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4")}>
       {options.map(o => (
         <button key={o} type="button" onClick={() => onChange(o)}
-          className={"rounded-lg border px-3 py-2.5 text-sm font-medium transition " +
-            (value === o
-              ? "border-sky-600 bg-sky-600 text-white shadow-sm"
-              : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-sky-400 dark:hover:border-sky-600")}>
+          className={"rounded-lg border px-3 py-2.5 text-sm font-medium transition duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine-500 focus-visible:ring-offset-1 " +
+            (value === o ? activeCls
+              : "border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:border-stone-500 dark:hover:border-stone-500 hover:-translate-y-px")}>
           {o}
         </button>
       ))}
@@ -332,29 +386,25 @@ function SegmentGroup({ options, value, onChange, cols }) {
 function Dropzone({ onFile, status, fileName, error }) {
   const inputRef = useRef(null);
   const [drag, setDrag] = useState(false);
-
   const handleFiles = useCallback(files => {
     const f = files?.[0];
     if (f) onFile(f);
   }, [onFile]);
-
   return (
-    <div
-      role="button" tabIndex={0}
+    <div role="button" tabIndex={0}
       onClick={() => inputRef.current?.click()}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputRef.current?.click(); } }}
       onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setDrag(true); }}
       onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDrag(true); }}
       onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setDrag(false); }}
       onDrop={e => { e.preventDefault(); e.stopPropagation(); setDrag(false); handleFiles(e.dataTransfer?.files); }}
-      className={"cursor-pointer rounded-xl border-2 border-dashed px-6 py-8 text-center transition select-none " +
-        (drag
-          ? "border-sky-500 bg-sky-50 dark:bg-sky-950/40"
-          : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-sky-400 dark:hover:border-sky-600")}>
+      className={"cursor-pointer rounded-xl border-2 border-dashed px-6 py-8 text-center transition duration-200 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine-500 focus-visible:ring-offset-1 " +
+        (drag ? "border-pine-500 bg-pine-50 dark:bg-pine-950"
+              : "border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-pine-400 dark:hover:border-pine-600")}>
       <input ref={inputRef} type="file" accept=".pdf,.docx,.txt" className="hidden"
-        onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
+             onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} />
       {status === "analyzing" ? (
-        <div className="flex items-center justify-center gap-3 text-sky-700 dark:text-sky-400">
+        <div className="flex items-center justify-center gap-3 text-pine-700 dark:text-pine-300">
           <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
@@ -363,32 +413,35 @@ function Dropzone({ onFile, status, fileName, error }) {
         </div>
       ) : status === "done" ? (
         <div className="text-sm">
-          <span className="inline-flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="inline-flex items-center gap-2 font-medium text-pine-700 dark:text-pine-300">
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
             {fileName}
           </span>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Resume parsed. Click or drop to replace.</p>
+          <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">Resume parsed. Click or drop to replace.</p>
         </div>
       ) : (
         <div>
-          <svg className="mx-auto h-8 w-8 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+          <svg className="mx-auto h-8 w-8 text-stone-400 dark:text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
           </svg>
-          <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300">Drop your resume here, or click to browse</p>
-          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">PDF, DOCX, or TXT</p>
+          <p className="mt-2 text-sm font-medium text-stone-700 dark:text-stone-300">Drop your resume here, or click to browse</p>
+          <p className="mt-1 text-xs text-stone-400 dark:text-stone-500">PDF, DOCX, or TXT</p>
         </div>
       )}
-      {error && <p className="mt-2 text-xs font-medium text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }
 
 /* ---------------- app ---------------- */
 function App() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
 
   const [mode, setMode] = useState("setup"); // "setup" | "pause"
+
   const [accessCode, setAccessCode] = useState("");
   const [codeValid, setCodeValid] = useState(null); // null | true | false
   const [name, setName] = useState("");
@@ -411,7 +464,7 @@ function App() {
   const [done, setDone] = useState(false);
   const [doneMode, setDoneMode] = useState("setup"); // which flow produced the success screen
 
-  // live access-code check — checksum only; final authorization is server-side in the Zap
+  // live access-code check — checksum only; final authorization is server-side
   useEffect(() => {
     if (!accessCode) { setCodeValid(null); return; }
     setCodeValid(isValidCode(accessCode));
@@ -435,7 +488,6 @@ function App() {
       if (ext === "pdf") text = await extractPdf(file);
       else if (ext === "docx") text = await extractDocx(file);
       else text = (await file.text()).trim();
-
       const kws = extractKeywords(text);
       const foundName = extractName(text);
       const foundEmail = extractEmail(text);
@@ -466,34 +518,10 @@ function App() {
     const regions = [city, state, country].filter(Boolean).join(", ");
     // Payload keys are identical across both flows (contract unchanged).
     // Pause is signalled purely by frequency === "Paused"; other fields are ignored
-    // by the Zap's paused branch, so we send safe empties.
+    // by the paused branch, so we send safe empties.
     const payload = mode === "pause"
-      ? {
-          access_code: code,
-          name: "",
-          email: "",
-          resume_text: "",
-          target_roles: "",
-          regions: "",
-          remote: "",
-          min_salary: 0,
-          seniority: "",
-          frequency: "Paused",
-          submitted_at: new Date().toISOString()
-        }
-      : {
-          access_code: code,
-          name: name.trim(),
-          email: email.trim(),
-          resume_text: resumeText,
-          target_roles: roles.trim(),
-          regions,
-          remote,
-          min_salary: salMin,
-          seniority,
-          frequency,
-          submitted_at: new Date().toISOString()
-        };
+      ? { access_code: code, name: "", email: "", resume_text: "", target_roles: "", regions: "", remote: "", min_salary: 0, seniority: "", frequency: "Paused", submitted_at: new Date().toISOString() }
+      : { access_code: code, name: name.trim(), email: email.trim(), resume_text: resumeText, target_roles: roles.trim(), regions, remote, min_salary: salMin, seniority, frequency, submitted_at: new Date().toISOString() };
     try {
       const res = await fetch(HOOK_URL, { method: "POST", body: JSON.stringify(payload) });
       if (!res.ok) throw new Error("HTTP " + res.status);
@@ -514,35 +542,30 @@ function App() {
     setAccessCode(""); setCodeValid(null);
     setName(""); setEmail("");
     setResumeText(""); setResumeStatus("idle"); setResumeName(""); setResumeError("");
-    setRoles(""); setCountry("United States"); setState(""); setCity("");
+    setRoles("");
+    setCountry("United States"); setState(""); setCity("");
     setRemote("Any"); setSalMin(100000); setSalMax(200000);
     setSeniority("Any"); setFrequency("Daily");
     setSubmitError(""); setDone(false);
   }
 
-  function switchMode(next) {
-    setMode(next);
-    setSubmitError("");
-  }
+  function switchMode(next) { setMode(next); setSubmitError(""); }
+
+  const primaryBtn = "w-full rounded-xl py-3.5 text-sm font-bold tracking-wide transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine-500 focus-visible:ring-offset-2 ";
 
   return (
-    <div className="min-h-screen py-10 px-4">
-      <div className="mx-auto max-w-xl">
+    <div className="min-h-[100dvh] py-10 px-4">
+      <div className="mx-auto max-w-xl stagger">
+
         {/* header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex items-end justify-between mb-8">
           <div>
-            <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center shadow">
-                <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Job Scout</h1>
-            </div>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">For friends &amp; invitees</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-pine-700 dark:text-pine-300">Invite-only</p>
+            <h1 className="mt-1 font-display text-4xl font-semibold text-stone-900 dark:text-stone-50">Job Scout</h1>
+            <p className="mt-1.5 text-sm text-stone-500 dark:text-stone-400">A scout that quietly checks the boards so you don't have to.</p>
           </div>
           <button type="button" onClick={() => setDark(d => !d)} aria-label="Toggle dark mode"
-            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition">
+            className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 p-2 text-stone-500 dark:text-stone-400 hover:text-pine-700 dark:hover:text-pine-300 transition duration-200 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine-500">
             {dark ? (
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1.5M12 19.5V21M4.2 4.2l1.06 1.06M18.74 18.74l1.06 1.06M3 12h1.5M19.5 12H21M4.2 19.8l1.06-1.06M18.74 5.26l1.06-1.06M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
             ) : (
@@ -553,32 +576,32 @@ function App() {
 
         {done ? (
           /* success view */
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-10 text-center shadow-sm">
+          <div className="rounded-2xl bg-white dark:bg-stone-900 ring-1 ring-stone-900/5 dark:ring-white/10 p-10 text-center shadow-[0_1px_2px_rgba(28,25,23,.04),0_20px_48px_-24px_rgba(28,25,23,.22)]">
             {doneMode === "pause" ? (
               <>
-                <div className="mx-auto h-14 w-14 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-                  <svg className="h-7 w-7 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25v7.5M15 8.25v7.5" /></svg>
+                <div className="mx-auto h-14 w-14 rounded-2xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                  <svg className="h-7 w-7 text-amber-700 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25v7.5M15 8.25v7.5" /></svg>
                 </div>
-                <h2 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">Agent paused ⏸️</h2>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  Your scout is on hold — no more matches for now. Congrats if you found a role! Come back and set it up again whenever you like.
+                <h2 className="mt-5 font-display text-2xl font-semibold text-stone-900 dark:text-stone-50">Scout paused</h2>
+                <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+                  Your scout is on hold — no more matches for now. Congrats if you found a role. Come back and set it up again whenever you like.
                 </p>
                 <button type="button" onClick={reset}
-                  className="mt-6 rounded-lg bg-sky-600 hover:bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white transition shadow-sm">
+                  className="mt-6 rounded-lg bg-pine-600 hover:bg-pine-700 px-5 py-2.5 text-sm font-semibold text-white transition duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine-500 focus-visible:ring-offset-2 shadow-[0_8px_20px_-8px_rgba(34,101,81,.5)]">
                   Done
                 </button>
               </>
             ) : (
               <>
-                <div className="mx-auto h-14 w-14 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-                  <svg className="h-7 w-7 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                <div className="mx-auto h-14 w-14 rounded-2xl bg-pine-100 dark:bg-pine-950 flex items-center justify-center">
+                  <svg className="h-7 w-7 text-pine-700 dark:text-pine-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                 </div>
-                <h2 className="mt-5 text-xl font-bold text-slate-900 dark:text-white">Agent deployed 🎯</h2>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  Your scout is set up. Watch your inbox — matching roles will start arriving on your chosen schedule.
+                <h2 className="mt-5 font-display text-2xl font-semibold text-stone-900 dark:text-stone-50">Your scout is live</h2>
+                <p className="mt-2 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+                  Watch your inbox — matching roles will start arriving on your chosen schedule.
                 </p>
                 <button type="button" onClick={reset}
-                  className="mt-6 rounded-lg bg-sky-600 hover:bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white transition shadow-sm">
+                  className="mt-6 rounded-lg bg-pine-600 hover:bg-pine-700 px-5 py-2.5 text-sm font-semibold text-white transition duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine-500 focus-visible:ring-offset-2 shadow-[0_8px_20px_-8px_rgba(34,101,81,.5)]">
                   Set up another
                 </button>
               </>
@@ -586,59 +609,63 @@ function App() {
           </div>
         ) : (
           /* form */
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm">
+          <div className="rounded-2xl bg-white dark:bg-stone-900 ring-1 ring-stone-900/5 dark:ring-white/10 p-6 sm:p-8 shadow-[0_1px_2px_rgba(28,25,23,.04),0_20px_48px_-24px_rgba(28,25,23,.22)]">
+
             {/* mode toggle */}
             <div className="mb-6 grid grid-cols-2 gap-2">
               <button type="button" onClick={() => switchMode("setup")}
-                className={"rounded-lg border px-3 py-2.5 text-sm font-medium transition " +
+                className={"rounded-lg border px-3 py-2.5 text-sm font-medium transition duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine-500 " +
                   (mode === "setup"
-                    ? "border-sky-600 bg-sky-600 text-white shadow-sm"
-                    : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-sky-400 dark:hover:border-sky-600")}>
+                    ? "border-pine-600 bg-pine-600 text-white shadow-sm"
+                    : "border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:border-pine-400 dark:hover:border-pine-600")}>
                 Set up / update
               </button>
               <button type="button" onClick={() => switchMode("pause")}
-                className={"rounded-lg border px-3 py-2.5 text-sm font-medium transition " +
+                className={"rounded-lg border px-3 py-2.5 text-sm font-medium transition duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 " +
                   (mode === "pause"
-                    ? "border-amber-500 bg-amber-500 text-white shadow-sm"
-                    : "border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-amber-400 dark:hover:border-amber-500")}>
+                    ? "border-amber-600 bg-amber-600 text-white shadow-sm"
+                    : "border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 hover:border-amber-500 dark:hover:border-amber-600")}>
                 Pause — I found a role
               </button>
             </div>
 
             <Field label="Access token">
               <div className="relative">
-                <input className={inputCls + " pr-10 font-mono tracking-wide"} value={accessCode}
+                <input
+                  className={inputCls + " pr-10 font-mono tracking-wide"}
+                  value={accessCode}
                   placeholder="SCOUT-XXXX-XXXX"
-                  onChange={e => setAccessCode(e.target.value.toUpperCase())} autoComplete="off" spellCheck="false" />
+                  onChange={e => setAccessCode(e.target.value.toUpperCase())}
+                  autoComplete="off" spellCheck="false"
+                />
                 {codeValid !== null && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2">
                     {codeValid
-                      ? <svg className="h-5 w-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
+                      ? <svg className="h-5 w-5 text-pine-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" /></svg>
                       : <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.7 7.3a1 1 0 00-1.4 1.4L8.6 10l-1.3 1.3a1 1 0 101.4 1.4L10 11.4l1.3 1.3a1 1 0 001.4-1.4L11.4 10l1.3-1.3a1 1 0 00-1.4-1.4L10 8.6 8.7 7.3z" clipRule="evenodd" /></svg>}
                   </span>
                 )}
               </div>
-              {codeValid === false && <p className="mt-1 text-xs font-medium text-red-500">That token doesn't look right. Check your invite.</p>}
+              {codeValid === false && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">That token doesn't look right. Check your invite.</p>}
             </Field>
 
             {mode === "pause" ? (
               /* pause flow — code only */
               <>
-                <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mb-5 text-sm leading-relaxed text-stone-500 dark:text-stone-400">
                   Found a role, or need a break? Enter your access token and we'll pause your scout — no more match emails until you set it up again.
                 </p>
                 {submitError && (
                   <p className="mb-4 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-3.5 py-2.5 text-sm text-red-600 dark:text-red-400">{submitError}</p>
                 )}
                 <button type="button" onClick={submit} disabled={!canSubmit}
-                  className={"w-full rounded-xl py-3.5 text-sm font-bold tracking-wide transition shadow-sm " +
-                    (canSubmit
-                      ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-600 hover:to-orange-700"
-                      : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed")}>
+                  className={primaryBtn + (canSubmit
+                    ? "bg-amber-600 text-white hover:bg-amber-700 active:scale-[0.99] shadow-[0_8px_20px_-8px_rgba(180,83,9,.5)]"
+                    : "bg-stone-200 dark:bg-stone-800 text-stone-400 dark:text-stone-600 cursor-not-allowed")}>
                   {submitting ? "Pausing…" : "Pause my agent"}
                 </button>
                 {codeValid !== true && (
-                  <p className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">Enter your access token to pause.</p>
+                  <p className="mt-2 text-center text-xs text-stone-400 dark:text-stone-500">Enter your access token to pause.</p>
                 )}
               </>
             ) : (
@@ -658,22 +685,14 @@ function App() {
                 </Field>
 
                 <Field label="Target roles / keywords" hint="Auto-filled from your resume — edit freely. Comma-separated.">
-                  <input className={inputCls} value={roles} onChange={e => setRoles(e.target.value)}
-                    placeholder="e.g. Product Designer, UX Researcher" />
+                  <input className={inputCls} value={roles} onChange={e => setRoles(e.target.value)} placeholder="e.g. Product Designer, UX Researcher" />
                 </Field>
 
                 <Field label="Location">
                   <div className="grid sm:grid-cols-3 gap-3">
-                    <Autocomplete value={country} placeholder="Country"
-                      options={Object.keys(GEO)}
-                      onChange={v => { setCountry(v); setState(""); setCity(""); }} />
-                    <Autocomplete value={state} placeholder="State"
-                      options={states}
-                      onChange={v => { setState(v); setCity(""); }} />
-                    <Autocomplete value={city} placeholder="City"
-                      options={cities}
-                      onChange={setCity}
-                      disabled={!state} />
+                    <Autocomplete value={country} placeholder="Country" options={Object.keys(GEO)} onChange={v => { setCountry(v); setState(""); setCity(""); }} />
+                    <Autocomplete value={state} placeholder="State" options={states} onChange={v => { setState(v); setCity(""); }} />
+                    <Autocomplete value={city} placeholder="City" options={cities} onChange={setCity} disabled={!state} />
                   </div>
                 </Field>
 
@@ -698,23 +717,22 @@ function App() {
                 )}
 
                 <button type="button" onClick={submit} disabled={!canSubmit}
-                  className={"w-full rounded-xl py-3.5 text-sm font-bold tracking-wide transition shadow-sm " +
-                    (canSubmit
-                      ? "bg-gradient-to-r from-sky-600 to-blue-600 text-white hover:from-sky-700 hover:to-blue-700"
-                      : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed")}>
-                  {submitting ? "Deploying…" : "Save & Deploy Agent"}
+                  className={primaryBtn + (canSubmit
+                    ? "bg-pine-600 text-white hover:bg-pine-700 active:scale-[0.99] shadow-[0_8px_20px_-8px_rgba(34,101,81,.5)]"
+                    : "bg-stone-200 dark:bg-stone-800 text-stone-400 dark:text-stone-600 cursor-not-allowed")}>
+                  {submitting ? "Deploying…" : "Save & deploy agent"}
                 </button>
                 {codeValid !== true ? (
-                  <p className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">Enter a valid access token to deploy.</p>
+                  <p className="mt-2 text-center text-xs text-stone-400 dark:text-stone-500">Enter a valid access token to deploy.</p>
                 ) : !resumeText ? (
-                  <p className="mt-2 text-center text-xs text-slate-400 dark:text-slate-500">Add your resume to deploy.</p>
+                  <p className="mt-2 text-center text-xs text-stone-400 dark:text-stone-500">Add your resume to deploy.</p>
                 ) : null}
               </>
             )}
           </div>
         )}
 
-        <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-600">
+        <p className="mt-6 text-center text-xs text-stone-400 dark:text-stone-600">
           Invite-only · Job Scout quietly checks the boards so you don't have to.
         </p>
       </div>
