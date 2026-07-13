@@ -364,6 +364,31 @@ function SalarySlider({ min, max, onChange }) {
   );
 }
 
+function AgeSlider({ value, onChange }) {
+  const LO = 1, HI = 16; // 16 renders as "15+"
+  const pct = v => ((v - LO) / (HI - LO)) * 100;
+  const label = v => v >= HI ? "15+ days (any age)" : v === 1 ? "1 day" : v + " days";
+  return (
+    <div className="pt-1">
+      <div className="flex justify-between mb-2 text-sm font-semibold tabular-nums text-pine-700 dark:text-pine-300">
+        <span>Posted within the last</span>
+        <span>{label(value)}</span>
+      </div>
+      <div className="relative h-5">
+        <div className="absolute top-1/2 -translate-y-1/2 w-full h-1.5 rounded-full bg-stone-200 dark:bg-stone-700" />
+        <div className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full bg-pine-600 dark:bg-pine-400"
+             style={{ left: "0%", width: pct(value) + "%" }} />
+        <input type="range" min={LO} max={HI} step={1} value={value}
+               onChange={e => onChange(+e.target.value)}
+               className="range-thumb absolute w-full h-5 appearance-none bg-transparent pointer-events-auto" />
+      </div>
+      <div className="flex justify-between mt-1.5 text-xs tabular-nums text-stone-400 dark:text-stone-500">
+        <span>1 day</span><span>15+ days</span>
+      </div>
+    </div>
+  );
+}
+
 function SegmentGroup({ options, value, onChange, cols, tone }) {
   const activeCls = tone === "amber"
     ? "border-amber-600 bg-amber-600 text-white shadow-sm"
@@ -458,6 +483,7 @@ function App() {
   const [salMin, setSalMin] = useState(100000);
   const [salMax, setSalMax] = useState(200000);
   const [seniority, setSeniority] = useState("Any");
+  const [maxAge, setMaxAge] = useState(4); // max posting age in days; 16 = "15+" (no cap)
   const [frequency, setFrequency] = useState("Daily");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -520,8 +546,8 @@ function App() {
     // Pause is signalled purely by frequency === "Paused"; other fields are ignored
     // by the paused branch, so we send safe empties.
     const payload = mode === "pause"
-      ? { access_code: code, name: "", email: "", resume_text: "", target_roles: "", regions: "", remote: "", min_salary: 0, seniority: "", frequency: "Paused", submitted_at: new Date().toISOString() }
-      : { access_code: code, name: name.trim(), email: email.trim(), resume_text: resumeText, target_roles: roles.trim(), regions, remote, min_salary: salMin, seniority, frequency, submitted_at: new Date().toISOString() };
+      ? { access_code: code, name: "", email: "", resume_text: "", target_roles: "", regions: "", remote: "", min_salary: 0, seniority: "", frequency: "Paused", max_posting_age: "", submitted_at: new Date().toISOString() }
+      : { access_code: code, name: name.trim(), email: email.trim(), resume_text: resumeText, target_roles: roles.trim(), regions, remote, min_salary: salMin, seniority, frequency, max_posting_age: maxAge >= 16 ? "15+" : String(maxAge), submitted_at: new Date().toISOString() };
     try {
       const res = await fetch(HOOK_URL, { method: "POST", body: JSON.stringify(payload) });
       if (!res.ok) throw new Error("HTTP " + res.status);
@@ -545,7 +571,7 @@ function App() {
     setRoles("");
     setCountry("United States"); setState(""); setCity("");
     setRemote("Any"); setSalMin(100000); setSalMax(200000);
-    setSeniority("Any"); setFrequency("Daily");
+    setSeniority("Any"); setFrequency("Daily"); setMaxAge(4);
     setSubmitError(""); setDone(false);
   }
 
@@ -706,6 +732,10 @@ function App() {
 
                 <Field label="Seniority">
                   <SegmentGroup options={["Entry", "Mid", "Senior", "Any"]} value={seniority} onChange={setSeniority} />
+                </Field>
+
+                <Field label="Posting freshness" hint="Only postings newer than this will be emailed to you. Fresher = fewer but hotter leads.">
+                  <AgeSlider value={maxAge} onChange={setMaxAge} />
                 </Field>
 
                 <Field label="Alert frequency">
