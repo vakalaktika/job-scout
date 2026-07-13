@@ -23,8 +23,10 @@
     {{POSTED_BG}} / {{POSTED_FG}}  freshness pill colors:
         0–2 days:   bg #dcfce7  fg #15803d   (green — fresh)
         3–7 days:   bg #fef3c7  fg #b45309   (amber — recent)
-        8+  days:   bg #f1f5f9  fg #64748b   (slate — older)
+        8+  days:   bg #f1f5f9  fg #64748b   (gray — older)
         unknown:    bg #f1f5f9  fg #94a3b8
+
+  Design language matches the Job Scout form: warm stone neutrals, pine accent.
 -->
 <html lang="en">
 <head>
@@ -33,11 +35,11 @@
   <meta name="color-scheme" content="light">
   <title>Job Scout — new matches</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f1f5f9; -webkit-text-size-adjust:100%;">
+<body style="margin:0; padding:0; background-color:#f5f5f4; -webkit-text-size-adjust:100%;">
   <!-- preheader (hidden preview text) -->
   <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">{{HEADLINE}} — freshest first, with posting dates.</div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f4;">
     <tr>
       <td align="center" style="padding:32px 16px;">
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:100%;">
@@ -47,18 +49,18 @@
             <td style="padding:0 8px 16px 8px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:700; letter-spacing:2px; color:#0369a1; text-transform:uppercase;">
+                  <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:700; letter-spacing:2px; color:#1b5343; text-transform:uppercase;">
                     Job&nbsp;Scout
                   </td>
-                  <td align="right" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; color:#64748b;">
+                  <td align="right" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; color:#78716c;">
                     {{RUN_DATE}}
                   </td>
                 </tr>
               </table>
-              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:22px; font-weight:700; color:#0f172a; padding-top:12px;">
+              <div style="font-family:Georgia,'Times New Roman',serif; font-size:24px; font-weight:700; color:#1c1917; padding-top:12px;">
                 {{HEADLINE}}
               </div>
-              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; color:#475569; padding-top:4px;">
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; color:#57534e; padding-top:4px;">
                 Hi {{FIRST_NAME}} — sorted freshest first. Posting dates are on each card.
               </div>
             </td>
@@ -69,12 +71,12 @@
           <!-- JOB_CARD_START -->
           <tr>
             <td style="padding:0 0 14px 0;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border:1px solid #e2e8f0; border-radius:12px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border:1px solid #e7e5e4; border-radius:12px;">
                 <tr>
                   <td style="padding:20px 24px 0 24px;">
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; color:#0369a1; text-transform:uppercase; letter-spacing:0.5px;">
+                        <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; color:#1b5343; text-transform:uppercase; letter-spacing:0.5px;">
                           {{COMPANY}}
                         </td>
                         <td align="right">
@@ -88,22 +90,22 @@
                 </tr>
                 <tr>
                   <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; line-height:1.3;">
-                    <a href="{{URL}}" style="color:#0f172a; text-decoration:none;">{{TITLE}}</a>
+                    <a href="{{URL}}" style="color:#1c1917; text-decoration:none;">{{TITLE}}</a>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; color:#64748b;">
+                  <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; color:#78716c;">
                     {{META_LINE}}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:10px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; color:#334155;">
+                  <td style="padding:10px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; color:#44403c;">
                     {{MATCH_REASON}}
                   </td>
                 </tr>
                 <tr>
                   <td style="padding:16px 24px 20px 24px;">
-                    <a href="{{URL}}" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; background-color:#0284c7; border-radius:8px; padding:10px 20px; text-decoration:none;">
+                    <a href="{{URL}}" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; background-color:#226551; border-radius:8px; padding:10px 20px; text-decoration:none;">
                       View posting&nbsp;&rarr;
                     </a>
                   </td>
@@ -115,11 +117,11 @@
 
           <!-- footer -->
           <tr>
-            <td style="padding:10px 8px 0 8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#94a3b8;">
+            <td style="padding:10px 8px 0 8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#a8a29e;">
               You get Job Scout alerts because you signed up with an invite code.
               Only jobs we haven't sent you before make it into these emails.<br>
               Need a break or found a role?
-              <a href="https://vakalaktika.github.io/job-scout/" style="color:#0369a1;">Pause your agent</a> with your invite code.
+              <a href="https://vakalaktika.github.io/job-scout/" style="color:#1b5343;">Pause your agent</a> with your invite code.
             </td>
           </tr>
 
