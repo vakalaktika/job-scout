@@ -510,10 +510,14 @@ function App() {
     setResumeName(file.name);
     const started = Date.now();
     try {
-      let text = "";
-      if (ext === "pdf") text = await extractPdf(file);
-      else if (ext === "docx") text = await extractDocx(file);
-      else text = (await file.text()).trim();
+      const extraction = ext === "pdf" ? extractPdf(file)
+        : ext === "docx" ? extractDocx(file)
+        : file.text().then(t => (t || "").trim());
+      // Watchdog: never leave the user stuck on "Analyzing" if a reader hangs
+      const text = await Promise.race([
+        extraction,
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Resume extraction timed out")), 20000))
+      ]);
       if (!text || text.replace(/\s/g, "").length < 40) {
         // "Successful" parse but no real text — typical of scanned/image-based PDFs.
         const waitFail = Math.max(0, 1200 - (Date.now() - started));
