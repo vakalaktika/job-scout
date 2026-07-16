@@ -198,9 +198,9 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
             ? Y.jsx("div", { className: "wizard-kicker-row", children: Y.jsx("span", { className: "optional-badge", children: "Optional" }) })
             : null
           : Y.jsxs("div", {
-              className: "wizard-kicker-row",
+              className: `wizard-kicker-row ${ie ? "has-optional" : "step-only"}`,
               children: [
-                Y.jsxs("span", { children: ["Step ", T + 1, " of ", N.length] }),
+                Y.jsxs("span", { className: "step-count-kicker", children: ["Step ", T + 1, " of ", N.length] }),
                 ie ? Y.jsx("span", { className: "optional-badge", children: "Optional" }) : null,
               ],
             }),

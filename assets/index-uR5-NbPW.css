@@ -122,3 +122,44 @@
 @media(prefers-reduced-motion:reduce){
   .wizard-progress-track>span{will-change:auto}
 }
+
+/* Mobile form experience: compact orientation and persistent actions */
+@media(max-width:780px){
+  .journey-intake>.journey-bar{display:none}
+  .journey-intake .journey-screen{min-height:100dvh}
+  .wizard-shell .flow-topbar{height:54px;padding:0 14px}
+  .wizard-shell .flow-topbar>span{font-size:11px}
+  .wizard-shell .brand-lockup{font-size:17px}
+  .wizard-shell .brand-mark{width:26px;height:26px}
+  .wizard-main,.editing-main{padding:15px 12px calc(92px + env(safe-area-inset-bottom))}
+  .wizard-intro{display:block}
+  .wizard-intro .eyebrow{font-size:8px;letter-spacing:.12em}
+  .wizard-intro h1,.editing-main .wizard-intro h1{max-width:520px;margin:5px 0 5px;font-size:24px;line-height:1.1;letter-spacing:-.03em}
+  .wizard-intro>p:not(.eyebrow){max-width:540px;margin:0;font-size:12px;line-height:1.45}
+  .wizard-form{margin-top:14px}
+  .wizard-progress{position:sticky;top:0;z-index:8;border-radius:12px 12px 0 0;padding:11px 14px 10px;box-shadow:0 5px 14px #211f1c0a}
+  .wizard-progress-meta{margin-bottom:7px;font-size:10px}
+  .wizard-progress nav{display:none}
+  .wizard-progress-track{height:3px}
+  .wizard-panel{padding:20px 16px 24px}
+  .wizard-step-heading{margin-bottom:18px}
+  .wizard-kicker-row.step-only{display:none}
+  .wizard-kicker-row.has-optional{margin-bottom:6px}
+  .wizard-kicker-row.has-optional .step-count-kicker{display:none}
+  .wizard-step-heading h2{font-size:23px;line-height:1.12}
+  .wizard-step-heading p{margin-top:7px;font-size:13px;line-height:1.45}
+  .wizard-form label:not(.resume-field):not(.form-toggle){margin-top:15px;font-size:11px}
+  .wizard-form input,.wizard-form select{min-height:46px;padding:11px 12px;font-size:14px}
+  .field-help{font-size:11px;line-height:1.4}
+  .resume-field{margin-top:16px;padding:12px}
+  .resume-copy strong{font-size:14px}
+  .resume-copy small{font-size:11px;line-height:1.4}
+  .preference-tabs-shell{position:sticky;top:0;z-index:8;border-radius:12px 12px 0 0;box-shadow:0 5px 14px #211f1c0a}
+  .preference-tabs-shell [role=tab]{min-width:92px;min-height:42px;padding:8px 11px;font-size:11px}
+  .wizard-actions,.editing-form .wizard-actions{position:fixed;right:0;bottom:0;left:0;z-index:30;display:flex;align-items:center;justify-content:flex-end;flex-direction:row;gap:8px;margin:0;border:0;border-top:1px solid var(--line);border-radius:0;background:#fbfbfaf2;padding:8px 12px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px #211f1c12;backdrop-filter:blur(14px)}
+  .wizard-actions button{width:auto;min-height:44px;padding:10px 14px}
+  .wizard-actions .secondary-flow-button{min-width:76px}
+  .wizard-actions .primary-flow-button{min-width:126px}
+  .wizard-action-note{display:none}
+  .wizard-privacy{margin-top:10px;padding-bottom:4px}
+}

@@ -33,6 +33,14 @@ if (bundle.includes(standardJourneyBar)) {
   throw new Error("Could not remove onboarding progress from dashboard editing.");
 }
 
+const standardShellClass = 'className:e==="dashboard"?"member-shell":"journey-shell"';
+const statefulShellClass = 'className:e==="dashboard"?"member-shell":`journey-shell journey-${e}`';
+if (bundle.includes(standardShellClass)) {
+  bundle = bundle.replace(standardShellClass, statefulShellClass);
+} else if (!bundle.includes(statefulShellClass)) {
+  throw new Error("Could not add journey state classes for responsive layouts.");
+}
+
 // Keep the active production bundle on one restrained motion language. These
 // replacements cover the dashboard, authentication, onboarding, and feedback
 // surfaces that live outside the maintainable intake component below.
