@@ -24,6 +24,7 @@ Blocked for the same reason. The intended change is interaction-semantic rather 
 - Initial pass: blocked before visual comparison because no supported browser surface is available.
 - Fixes made from source evidence: removed onboarding progress and numbering from editing; exposed every category; added a single save action and cancel path; kept onboarding behavior unchanged.
 - Interaction refinement: removed panel exit/entry motion and automatic smooth scrolling from preference tabs; retained only the fast selected-tab spring.
+- Platform motion pass: standardized micro, surface, and feedback springs; reduced page and card travel to 2–8px; removed intake panel slides in favor of a quick opacity transition.
 - Post-fix visual evidence: unavailable.
 
 ## Implementation checklist

@@ -292,7 +292,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                 ? Y.jsxs(Ut.div, {
                     className: "resume-result success",
                     role: "status",
-                    initial: s ? false : { opacity: 0, y: 5 },
+                    initial: s ? false : { opacity: 0, y: 2 },
                     animate: { opacity: 1, y: 0 },
                     exit: { opacity: 0 },
                     transition: Tr,
@@ -316,7 +316,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                   ? Y.jsxs(Ut.div, {
                       className: "resume-result empty",
                       role: "status",
-                      initial: s ? false : { opacity: 0, y: 5 },
+                      initial: s ? false : { opacity: 0, y: 2 },
                       animate: { opacity: 1, y: 0 },
                       exit: { opacity: 0 },
                       transition: Tr,
@@ -326,7 +326,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                     ? Y.jsxs(Ut.div, {
                         className: "resume-result error",
                         role: "alert",
-                        initial: s ? false : { opacity: 0, y: 5 },
+                        initial: s ? false : { opacity: 0, y: 2 },
                         animate: { opacity: 1, y: 0 },
                         exit: { opacity: 0 },
                         transition: Tr,
@@ -662,7 +662,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
             className: `intake-form wizard-form ${H ? "editing-form" : ""}`,
             onSubmit: ae,
             noValidate: true,
-            initial: s ? false : { opacity: 0, y: 14, scale: 0.99 },
+            initial: s ? false : { opacity: 0, y: 4 },
             animate: { opacity: 1, y: 0, scale: 1 },
             transition: Mu,
             children: [
@@ -742,19 +742,19 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                   id: H ? "preference-tabpanel" : undefined,
                   role: H ? "tabpanel" : undefined,
                   "aria-labelledby": H ? `preference-tab-${T}` : undefined,
-                  initial: H || s ? false : { opacity: 0, x: 18 },
+                  initial: H || s ? false : { opacity: 0 },
                   animate: { opacity: 1, x: 0 },
-                  exit: H || s ? undefined : { opacity: 0, x: -14 },
-                  transition: H ? Tr : Mu,
+                  exit: H || s ? undefined : { opacity: 0 },
+                  transition: Tr,
                   children: ie(),
                 }, T),
               }),
               Y.jsx(Bc, {
                 mode: "wait",
                 children: L
-                  ? Y.jsx(Ut.p, { id: "step-error", className: "form-error wizard-error", role: "alert", initial: s ? false : { opacity: 0, y: 4 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 }, transition: Tr, children: L }, L)
+                  ? Y.jsx(Ut.p, { id: "step-error", className: "form-error wizard-error", role: "alert", initial: s ? false : { opacity: 0, y: 2 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 }, transition: Tr, children: L }, L)
                   : D
-                    ? Y.jsx(Ut.p, { className: "form-error wizard-error", role: "alert", initial: s ? false : { opacity: 0, y: 4 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 }, transition: Tr, children: D }, D)
+                    ? Y.jsx(Ut.p, { className: "form-error wizard-error", role: "alert", initial: s ? false : { opacity: 0, y: 2 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0 }, transition: Tr, children: D }, D)
                     : null,
               }),
               Y.jsxs("div", {

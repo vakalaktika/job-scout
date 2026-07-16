@@ -33,6 +33,27 @@ if (bundle.includes(standardJourneyBar)) {
   throw new Error("Could not remove onboarding progress from dashboard editing.");
 }
 
+// Keep the active production bundle on one restrained motion language. These
+// replacements cover the dashboard, authentication, onboarding, and feedback
+// surfaces that live outside the maintainable intake component below.
+const motionReplacements = [
+  ['{type:"spring",stiffness:400,damping:28}', '{type:"spring",stiffness:420,damping:32}'],
+  ['{type:"spring",stiffness:180,damping:24}', '{type:"spring",stiffness:320,damping:34}'],
+  ['{type:"spring",stiffness:300,damping:15}', '{type:"spring",stiffness:360,damping:24}'],
+  ['{opacity:0,y:8}', '{opacity:0,y:4}'],
+  ['{opacity:0,y:10}', '{opacity:0,y:4}'],
+  ['{opacity:0,y:-6}', '{opacity:0,y:-3}'],
+  ['{opacity:0,y:-8}', '{opacity:0,y:-3}'],
+  ['{opacity:0,y:18,scale:.98}', '{opacity:0,y:6,scale:.995}'],
+  ['{opacity:0,y:14,scale:.99}', '{opacity:0,y:5}'],
+  ['{opacity:0,scale:.96}', '{opacity:0,scale:.985}'],
+  ['{opacity:0,y:16,scale:.985}', '{opacity:0,y:6}'],
+  ['{opacity:0,x:-18,scale:.98}', '{opacity:0,x:-8,scale:.995}'],
+];
+for (const [from, to] of motionReplacements) {
+  bundle = bundle.replaceAll(from, to);
+}
+
 const start = bundle.indexOf("function TP(");
 const end = bundle.indexOf("function AP(", start);
 
