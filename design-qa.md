@@ -26,6 +26,7 @@ Blocked for the same reason. The intended change is interaction-semantic rather 
 - Interaction refinement: removed panel exit/entry motion and automatic smooth scrolling from preference tabs; retained only the fast selected-tab spring.
 - Platform motion pass: standardized micro, surface, and feedback springs; reduced page and card travel to 2–8px; removed intake panel slides in favor of a quick opacity transition.
 - Mobile form pass: removed redundant global intake progress, condensed the intro and step indicator, made progress/category navigation sticky, and standardized a compact fixed bottom action dock across intake and editing.
+- Mobile tab discovery pass: widened editing tabs to expose a partial next option, added proximity snapping, and centered the selected tab so hidden categories remain discoverable.
 - Post-fix visual evidence: unavailable.
 
 ## Implementation checklist

@@ -89,10 +89,20 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     if (T === 1 && !l.roles.trim()) return "Add at least one role you would be happy to apply for.";
     return "";
   };
+  const ce = (ne, ae = false) => {
+    requestAnimationFrame(() => {
+      const le = document.getElementById(`preference-tab-${ne}`);
+      if (!le) return;
+      if (ae) le.focus();
+      le.scrollIntoView({ behavior: s ? "auto" : "smooth", block: "nearest", inline: "center" });
+    });
+  };
   const te = (ne) => {
     R(ne);
     F("");
-    if (!H) {
+    if (H) {
+      ce(ne);
+    } else {
       requestAnimationFrame(() => document.getElementById("intake-step-heading")?.focus());
       window.scrollTo({ top: 0, behavior: s ? "auto" : "smooth" });
     }
@@ -113,7 +123,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     ne.preventDefault();
     R(ie);
     F("");
-    requestAnimationFrame(() => document.getElementById(`preference-tab-${ie}`)?.focus());
+    ce(ie, true);
   };
   const ne = () => {
     const ae = ee();
