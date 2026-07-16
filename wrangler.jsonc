@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "job-scout-intake",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-07-14",
+  "keep_vars": true,
+  "secrets": {
+    "required": ["NOTION_TOKEN", "SESSION_SECRET"]
+  }
+}
