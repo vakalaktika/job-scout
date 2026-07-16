@@ -4,7 +4,11 @@
   "main": "worker.mjs",
   "compatibility_date": "2026-07-14",
   "keep_vars": true,
+  "vars": {
+    "OPENAI_BRIEF_MODEL": "gpt-5.4-nano",
+    "BRIEF_ENRICH_LIMIT": "4"
+  },
   "secrets": {
-    "required": ["NOTION_TOKEN", "SESSION_SECRET"]
+    "required": ["NOTION_TOKEN", "SESSION_SECRET", "OPENAI_API_KEY"]
   }
 }
