@@ -2,24 +2,33 @@
 <!--
   Job Scout — match-alert email template
   Used by the dispatcher routine (trig_01LZtNUf7LVFzw3C2Fyy9QEw).
-  The dispatcher fetches this file, fills the {{PLACEHOLDERS}}, and repeats
-  the block between JOB_CARD_START / JOB_CARD_END once per posting.
 
-  Placeholders (per email):
+  HOW TO FILL (read carefully — a leaked {{JOB_CARDS}} token is a shipped bug):
+    1. Fill the per-email placeholders: {{HEADLINE}}, {{RUN_DATE}}, {{FIRST_NAME}}.
+    2. Build the job cards. Find the single commented-out card exemplar lower
+       in this file (the one wrapped in a fenced comment near the {{JOB_CARDS}}
+       token). For EACH posting, copy that <tr>…</tr> exemplar, fill its
+       per-card placeholders, and concatenate the filled cards in order
+       (freshest first).
+    3. Replace the single {{JOB_CARDS}} token with the concatenated cards.
+    4. Ship. Remove the exemplar's fenced comment entirely; no {{...}} token
+       may survive in the sent email. If there are zero new postings, do not
+       send the email at all.
+
+  Per-email placeholders:
     {{HEADLINE}}      e.g. "2 new matches for you"
     {{RUN_DATE}}      e.g. "Sunday, July 12, 2026"
     {{FIRST_NAME}}    candidate first name
-    {{JOB_CARDS}}     the repeated job-card blocks
 
-  Placeholders (per job card):
+  Per-card placeholders (inside the exemplar):
     {{TITLE}}         exact job title
     {{URL}}           direct link to the posting
     {{COMPANY}}       company name
     {{META_LINE}}     "San Diego, CA (Remote) &nbsp;·&nbsp; $170k–$200k &nbsp;·&nbsp; LinkedIn"
-                      (omit salary segment if not listed)
+                      (omit the salary segment if not listed)
     {{MATCH_REASON}}  one sentence on why it fits their profile
     {{POSTED_LABEL}}  "Posted today" / "Posted yesterday" / "Posted 3 days ago" /
-                      "Posted Jul 3 (9 days ago)" / "Posted date not listed"
+                      "Posted Jul 3 (9 days ago)" / "Posting date not listed"
     {{POSTED_BG}} / {{POSTED_FG}}  freshness pill colors:
         0–2 days:   bg #dcfce7  fg #15803d   (green — fresh)
         3–7 days:   bg #fef3c7  fg #b45309   (amber — recent)
@@ -37,7 +46,7 @@
 </head>
 <body style="margin:0; padding:0; background-color:#f5f5f4; -webkit-text-size-adjust:100%;">
   <!-- preheader (hidden preview text) -->
-  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">{{HEADLINE}} — freshest first, with posting dates.</div>
+  <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">{{HEADLINE}} — matched to your profile, freshest first, with salary and posting dates.</div>
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f4;">
     <tr>
@@ -60,15 +69,23 @@
               <div style="font-family:Georgia,'Times New Roman',serif; font-size:24px; font-weight:700; color:#1c1917; padding-top:12px;">
                 {{HEADLINE}}
               </div>
-              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; color:#57534e; padding-top:4px;">
-                Hi {{FIRST_NAME}} — sorted freshest first. Posting dates are on each card.
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; color:#57534e; padding-top:6px;">
+                Hi {{FIRST_NAME}} — here are your newest matches, sorted freshest first. Salary and posting date are on every card, so you can act right from your inbox.
               </div>
             </td>
           </tr>
 
           {{JOB_CARDS}}
 
-          <!-- JOB_CARD_START -->
+          <!-- ==========================================================
+            PER-CARD EXEMPLAR. The block delimited below is the template for
+            one card. For each posting, copy that block, fill its
+            placeholders, join them in order (freshest first), and substitute
+            the result for the {{JOB_CARDS}} token above. Remove this entire
+            comment from the sent email.
+          ===========================================================
+
+          JOB_CARD_START
           <tr>
             <td style="padding:0 0 14px 0;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border:1px solid #e7e5e4; border-radius:12px;">
@@ -99,8 +116,15 @@
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:10px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; color:#44403c;">
-                    {{MATCH_REASON}}
+                  <td style="padding:14px 24px 0 24px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f6f7f5; border-radius:8px;">
+                      <tr>
+                        <td style="padding:10px 14px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; color:#44403c;">
+                          <span style="display:block; font-size:11px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:#1b5343; padding-bottom:3px;">Why this fits you</span>
+                          {{MATCH_REASON}}
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
                 <tr>
@@ -113,26 +137,27 @@
               </table>
             </td>
           </tr>
-          <!-- JOB_CARD_END -->
+          JOB_CARD_END
 
-          <!-- dashboard link -->
+          ========================================================== -->
+
+          <!-- CTA: dashboard -->
           <tr>
-            <td align="center" style="padding:8px 8px 12px 8px;">
-              <a href="https://vakalaktika.github.io/job-scout/?step=dashboard" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#1b5343; border:1px solid #b9cdc5; border-radius:8px; padding:9px 18px; text-decoration:none;">
+            <td align="center" style="padding:6px 8px 12px 8px;">
+              <a href="https://vakalaktika.github.io/job-scout/?step=dashboard" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; font-weight:700; color:#ffffff; background-color:#1b5343; border-radius:8px; padding:12px 26px; text-decoration:none;">
                 Open your dashboard&nbsp;&rarr;
               </a>
-              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.5; color:#78716c; padding-top:8px;">
-                Review the rest of your matches, saved jobs, or preferences.
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.5; color:#78716c; padding-top:10px;">
+                Save these, compare every match, and fine-tune what Scout looks for.
               </div>
             </td>
           </tr>
 
           <!-- footer -->
           <tr>
-            <td style="padding:10px 8px 0 8px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#a8a29e;">
-              You get Job Scout alerts because you signed up with an invite code.
-              Only jobs we haven't sent you before make it into these emails.<br>
-              You can pause job emails anytime from Settings in your dashboard.
+            <td style="padding:18px 8px 0 8px; border-top:1px solid #e7e5e4; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#a8a29e;">
+              You get Job Scout alerts because you signed up with an invite code, and you only ever see roles we haven't sent you before.<br>
+              <a href="https://vakalaktika.github.io/job-scout/?step=dashboard" style="color:#78716c; text-decoration:underline;">Manage or pause alerts</a> anytime from your dashboard.
             </td>
           </tr>
 
