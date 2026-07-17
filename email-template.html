@@ -78,12 +78,16 @@
           {{JOB_CARDS}}
 
           <!-- ==========================================================
-            PER-CARD EXEMPLAR. The block delimited below is the template for
-            one card. For each posting, copy that block, fill its
-            placeholders, join them in order (freshest first), and substitute
-            the result for the {{JOB_CARDS}} token above. Remove this entire
-            comment from the sent email.
-          ===========================================================
+            PER-CARD EXEMPLAR (instructions only). buildEmail strips HTML
+            comments BEFORE it searches for the markers, so the JOB_CARD_START
+            marker, the card, and the JOB_CARD_END marker below must stay as
+            real HTML — do not wrap them in a comment. The block between those
+            two markers is the template for one card: the dispatcher copies it
+            per posting, fills the placeholders, joins them in order (freshest
+            first), substitutes the result for the {{JOB_CARDS}} token above,
+            and removes the markers plus the exemplar. Nothing between the
+            markers survives in the sent email.
+          ========================================================== -->
 
           JOB_CARD_START
           <tr>
@@ -138,8 +142,6 @@
             </td>
           </tr>
           JOB_CARD_END
-
-          ========================================================== -->
 
           <!-- CTA: dashboard -->
           <tr>
