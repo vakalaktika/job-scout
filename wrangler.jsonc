@@ -9,6 +9,6 @@
     "BRIEF_ENRICH_LIMIT": "4"
   },
   "secrets": {
-    "required": ["NOTION_TOKEN", "SESSION_SECRET", "OPENAI_API_KEY"]
+    "required": ["NOTION_TOKEN", "SESSION_SECRET", "OPENAI_API_KEY", "RESEND_API_KEY"]
   }
 }

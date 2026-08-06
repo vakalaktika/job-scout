@@ -9,5 +9,44 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Magic-link login. When a sign-in email is opened the URL carries ?login=<token>.
+      // This classic inline script runs before the deferred module bundle executes, so
+      // it can exchange the token for a session, write it in the exact shape the
+      // dashboard reads (localStorage "job-scout-session-v1"), strip the token from the
+      // URL, and reload so the app boots already signed in.
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get("login");
+        if (!token) return;
+        var bundle = document.querySelector('script[type="module"]');
+        if (bundle) bundle.remove();
+        fetch("https://job-scout-intake.vakalaktika.workers.dev/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "magic_consume", magic_token: token }),
+        })
+          .then(function (response) {
+            return response.json().catch(function () {
+              return { ok: false };
+            });
+          })
+          .then(function (data) {
+            if (data && data.ok && data.session_token) {
+              localStorage.setItem(
+                "job-scout-session-v1",
+                JSON.stringify({ token: data.session_token, expiresAt: data.session_expires_at }),
+              );
+            }
+            params.delete("login");
+            var search = params.toString();
+            window.location.replace(window.location.pathname + (search ? "?" + search : ""));
+          })
+          .catch(function () {
+            params.delete("login");
+            window.location.replace(window.location.pathname);
+          });
+      })();
+    </script>
   </body>
 </html>
