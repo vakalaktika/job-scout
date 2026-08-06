@@ -1,0 +1,1717 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Scout — End-to-end experience</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Gelasio:opsz,wght@12..144,500;12..144,600;12..144,700&family=Work+Sans:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&display=swap"
+    />
+    <style>
+      /* Tokens lifted verbatim from the shipped login.html / dashboard bundle so
+         every mocked screen reads as the same product. */
+      :root {
+        --canvas: #fbfbfa;
+        --surface: #ffffff;
+        --ink: #211f1c;
+        --ink-soft: #6e6d67;
+        --ink-faint: #999891;
+        --line: #deded8;
+        --green: #356e59;
+        --green-deep: #245640;
+        --green-pale: #e8f0eb;
+        --clay: #9f5345;
+        --shadow: 0 12px 28px rgba(33, 31, 28, 0.055);
+        --shadow-lift: 0 20px 48px rgba(33, 31, 28, 0.1);
+        --card-radius: 14px;
+        --control-height: 48px;
+
+        /* freshness pill palette (email template contract) */
+        --fresh-bg: #dcfce7;
+        --fresh-fg: #15803d;
+        --recent-bg: #fef3c7;
+        --recent-fg: #b45309;
+        --old-bg: #f1f5f9;
+        --old-fg: #64748b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 84px;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--ink);
+        font-family: "Work Sans", Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--green-deep);
+      }
+
+      /* ---------- review-page chrome ---------- */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 12px 24px;
+        background: rgba(251, 251, 250, 0.92);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--line);
+      }
+      .topbar .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-right: 6px;
+      }
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: var(--green-deep);
+        color: #fff;
+        flex: none;
+      }
+      .brand-name {
+        font-family: Gelasio, Georgia, serif;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.4px;
+      }
+      .topnav {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+      .topnav a {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        text-decoration: none;
+        color: var(--ink-soft);
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+      }
+      .topnav a:hover {
+        color: var(--ink);
+        background: var(--green-pale);
+        border-color: #d3e2d9;
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 24px 96px;
+      }
+      .intro {
+        max-width: 720px;
+        margin: 0 auto 8px;
+        text-align: center;
+      }
+      .intro .eyebrow {
+        margin: 0 0 10px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        color: var(--green);
+      }
+      .intro h1 {
+        margin: 0 0 14px;
+        font-family: Gelasio, Georgia, serif;
+        font-size: clamp(28px, 4vw, 40px);
+        font-weight: 600;
+        letter-spacing: -0.8px;
+        line-height: 1.1;
+      }
+      .intro p {
+        margin: 0 auto;
+        max-width: 620px;
+        color: var(--ink-soft);
+        font-size: 15px;
+      }
+
+      /* section = one screen in the journey */
+      .screen {
+        margin-top: 64px;
+        scroll-margin-top: 84px;
+      }
+      .screen-head {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        flex-wrap: wrap;
+        max-width: 1180px;
+        margin: 0 auto 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #e2e0da;
+      }
+      .step-index {
+        display: inline-grid;
+        place-items: center;
+        min-width: 30px;
+        height: 30px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--green-deep);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        flex: none;
+      }
+      .screen-head h2 {
+        margin: 0;
+        font-family: Gelasio, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      .screen-head .desc {
+        flex: 1 1 320px;
+        min-width: 240px;
+        color: var(--ink-soft);
+        font-size: 13.5px;
+      }
+      .surface-label {
+        display: inline-block;
+        margin-left: auto;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 10px;
+        white-space: nowrap;
+        align-self: center;
+      }
+
+      /* stage = the neutral backdrop each mock sits on */
+      .stage {
+        display: grid;
+        place-items: start center;
+        padding: 40px 24px;
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+      }
+      .stage.stage-email {
+        background: #f5f5f4;
+      }
+      .stage.stage-wide {
+        place-items: stretch;
+      }
+
+      /* ---------- shared product primitives ---------- */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--card-radius);
+        box-shadow: var(--shadow);
+      }
+      .app-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 20px;
+      }
+      .eyebrow {
+        margin: 0 0 6px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--green);
+      }
+      .card-icon {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--green-pale);
+        color: var(--green);
+        margin: 0 0 18px;
+      }
+      h3.title {
+        margin: 0 0 10px;
+        font-family: Gelasio, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.55px;
+        line-height: 1.15;
+      }
+      p.lead {
+        margin: 0 0 22px;
+        color: var(--ink-soft);
+        line-height: 1.55;
+      }
+      .field {
+        margin-bottom: 16px;
+      }
+      .field > label,
+      .field-label {
+        display: block;
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .control {
+        width: 100%;
+        min-height: var(--control-height);
+        padding: 13px 14px;
+        font-family: inherit;
+        font-size: 15px;
+        color: var(--ink);
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+      }
+      .control.placeholder {
+        color: var(--ink-soft);
+      }
+      .field-help {
+        display: block;
+        margin-top: 7px;
+        font-size: 12px;
+        color: var(--ink-soft);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 46px;
+        padding: 12px 18px;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        border-radius: 9px;
+        border: 1px solid transparent;
+        cursor: default;
+      }
+      .btn-primary {
+        color: #fff;
+        background: var(--green-deep);
+        border-color: var(--green-deep);
+      }
+      .btn-ink {
+        color: #fff;
+        background: var(--ink);
+        border-color: var(--ink);
+      }
+      .btn-ghost {
+        color: var(--ink);
+        background: var(--surface);
+        border-color: var(--line);
+      }
+      .btn-block {
+        width: 100%;
+      }
+
+      /* intake wizard shell */
+      .wizard {
+        width: 100%;
+        max-width: 560px;
+        padding: clamp(24px, 3vw, 34px);
+      }
+      .wizard-kicker-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .step-count-kicker {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--green);
+      }
+      .optional-badge {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 8px;
+      }
+      .step-dots {
+        display: flex;
+        gap: 6px;
+        margin-left: auto;
+      }
+      .step-dots span {
+        width: 22px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--line);
+      }
+      .step-dots span.on {
+        background: var(--green);
+      }
+      .step-dots span.done {
+        background: var(--green-pale);
+      }
+      .wizard h3 {
+        margin: 0 0 6px;
+        font-family: Gelasio, Georgia, serif;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: -0.6px;
+      }
+      .wizard > p.sub {
+        margin: 0 0 22px;
+        color: var(--ink-soft);
+      }
+      .wizard-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 26px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+      }
+      .wizard-actions .btn-primary {
+        margin-left: auto;
+      }
+
+      /* résumé dropzone */
+      .resume-field {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px;
+        border: 1.5px dashed #cfcfc7;
+        border-radius: 12px;
+        background: var(--canvas);
+      }
+      .resume-icon {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        background: var(--green-pale);
+        color: var(--green);
+        flex: none;
+      }
+      .resume-copy strong {
+        display: block;
+        font-size: 14px;
+      }
+      .resume-copy small {
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+      .resume-action {
+        margin-left: auto;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--green-deep);
+        border: 1px solid #cfe0d8;
+        background: var(--green-pale);
+        border-radius: 8px;
+        padding: 7px 12px;
+        white-space: nowrap;
+      }
+      .resume-result {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 10px;
+        font-size: 13px;
+        background: var(--green-pale);
+        border: 1px solid #cfe0d8;
+        color: var(--green-deep);
+      }
+      .resume-result strong {
+        display: block;
+      }
+      .resume-result small {
+        color: var(--ink-soft);
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .three-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+      }
+
+      /* range / slider mock */
+      .range-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 10px;
+      }
+      .range-heading output {
+        font-weight: 600;
+        color: var(--green-deep);
+      }
+      .track {
+        position: relative;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--line);
+        margin: 16px 4px 6px;
+      }
+      .track .fill {
+        position: absolute;
+        top: 0;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--green);
+      }
+      .track .knob {
+        position: absolute;
+        top: 50%;
+        width: 18px;
+        height: 18px;
+        margin: -9px 0 0 -9px;
+        border-radius: 50%;
+        background: #fff;
+        border: 2px solid var(--green);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+      }
+
+      /* toggle switch */
+      .switch-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 0;
+      }
+      .switch-row .switch-copy strong {
+        display: block;
+        font-size: 14px;
+      }
+      .switch-row .switch-copy small {
+        color: var(--ink-soft);
+        font-size: 12px;
+      }
+      .switch {
+        margin-left: auto;
+        flex: none;
+        width: 40px;
+        height: 24px;
+        border-radius: 999px;
+        background: var(--green);
+        position: relative;
+      }
+      .switch span {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        transform: translateX(16px);
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+      }
+
+      /* chips */
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+      }
+      .chip.active {
+        background: var(--green-pale);
+        border-color: #cfe0d8;
+        color: var(--green-deep);
+        font-weight: 600;
+      }
+      .chip .x {
+        color: var(--ink-soft);
+      }
+
+      /* radio option cards */
+      .option {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--surface);
+        margin-bottom: 10px;
+      }
+      .option.sel {
+        border-color: var(--green);
+        background: var(--green-pale);
+        box-shadow: 0 0 0 1px var(--green);
+      }
+      .option .radio {
+        margin-top: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid #c7c7bf;
+        flex: none;
+      }
+      .option.sel .radio {
+        border-color: var(--green);
+        background: radial-gradient(circle, var(--green) 42%, transparent 46%);
+      }
+      .option .opt-label {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .option .opt-help {
+        color: var(--ink-soft);
+        font-size: 12.5px;
+      }
+
+      /* success / confirmation */
+      .success-mark {
+        display: grid;
+        place-items: center;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: var(--green-pale);
+        color: var(--green);
+        margin: 0 0 20px;
+      }
+      .summary-list {
+        list-style: none;
+        margin: 22px 0 0;
+        padding: 18px 0 0;
+        border-top: 1px solid var(--line);
+      }
+      .summary-list li {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 9px 0;
+        font-size: 13.5px;
+      }
+      .summary-list li span:first-child {
+        color: var(--ink-soft);
+      }
+      .summary-list li span:last-child {
+        font-weight: 600;
+        text-align: right;
+      }
+
+      /* ---------- email ---------- */
+      .email {
+        width: 600px;
+        max-width: 100%;
+      }
+      .email-head-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 8px;
+      }
+      .email-wordmark {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: #1b5343;
+        text-transform: uppercase;
+      }
+      .email-date {
+        font-size: 12px;
+        color: #78716c;
+      }
+      .email-headline {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: #1c1917;
+        padding: 12px 8px 0;
+      }
+      .email-intro {
+        font-size: 14px;
+        line-height: 1.5;
+        color: #57534e;
+        padding: 6px 8px 20px;
+      }
+      .jobcard {
+        background: #fff;
+        border: 1px solid #e7e5e4;
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-bottom: 14px;
+      }
+      .jobcard-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .jc-company {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1b5343;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 999px;
+        padding: 3px 10px;
+        white-space: nowrap;
+      }
+      .pill.fresh {
+        background: var(--fresh-bg);
+        color: var(--fresh-fg);
+      }
+      .pill.recent {
+        background: var(--recent-bg);
+        color: var(--recent-fg);
+      }
+      .pill.old {
+        background: var(--old-bg);
+        color: var(--old-fg);
+      }
+      .jc-title {
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.3;
+        color: #1c1917;
+        padding-top: 6px;
+      }
+      .workplace-badge {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #1b5343;
+        background: #e7f0ec;
+        border: 1px solid #cfe0d8;
+        border-radius: 6px;
+        padding: 3px 9px;
+      }
+      .jc-meta {
+        font-size: 13px;
+        color: #78716c;
+        padding-top: 8px;
+      }
+      .jc-why {
+        margin-top: 14px;
+        background: #f6f7f5;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #44403c;
+      }
+      .jc-why b {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: #1b5343;
+        padding-bottom: 3px;
+      }
+      .jc-cta {
+        display: inline-block;
+        margin-top: 16px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #fff;
+        background: #226551;
+        border-radius: 8px;
+        padding: 10px 20px;
+      }
+      .email-footer {
+        margin-top: 6px;
+        padding: 18px 8px 0;
+        border-top: 1px solid #e7e5e4;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #a8a29e;
+        text-align: center;
+      }
+      .email-dash-cta {
+        text-align: center;
+        padding: 6px 8px 12px;
+      }
+      .email-dash-cta a {
+        display: inline-block;
+        font-size: 15px;
+        font-weight: 700;
+        color: #fff;
+        background: #1b5343;
+        border-radius: 8px;
+        padding: 12px 26px;
+        text-decoration: none;
+      }
+      .email-dash-cta div {
+        font-size: 13px;
+        color: #78716c;
+        padding-top: 10px;
+      }
+
+      /* ---------- dashboard ---------- */
+      .dash {
+        width: 100%;
+        max-width: 1000px;
+      }
+      .dash-shell {
+        display: grid;
+        grid-template-columns: 210px 1fr;
+        gap: 0;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .dash-side {
+        background: var(--canvas);
+        border-right: 1px solid var(--line);
+        padding: 20px 16px;
+      }
+      .dash-side .app-brand {
+        margin-bottom: 26px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--ink-soft);
+        margin-bottom: 2px;
+      }
+      .nav-item.active {
+        background: var(--green-pale);
+        color: var(--green-deep);
+        font-weight: 600;
+      }
+      .nav-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: 0.55;
+        flex: none;
+      }
+      .dash-main {
+        padding: 26px 28px;
+      }
+      .dash-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .dash-header h3 {
+        margin: 0 0 4px;
+        font-family: Gelasio, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      .dash-header p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 13px;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .seg span {
+        padding: 8px 14px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+      .seg span.on {
+        background: var(--ink);
+        color: #fff;
+      }
+      .dash-card {
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        padding: 18px 20px;
+        margin-bottom: 14px;
+        background: var(--surface);
+      }
+      .dash-card.gone {
+        opacity: 0.72;
+      }
+      .dc-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .dc-company {
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--green);
+      }
+      .dc-title {
+        margin: 6px 0 0;
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .dc-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .dc-meta {
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+      .dc-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      .act {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--ink);
+      }
+      .act.yes {
+        background: var(--green-deep);
+        border-color: var(--green-deep);
+        color: #fff;
+      }
+      .act.saved {
+        background: var(--green-pale);
+        border-color: #cfe0d8;
+        color: var(--green-deep);
+      }
+      .act.link {
+        margin-left: auto;
+        border: none;
+        background: transparent;
+        color: var(--green-deep);
+      }
+      .status-badge {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        padding: 3px 9px;
+        border-radius: 999px;
+      }
+      .status-badge.live {
+        background: var(--green-pale);
+        color: var(--green-deep);
+      }
+      .status-badge.gone {
+        background: #fbeae7;
+        color: var(--clay);
+      }
+
+      /* brief detail */
+      .brief {
+        width: 100%;
+        max-width: 640px;
+        padding: 0;
+        overflow: hidden;
+      }
+      .brief-head {
+        padding: 24px 28px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brief-back {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--ink-soft);
+        margin-bottom: 14px;
+      }
+      .brief-head h3 {
+        margin: 8px 0 0;
+        font-family: Gelasio, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      .brief-body {
+        padding: 22px 28px 26px;
+      }
+      .brief-section {
+        margin-bottom: 20px;
+      }
+      .brief-section h4 {
+        margin: 0 0 6px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--green);
+      }
+      .brief-section p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #3a3833;
+      }
+      .req-list {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .req-list li {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #3a3833;
+        margin-bottom: 4px;
+      }
+      .feedback-box {
+        margin-top: 22px;
+        padding: 18px 20px;
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+      }
+      .feedback-box .fb-q {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .fb-reasons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      /* editing tabs */
+      .editbar {
+        display: flex;
+        gap: 18px;
+        overflow: hidden;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 22px;
+      }
+      .edittab {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--ink-soft);
+        padding: 10px 2px;
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+      }
+      .edittab.on {
+        color: var(--green-deep);
+        border-bottom-color: var(--green);
+      }
+      .save-dock {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 24px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+      .save-dock .hint {
+        font-size: 12.5px;
+        color: var(--ink-soft);
+      }
+      .save-dock .btn-primary {
+        margin-left: auto;
+      }
+
+      .caption {
+        max-width: 1180px;
+        margin: 14px auto 0;
+        font-size: 12.5px;
+        color: var(--ink-faint);
+        text-align: center;
+      }
+
+      @media (max-width: 720px) {
+        .two-col,
+        .three-col {
+          grid-template-columns: 1fr;
+        }
+        .dash-shell {
+          grid-template-columns: 1fr;
+        }
+        .dash-side {
+          display: none;
+        }
+        .screen-head .surface-label {
+          margin-left: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>
+        </span>
+        <span class="brand-name">Job Scout</span>
+      </div>
+      <nav class="topnav" aria-label="Jump to screen">
+        <a href="#s1">Invite</a>
+        <a href="#s2">Basics</a>
+        <a href="#s3">Roles</a>
+        <a href="#s4">Location</a>
+        <a href="#s5">Filters</a>
+        <a href="#s6">Delivery</a>
+        <a href="#s7">Ready</a>
+        <a href="#s8">Email</a>
+        <a href="#s9">Dashboard</a>
+        <a href="#s10">Brief</a>
+        <a href="#s11">Edit</a>
+        <a href="#s12">Sign-in</a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <section class="intro">
+        <p class="eyebrow">Experience review · end to end</p>
+        <h1>From invite code to a shortlist in your inbox</h1>
+        <p>
+          Every screen a Job Scout member touches, in order — invite entry, the five-step
+          intake, the match-alert email a scheduled agent sends, and the dashboard where matches
+          are reviewed and preferences are tuned. Built with the shipped design tokens and copy so
+          it reads as the real product.
+        </p>
+      </section>
+
+      <!-- 1 · INVITE -->
+      <section class="screen" id="s1">
+        <div class="screen-head">
+          <span class="step-index">1</span>
+          <h2>Private access</h2>
+          <span class="desc">Invite-only. A member enters their access code to unlock intake — no open sign-up.</span>
+          <span class="surface-label">Web · gate</span>
+        </div>
+        <div class="stage">
+          <div class="card" style="width:100%;max-width:440px;padding:32px;">
+            <div class="app-brand">
+              <span class="brand-mark" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>
+              </span>
+              <span class="brand-name">Job Scout</span>
+            </div>
+            <span class="card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            </span>
+            <p class="eyebrow">Invite only</p>
+            <h3 class="title">Enter your access code</h3>
+            <p class="lead">Your invite email has a code that looks like <strong>SCOUT-XXXX-YYYY</strong>. It unlocks a short setup so your scout knows what to look for.</p>
+            <div class="field">
+              <label>Access code</label>
+              <div class="control" style="letter-spacing:2px;font-weight:600;">SCOUT-4K9P-7Q2M</div>
+            </div>
+            <div class="btn btn-ink btn-block">Unlock setup</div>
+            <p class="field-help" style="margin-top:18px;">Already set up? <a href="#s12">Email me a sign-in link</a>.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2 · BASICS -->
+      <section class="screen" id="s2">
+        <div class="screen-head">
+          <span class="step-index">2</span>
+          <h2>Intake — Start with you</h2>
+          <span class="desc">Step 1 of 5. Name, email, and a résumé parsed in the browser to prefill the rest.</span>
+          <span class="surface-label">Web · intake 1/5</span>
+        </div>
+        <div class="stage">
+          <div class="card wizard">
+            <div class="wizard-kicker-row">
+              <span class="step-count-kicker">Step 1 of 5</span>
+              <div class="step-dots"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+            </div>
+            <p class="eyebrow">Personalize your scout</p>
+            <h3>Start with you</h3>
+            <p class="sub">Your resume does most of the work here.</p>
+
+            <div class="two-col">
+              <div class="field"><label>Name</label><div class="control">Maya Chen</div></div>
+              <div class="field"><label>Email</label><div class="control">maya.chen@example.com</div><small class="field-help">Where we’ll send your newest matches.</small></div>
+            </div>
+
+            <div class="field" style="margin-top:6px;">
+              <label>Résumé</label>
+              <div class="resume-field">
+                <span class="resume-icon" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M6 3h8l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/></svg>
+                </span>
+                <div class="resume-copy">
+                  <strong>Maya-Chen-Resume.pdf</strong>
+                  <small>Resume added · Replace it anytime</small>
+                </div>
+                <span class="resume-action">Replace</span>
+              </div>
+              <div class="resume-result">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-top:1px;flex:none;"><path d="M20 6 9 17l-5-5"/></svg>
+                <div>
+                  <strong>Resume details added</strong>
+                  <small>We prefilled your keywords and filter suggestions — review them next.</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="wizard-actions">
+              <div class="btn btn-primary">Continue →</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 · ROLES -->
+      <section class="screen" id="s3">
+        <div class="screen-head">
+          <span class="step-index">3</span>
+          <h2>Intake — Roles &amp; focus</h2>
+          <span class="desc">Step 2 of 5. A couple of role titles plus optional themes that make a match feel relevant.</span>
+          <span class="surface-label">Web · intake 2/5</span>
+        </div>
+        <div class="stage">
+          <div class="card wizard">
+            <div class="wizard-kicker-row">
+              <span class="step-count-kicker">Step 2 of 5</span>
+              <div class="step-dots"><span class="done"></span><span class="on"></span><span></span><span></span><span></span></div>
+            </div>
+            <p class="eyebrow">Personalize your scout</p>
+            <h3>What would feel like a good next move?</h3>
+            <p class="sub">A couple of role titles is plenty. Keep it broad if you are exploring.</p>
+
+            <div class="field">
+              <label>Target roles</label>
+              <div class="control">Senior Product Designer, Design Lead</div>
+              <small class="field-help">Separate titles with commas. You can change these later.</small>
+            </div>
+            <div class="field">
+              <label>What matters in a good match?</label>
+              <div class="control placeholder">Design systems, healthcare, B2B SaaS</div>
+              <small class="field-help">Optional skills, industries, or themes that should stand out.</small>
+            </div>
+            <div class="resume-result" style="background:var(--canvas);border-color:var(--line);color:var(--ink-soft);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-top:1px;flex:none;color:var(--green);"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+              <span>Tip: two or three role titles usually gives your scout enough range without making the results noisy.</span>
+            </div>
+
+            <div class="wizard-actions">
+              <div class="btn btn-ghost">← Back</div>
+              <div class="btn btn-primary">Continue →</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 · LOCATION -->
+      <section class="screen" id="s4">
+        <div class="screen-head">
+          <span class="step-index">4</span>
+          <h2>Intake — Location &amp; fit</h2>
+          <span class="desc">Step 3 of 5. Practical boundaries: where you can work, pay band, seniority, freshness, remote priority.</span>
+          <span class="surface-label">Web · intake 3/5</span>
+        </div>
+        <div class="stage">
+          <div class="card wizard">
+            <div class="wizard-kicker-row">
+              <span class="step-count-kicker">Step 3 of 5</span>
+              <div class="step-dots"><span class="done"></span><span class="done"></span><span class="on"></span><span></span><span></span></div>
+            </div>
+            <p class="eyebrow">Personalize your scout</p>
+            <h3>Where should the search focus?</h3>
+            <p class="sub">Set practical boundaries for location, pay, and level.</p>
+
+            <fieldset style="border:none;padding:0;margin:0 0 6px;">
+              <legend class="field-label" style="padding:0;">Preferred location</legend>
+              <div class="three-col">
+                <div><small class="field-help" style="margin:0 0 6px;">Country</small><div class="control" style="min-height:44px;">United States</div></div>
+                <div><small class="field-help" style="margin:0 0 6px;">State / region</small><div class="control" style="min-height:44px;">California</div></div>
+                <div><small class="field-help" style="margin:0 0 6px;">City</small><div class="control" style="min-height:44px;">San Diego</div></div>
+              </div>
+            </fieldset>
+
+            <div class="field" style="margin-top:18px;">
+              <div class="range-heading"><span class="field-label" style="margin:0;">Salary range</span><output>$170k – $200k+</output></div>
+              <div class="track"><div class="fill" style="left:34%;width:38%;"></div><div class="knob" style="left:34%;"></div><div class="knob" style="left:72%;"></div></div>
+            </div>
+
+            <div class="field">
+              <label>Seniority</label>
+              <div class="control" style="min-height:44px;">Senior</div>
+            </div>
+
+            <div class="field posted-range">
+              <div class="range-heading"><span class="field-label" style="margin:0;">Posted within</span><output>7 days</output></div>
+              <div class="track"><div class="fill" style="left:0;width:23%;"></div><div class="knob" style="left:23%;"></div></div>
+            </div>
+
+            <div class="switch-row">
+              <div class="switch-copy"><strong>Prioritize remote roles</strong><small>Remote jobs will appear before roles that need a move.</small></div>
+              <span class="switch" role="switch" aria-checked="true"><span></span></span>
+            </div>
+
+            <div class="wizard-actions">
+              <div class="btn btn-ghost">← Back</div>
+              <div class="btn btn-primary">Continue →</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5 · FILTERS -->
+      <section class="screen" id="s5">
+        <div class="screen-head">
+          <span class="step-index">5</span>
+          <h2>Intake — Filters</h2>
+          <span class="desc">Step 4 of 5, optional. Quiet down roles that look relevant on paper but aren’t right.</span>
+          <span class="surface-label">Web · intake 4/5</span>
+        </div>
+        <div class="stage">
+          <div class="card wizard">
+            <div class="wizard-kicker-row">
+              <span class="step-count-kicker">Step 4 of 5</span>
+              <span class="optional-badge">Optional</span>
+              <div class="step-dots"><span class="done"></span><span class="done"></span><span class="done"></span><span class="on"></span><span></span></div>
+            </div>
+            <p class="eyebrow">Personalize your scout</p>
+            <h3>What should we avoid?</h3>
+            <p class="sub">Use this to quiet down roles that look relevant on paper but are not for you.</p>
+
+            <div class="field">
+              <label>“Off my list” terms</label>
+              <div class="control placeholder">Infrastructure, DevOps, Platform</div>
+              <div class="chips">
+                <span class="chip active">Crypto <span class="x">×</span></span>
+                <span class="chip active">Contract-to-hire <span class="x">×</span></span>
+                <span class="chip active">On-site only <span class="x">×</span></span>
+              </div>
+            </div>
+
+            <div class="field" style="margin-top:18px;">
+              <label>When a term matches</label>
+              <div class="option sel"><span class="radio"></span><div><span class="opt-label">Move it lower</span><div class="opt-help">Still visible, after stronger matches.</div></div></div>
+              <div class="option"><span class="radio"></span><div><span class="opt-label">Hide it</span><div class="opt-help">Keep it out of your job list.</div></div></div>
+            </div>
+
+            <div class="wizard-actions">
+              <div class="btn btn-ghost">← Back</div>
+              <div class="btn btn-primary">Continue →</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6 · DELIVERY -->
+      <section class="screen" id="s6">
+        <div class="screen-head">
+          <span class="step-index">6</span>
+          <h2>Intake — Delivery</h2>
+          <span class="desc">Step 5 of 5. How often the scout sends a fresh shortlist.</span>
+          <span class="surface-label">Web · intake 5/5</span>
+        </div>
+        <div class="stage">
+          <div class="card wizard">
+            <div class="wizard-kicker-row">
+              <span class="step-count-kicker">Step 5 of 5</span>
+              <div class="step-dots"><span class="done"></span><span class="done"></span><span class="done"></span><span class="done"></span><span class="on"></span></div>
+            </div>
+            <p class="eyebrow">Personalize your scout</p>
+            <h3>How often should we check in?</h3>
+            <p class="sub">Choose a rhythm that keeps the search useful, not noisy.</p>
+
+            <div class="field">
+              <div class="option"><span class="radio"></span><div><span class="opt-label">Daily</span><div class="opt-help">A steady shortlist each day.</div></div></div>
+              <div class="option sel"><span class="radio"></span><div><span class="opt-label">3× a day</span><div class="opt-help">Best for an active search.</div></div></div>
+              <div class="option"><span class="radio"></span><div><span class="opt-label">Weekly</span><div class="opt-help">A quieter weekly roundup.</div></div></div>
+            </div>
+
+            <div class="wizard-actions">
+              <div class="btn btn-ghost">← Back</div>
+              <div class="btn btn-primary">Finish setup →</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7 · READY -->
+      <section class="screen" id="s7">
+        <div class="screen-head">
+          <span class="step-index">7</span>
+          <h2>Your scout is on it</h2>
+          <span class="desc">Confirmation. The profile is saved to Notion; the scheduled agent picks it up on its next run.</span>
+          <span class="surface-label">Web · confirmation</span>
+        </div>
+        <div class="stage">
+          <div class="card" style="width:100%;max-width:460px;padding:34px;text-align:center;">
+            <span class="success-mark" style="margin-inline:auto;" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </span>
+            <p class="eyebrow">Setup complete</p>
+            <h3 class="title">Your scout is on it, Maya</h3>
+            <p class="lead">We’ll start searching and email your first shortlist — freshest first — as soon as there are matches worth sending. You can refine anything from your dashboard.</p>
+            <ul class="summary-list" style="text-align:left;">
+              <li><span>Roles</span><span>Senior Product Designer, Design Lead</span></li>
+              <li><span>Location</span><span>San Diego, CA · remote first</span></li>
+              <li><span>Pay</span><span>$170k – $200k+</span></li>
+              <li><span>Cadence</span><span>3× a day</span></li>
+            </ul>
+            <div class="btn btn-primary btn-block" style="margin-top:22px;">Open my dashboard →</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8 · EMAIL -->
+      <section class="screen" id="s8">
+        <div class="screen-head">
+          <span class="step-index">8</span>
+          <h2>Match-alert email</h2>
+          <span class="desc">What the scheduled agent sends each run with new matches — one card per posting, freshest first, salary and posting date on every card.</span>
+          <span class="surface-label">Email · delivery</span>
+        </div>
+        <div class="stage stage-email">
+          <div class="email">
+            <div class="email-head-row">
+              <span class="email-wordmark">Job&nbsp;Scout</span>
+              <span class="email-date">Sunday, July 12, 2026</span>
+            </div>
+            <div class="email-headline">2 new matches for you</div>
+            <div class="email-intro">Hi Maya — here are your newest matches, sorted freshest first. Salary and posting date are on every card, so you can act right from your inbox.</div>
+
+            <!-- card 1 -->
+            <div class="jobcard">
+              <div class="jobcard-top">
+                <span class="jc-company">Vantage Health</span>
+                <span class="pill fresh">Posted today</span>
+              </div>
+              <div class="jc-title">Senior Product Designer</div>
+              <div><span class="workplace-badge">Remote</span></div>
+              <div class="jc-meta">San Diego, CA&nbsp; ·&nbsp; $170k–$200k&nbsp; ·&nbsp; LinkedIn</div>
+              <div class="jc-why">
+                <b>Why this fits you</b>
+                Your design-systems work at a B2B SaaS health company lines up with a newly formed pod rebuilding patient-facing scheduling from the ground up.
+              </div>
+              <div><span class="jc-cta">View posting&nbsp;→</span></div>
+            </div>
+
+            <!-- card 2 -->
+            <div class="jobcard">
+              <div class="jobcard-top">
+                <span class="jc-company">Northwind</span>
+                <span class="pill recent">Posted 3 days ago</span>
+              </div>
+              <div class="jc-title">Design Lead, Design Systems</div>
+              <div><span class="workplace-badge">Hybrid</span></div>
+              <div class="jc-meta">Remote (US) / San Diego&nbsp; ·&nbsp; $185k–$215k&nbsp; ·&nbsp; Greenhouse</div>
+              <div class="jc-why">
+                <b>Why this fits you</b>
+                You’d own the system a 40-person product org builds on — matching the “Design Lead” title and design-systems focus you set.
+              </div>
+              <div><span class="jc-cta">View posting&nbsp;→</span></div>
+            </div>
+
+            <div class="email-dash-cta">
+              <a href="#s9">Open your dashboard&nbsp;→</a>
+              <div>Save these, compare every match, and fine-tune what Scout looks for.</div>
+            </div>
+            <div class="email-footer">
+              You get Job Scout alerts because you signed up with an invite code, and you only ever see roles we haven’t sent you before.<br />
+              <a href="#s11" style="color:#78716c;">Manage or pause alerts</a> anytime from your dashboard.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9 · DASHBOARD -->
+      <section class="screen" id="s9">
+        <div class="screen-head">
+          <span class="step-index">9</span>
+          <h2>Dashboard — your matches</h2>
+          <span class="desc">The full list. Fresh briefs, freshness pills, a live/gone link status, and one-tap Interested / Not interested.</span>
+          <span class="surface-label">Web · dashboard</span>
+        </div>
+        <div class="stage stage-wide">
+          <div class="dash" style="margin-inline:auto;">
+            <div class="dash-shell">
+              <aside class="dash-side">
+                <div class="app-brand">
+                  <span class="brand-mark" aria-hidden="true" style="width:26px;height:26px;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>
+                  </span>
+                  <span class="brand-name" style="font-size:16px;">Job Scout</span>
+                </div>
+                <div class="nav-item active"><span class="nav-dot"></span>Matches</div>
+                <div class="nav-item"><span class="nav-dot"></span>Saved</div>
+                <div class="nav-item"><span class="nav-dot"></span>Preferences</div>
+                <div class="nav-item"><span class="nav-dot"></span>Pause alerts</div>
+              </aside>
+              <div class="dash-main">
+                <div class="dash-header">
+                  <div>
+                    <h3>Your matches</h3>
+                    <p>3 active · freshest first · last run today, 9:04 AM</p>
+                  </div>
+                  <div class="seg"><span class="on">New</span><span>Saved</span><span>All</span></div>
+                </div>
+
+                <!-- job 1 -->
+                <div class="dash-card">
+                  <div class="dc-top">
+                    <span class="dc-company">Vantage Health</span>
+                    <span class="pill fresh">Posted today</span>
+                  </div>
+                  <div class="dc-title">Senior Product Designer</div>
+                  <div class="dc-badges">
+                    <span class="workplace-badge">Remote</span>
+                    <span class="status-badge live">Link live</span>
+                  </div>
+                  <div class="dc-meta">San Diego, CA · $170k–$200k · LinkedIn</div>
+                  <div class="dc-actions">
+                    <span class="act yes">✓ Interested</span>
+                    <span class="act">Not interested</span>
+                    <a class="act link" href="#s10">Read brief →</a>
+                  </div>
+                </div>
+
+                <!-- job 2 -->
+                <div class="dash-card">
+                  <div class="dc-top">
+                    <span class="dc-company">Northwind</span>
+                    <span class="pill recent">Posted 3 days ago</span>
+                  </div>
+                  <div class="dc-title">Design Lead, Design Systems</div>
+                  <div class="dc-badges">
+                    <span class="workplace-badge">Hybrid</span>
+                    <span class="status-badge live">Link live</span>
+                  </div>
+                  <div class="dc-meta">Remote (US) / San Diego · $185k–$215k · Greenhouse</div>
+                  <div class="dc-actions">
+                    <span class="act saved">Interested</span>
+                    <span class="act">Not interested</span>
+                    <a class="act link" href="#s10">Read brief →</a>
+                  </div>
+                </div>
+
+                <!-- job 3 — gone -->
+                <div class="dash-card gone">
+                  <div class="dc-top">
+                    <span class="dc-company">Cobalt</span>
+                    <span class="pill old">Posted Jul 3 (9 days ago)</span>
+                  </div>
+                  <div class="dc-title">Staff Product Designer</div>
+                  <div class="dc-badges">
+                    <span class="workplace-badge">On-site</span>
+                    <span class="status-badge gone">No longer accepting</span>
+                  </div>
+                  <div class="dc-meta">Austin, TX · Lever</div>
+                  <div class="dc-actions">
+                    <span class="act">✓ Interested</span>
+                    <span class="act">Not interested</span>
+                    <a class="act link" href="#s10">Read brief →</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="caption">A closed posting is demoted and badged — never silently dropped — because hiding a live role is the worse failure.</p>
+      </section>
+
+      <!-- 10 · BRIEF -->
+      <section class="screen" id="s10">
+        <div class="screen-head">
+          <span class="step-index">10</span>
+          <h2>Job brief &amp; feedback</h2>
+          <span class="desc">The fuller, source-grounded brief: what the role owns, why it matched your résumé, key requirements — plus a decision with an optional reason.</span>
+          <span class="surface-label">Web · brief detail</span>
+        </div>
+        <div class="stage">
+          <div class="card brief">
+            <div class="brief-head">
+              <div class="brief-back">← Back to matches</div>
+              <span class="dc-company">Vantage Health</span>
+              <h3>Senior Product Designer</h3>
+              <div class="dc-badges" style="margin-top:12px;">
+                <span class="workplace-badge">Remote</span>
+                <span class="pill fresh">Posted today</span>
+                <span class="status-badge live">Link live</span>
+              </div>
+              <div class="dc-meta">San Diego, CA · $170k–$200k · LinkedIn</div>
+            </div>
+            <div class="brief-body">
+              <div class="brief-section">
+                <h4>Job summary</h4>
+                <p>Own the end-to-end design of Vantage’s patient-facing scheduling and care-navigation experience, partnering with one PM and two engineers on a newly formed pod.</p>
+              </div>
+              <div class="brief-section">
+                <h4>Why it matched</h4>
+                <p>Your five years shipping patient-facing flows and your design-systems work at a B2B SaaS health company map directly onto the pod’s mandate to rebuild scheduling from the ground up.</p>
+              </div>
+              <div class="brief-section">
+                <h4>Key requirements</h4>
+                <ul class="req-list">
+                  <li>5+ years of product design experience.</li>
+                  <li>Demonstrated ownership of a design system.</li>
+                  <li>Healthcare or other regulated-industry experience preferred.</li>
+                  <li>Comfort working directly with engineers in Figma.</li>
+                </ul>
+              </div>
+
+              <div class="feedback-box">
+                <div class="fb-q">Is this a fit?</div>
+                <div class="dc-actions" style="border:none;margin:0;padding:0;">
+                  <span class="act yes">✓ Interested</span>
+                  <span class="act">Not interested</span>
+                </div>
+                <div class="fb-q" style="margin:16px 0 0;">If not, what’s off? <span style="font-weight:400;color:var(--ink-soft);">(optional)</span></div>
+                <div class="fb-reasons">
+                  <span class="chip">Role</span>
+                  <span class="chip">Company</span>
+                  <span class="chip">Location</span>
+                  <span class="chip">Pay</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="caption">When a posting arrives without a written brief, the Worker repairs it on demand — grounded only in the original posting and your résumé.</p>
+      </section>
+
+      <!-- 11 · EDIT -->
+      <section class="screen" id="s11">
+        <div class="screen-head">
+          <span class="step-index">11</span>
+          <h2>Tune preferences</h2>
+          <span class="desc">Same categories as intake, but unlocked and unnumbered — jump to any tab and save. Pause alerts anytime.</span>
+          <span class="surface-label">Web · preferences</span>
+        </div>
+        <div class="stage">
+          <div class="card wizard" style="max-width:600px;">
+            <p class="eyebrow">Your job scout</p>
+            <h3 style="margin-bottom:16px;">Preferences</h3>
+            <div class="editbar">
+              <span class="edittab">Profile</span>
+              <span class="edittab on">Roles</span>
+              <span class="edittab">Location &amp; pay</span>
+              <span class="edittab">Filters</span>
+              <span class="edittab">Delivery</span>
+            </div>
+
+            <div class="field">
+              <label>Target roles</label>
+              <div class="control">Senior Product Designer, Design Lead, Principal Designer</div>
+              <small class="field-help">Separate titles with commas.</small>
+            </div>
+            <div class="field">
+              <label>What matters in a good match?</label>
+              <div class="control">Design systems, healthcare, B2B SaaS</div>
+              <div class="chips">
+                <span class="chip active">Design systems <span class="x">×</span></span>
+                <span class="chip active">Healthcare <span class="x">×</span></span>
+                <span class="chip active">B2B SaaS <span class="x">×</span></span>
+                <span class="chip">+ Add</span>
+              </div>
+            </div>
+
+            <div class="save-dock">
+              <span class="hint">Unsaved changes</span>
+              <span class="btn btn-ghost">Cancel</span>
+              <span class="btn btn-primary">Save changes</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12 · SIGN-IN -->
+      <section class="screen" id="s12">
+        <div class="screen-head">
+          <span class="step-index">12</span>
+          <h2>Returning sign-in</h2>
+          <span class="desc">Lost the code? A one-time magic link signs a member straight back in — the endpoint never reveals which emails exist.</span>
+          <span class="surface-label">Web · magic link</span>
+        </div>
+        <div class="stage">
+          <div class="card" style="width:100%;max-width:440px;padding:32px;">
+            <div class="app-brand">
+              <span class="brand-mark" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>
+              </span>
+              <span class="brand-name">Job Scout</span>
+            </div>
+            <span class="card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M3.5 7.5l8.5 5.5 8.5-5.5" /></svg>
+            </span>
+            <p class="eyebrow">Private access</p>
+            <h3 class="title">Email me a sign-in link</h3>
+            <p class="lead">Lost your invite code? Enter the email on your Job Scout profile and we’ll send you a one-time link that signs you straight in.</p>
+            <div class="field">
+              <label>Email address</label>
+              <div class="control">maya.chen@example.com</div>
+            </div>
+            <div class="btn btn-ink btn-block" style="margin-top:16px;">Email me a sign-in link</div>
+            <p class="field-help" style="color:var(--green-deep);margin-top:14px;">If that email is on a Job Scout profile, a sign-in link is on its way. It expires in 15 minutes.</p>
+            <p class="field-help" style="border-top:1px solid var(--line);padding-top:16px;margin-top:20px;">Still have your code? <a href="#s1">Open the dashboard</a>.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
