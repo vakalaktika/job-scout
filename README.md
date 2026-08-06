@@ -159,8 +159,10 @@ plus anything already marked Interested), each enriched with a written brief, wi
 steer-away rules applied. In the dashboard the member can:
 
 - Read each job's **summary**, **why it matched**, and **key requirements**.
-- Mark **Interested** / **Not interested** and leave freeform feedback (persisted to
-  Notion via the `job_decision` action).
+- Mark **Interested** / **Not interested**, optionally tagging a pass with one of four
+  reasons — Role, Company, Location, Pay — persisted to Notion via the `job_decision`
+  action. The reason is stored but nothing consumes it yet; free-text feedback and a
+  way to undo a decision are both open items in `.context/todos.md`.
 - Edit preferences (re-enter intake as unlocked tabs) or **pause** alerts.
 
 ---
@@ -178,6 +180,7 @@ steer-away rules applied. In the dashboard the member can:
 ├── assets/                 # Prebuilt Vite/React bundle (JS, CSS, pdf.js worker)
 ├── intake-flow.source.js   # Readable source of the intake component (patched into the bundle)
 ├── patch-intake-flow.mjs   # Script that injects intake-flow.source.js into the minified bundle
+├── patch-dashboard.mjs     # Dashboard-side fixes as guarded, idempotent bundle patches
 │
 ├── email-template.html     # Match-alert email; filled per run by the dispatcher routine
 ├── design-qa.md            # Design QA notes for the intake/edit redesign
@@ -205,7 +208,8 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 | `session` | session token | Return the member profile + enriched, steer-filtered job list for a signed-in member. |
 | `job_decision` | session token | Record **Interested / Not interested** + feedback on one posting (ownership-checked by email). |
 | `job_brief` | session token | Force brief enrichment for a single posting the member owns and return the updated public job. |
-| `magic_request` / `magic_consume` | — | Reserved for magic-link login; currently disabled (returns `404 feature_unavailable`). |
+| `magic_request` | email | Send a one-time sign-in link to the email on a candidate's profile. Always returns `{ ok: true }` regardless of whether the email matches, so it can't be used to probe which emails have accounts. |
+| `magic_consume` | magic token | Exchange a valid, unexpired, unconsumed magic token for a full member session. |
 
 ### Authentication
 
@@ -215,9 +219,23 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
   status (`Unused` / `Active` / `Revoked`) and a relation to the linked candidate.
 - **Sessions** are stateless: on any successful lookup the Worker issues an
   **HMAC-SHA256-signed token** (`base64url(payload).base64url(signature)`) valid for
-  **7 days**, carrying the member id, email, purpose, and expiry. The browser stores it
+  **30 days**, carrying the member id, email, purpose, and expiry. The browser stores it
   and sends it back on subsequent requests; the Worker verifies the signature and expiry
   with `SESSION_SECRET`. No server-side session store is needed.
+- **Revocation is enforced on every authenticated request**, not just at login. Because a
+  session token is a long-lived bearer credential (and magic-link sessions carry no access
+  code at all), the **candidate's `Status` is the single source of truth**: setting a
+  candidate to `Revoked` in Notion kills their live sessions on the very next request. To
+  cut off a member, set the **candidate** record to `Revoked` (revoking only the access
+  code no longer ends an existing session). `Paused` still allows sign-in — only delivery
+  pauses.
+- **Magic-link login** lets a member who lost their access code sign back in by email.
+  `magic_request` mints a short-lived (`15 min`) `magic`-purpose token, stores a
+  single-use nonce on the candidate (`Magic nonce`), and emails a link
+  (`/?login=<token>`) via **Resend** from `login@mail.uxed.me`. Opening the link runs the
+  inline consumer in `index.html`, which calls `magic_consume`; a successful exchange
+  clears the nonce (so the link works exactly once) and returns a normal 30-day session.
+  `login.html` is the standalone "email me a sign-in link" request page.
 
 ### Read-time filtering
 
@@ -261,6 +279,7 @@ the bundle by a patch script:
 
 ```sh
 node patch-intake-flow.mjs
+node patch-dashboard.mjs
 ```
 
 `patch-intake-flow.mjs` locates the intake component boundaries in the minified bundle,
@@ -268,6 +287,18 @@ swaps in the source component, wires up preview/edit entry points
 (`?preview=intake`, `?preview=edit`), and normalizes the motion language across the app.
 The cache-busting query string in `index.html` (e.g. `?v=mobile-tab-discovery`) is bumped
 when the bundle changes.
+
+`patch-dashboard.mjs` covers the dashboard component, which has no source at all — it
+exists only as minified code. Each fix is an exact-string replacement carrying a comment
+explaining why it exists. Every patch is idempotent (re-running reports `skipped`) and
+throws if its anchor cannot be found, so a bundle rebuild fails loudly rather than
+silently shipping without a fix. Prefer a `worker.mjs` fix whenever one can achieve the
+same outcome.
+
+Patches target `assets/index-BdD4MZod.js` by default; passing `"css"` as the fourth
+argument to `patch()` targets the stylesheet `assets/index-uR5-NbPW.css` instead, which
+is how design-token fixes are applied — currently raising `--ink-faint` from `#999891`
+(2.89:1, below WCAG AA) to `#73726c`.
 
 `design-qa.md` records the design-QA process for the intake/edit redesign.
 
@@ -288,11 +319,12 @@ Three databases, referenced by id in `worker.mjs`:
 ### Candidates (`CAND_DB`)
 | Property | Type | Notes |
 |---|---|---|
-| `Name`, `Email`, `Status` | title / email / select | `Active` / `Paused` |
+| `Name`, `Email`, `Status` | title / email / select | `Active` / `Paused` / `Revoked` — `Revoked` ends live sessions on the next request |
 | `Target roles`, `Regions`, `Min salary` | rich text | core preferences |
 | `Seniority`, `Remote OK`, `Frequency` | select | `3x daily` / `Daily` / `Weekly` (+ `Paused`) |
 | `Steer away`, `Steer mode` | rich text / select | `Rank lower` / `Hide` |
 | `Resume suggestions` | rich text | keyword chips surfaced in the UI |
+| `Magic nonce` | rich text | one-time nonce for the outstanding sign-in link; cleared when consumed |
 | `Notes` | rich text | keywords, max salary, posted-within window, résumé filename |
 | _(page body)_ | blocks | the parsed **résumé text**, chunked into paragraphs |
 
@@ -303,6 +335,9 @@ Three databases, referenced by id in `worker.mjs`:
 | `Company Logo` / `Logo` | url | optional |
 | `Candidate email` | — | ties a posting to a member |
 | `Date sent`, `Date posted` | date | delivery + freshness |
+| `Workplace type` | select | `Remote` / `Hybrid` / `On-site`; absent when the posting does not say |
+| `Link status` | select | `Live` / `Gone` / `Unknown` — whether the posting is still open |
+| `Link checked at` | date | last liveness check; re-checked once every 24h |
 | `Job description` / `Description` / `Posting text` | rich text | raw text used for enrichment |
 | `Job summary`, `Why it matched`, `Key requirements` | rich text | the written brief |
 | `Brief status`, `Brief error`, `Brief updated at` | select / rich text / date | enrichment bookkeeping |
@@ -341,10 +376,16 @@ job or fails the member session.
 
 ## Security model
 
-- **Secrets stay server-side.** `NOTION_TOKEN`, `SESSION_SECRET`, and `OPENAI_API_KEY`
-  exist only in the Worker; the static bundle ships no credentials.
-- **Signed, expiring sessions.** HMAC-SHA256 tokens, 7-day lifetime, verified on every
+- **Secrets stay server-side.** `NOTION_TOKEN`, `SESSION_SECRET`, `OPENAI_API_KEY`, and
+  `RESEND_API_KEY` exist only in the Worker; the static bundle ships no credentials.
+- **Signed, expiring sessions.** HMAC-SHA256 tokens, 30-day lifetime, verified on every
   request. Invite codes carry a checksum to reject malformed input early.
+- **Live revocation.** Candidate `Status = Revoked` is re-checked on every authenticated
+  request, so revoking a member ends their sessions immediately rather than waiting out
+  the token lifetime.
+- **Single-use magic links.** Sign-in links are `magic`-purpose tokens that expire in
+  15 minutes and are bound to a one-time nonce stored on the candidate; consuming a link
+  clears the nonce, and requesting a new link invalidates any outstanding one.
 - **Ownership checks.** `job_decision` and `job_brief` verify the posting's
   `Candidate email` matches the authenticated member before reading or writing.
 - **SSRF guards.** Posting fetches only follow public `http(s)` URLs; loopback,
@@ -406,6 +447,7 @@ Set as Worker secrets (never commit them):
 npx wrangler secret put NOTION_TOKEN     # Notion integration token (all three DBs shared with it)
 npx wrangler secret put SESSION_SECRET   # HMAC key for signing session tokens
 npx wrangler secret put OPENAI_API_KEY   # for job-brief enrichment
+npx wrangler secret put RESEND_API_KEY   # for sending magic-link sign-in emails
 ```
 
 Non-secret Worker vars (in `wrangler.jsonc`, overridable):
@@ -415,6 +457,7 @@ Non-secret Worker vars (in `wrangler.jsonc`, overridable):
 | `OPENAI_BRIEF_MODEL` | `gpt-5.4-nano` | model used for brief enrichment |
 | `BRIEF_ENRICH_LIMIT` | `4` | max briefs enriched per session request (clamped 1–6) |
 | `OPENAI_PROJECT` | _(unset)_ | optional `OpenAI-Project` header |
+| `MAGIC_FROM` | `Job Scout <login@mail.uxed.me>` | `From` header for magic-link emails (domain must be verified in Resend) |
 
 The three Notion database ids are constants at the top of `worker.mjs`. The Notion
 integration must be shared with all three databases.

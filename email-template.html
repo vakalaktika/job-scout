@@ -15,6 +15,17 @@
        may survive in the sent email. If there are zero new postings, do not
        send the email at all.
 
+  BEFORE SENDING — check that every posting URL is still live, and drop the ones
+  that are not. Beta users repeatedly reported opening alerts that linked to
+  expired postings, which is the single fastest way to lose their trust. A GET
+  that returns 404 or 410, a page whose Schema.org JobPosting validThrough has
+  passed, or a body saying the role is filled or no longer accepting applications
+  all mean: do not send that card. Note that expired listings commonly redirect
+  to a page that still returns 200 and still contains the full description, so a
+  status code alone is not enough. Record the outcome on the Sent posting's
+  "Link status" property (Live / Gone / Unknown) so the dashboard agrees with the
+  email; the Worker keeps that property fresh with its own re-check.
+
   Per-email placeholders:
     {{HEADLINE}}      e.g. "2 new matches for you"
     {{RUN_DATE}}      e.g. "Sunday, July 12, 2026"
@@ -24,8 +35,16 @@
     {{TITLE}}         exact job title
     {{URL}}           direct link to the posting
     {{COMPANY}}       company name
-    {{META_LINE}}     "San Diego, CA (Remote) &nbsp;·&nbsp; $170k–$200k &nbsp;·&nbsp; LinkedIn"
+    {{META_LINE}}     "San Diego, CA &nbsp;·&nbsp; $170k–$200k &nbsp;·&nbsp; LinkedIn"
                       (omit the salary segment if not listed)
+                      Do NOT put remote status here — use {{WORKPLACE_LABEL}} so it
+                      reads as its own badge instead of being buried in this line.
+    {{WORKPLACE_LABEL}}  "Remote" / "Hybrid" / "On-site", from the posting's
+                      Workplace type. When the posting does not say, delete that
+                      badge's whole <tr> from the card rather than guessing or
+                      leaving an empty pill. "Is this fully remote?" was the most
+                      common question from beta users, so an honest blank beats a
+                      confident wrong answer.
     {{MATCH_REASON}}  one sentence on why it fits their profile
     {{POSTED_LABEL}}  "Posted today" / "Posted yesterday" / "Posted 3 days ago" /
                       "Posted Jul 3 (9 days ago)" / "Posting date not listed"
@@ -112,6 +131,13 @@
                 <tr>
                   <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; line-height:1.3;">
                     <a href="{{URL}}" style="color:#1c1917; text-decoration:none;">{{TITLE}}</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 24px 0 24px;">
+                    <span style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; font-weight:600; color:#1b5343; background-color:#e7f0ec; border:1px solid #cfe0d8; border-radius:6px; padding:3px 9px; white-space:nowrap;">
+                      {{WORKPLACE_LABEL}}
+                    </span>
                   </td>
                 </tr>
                 <tr>

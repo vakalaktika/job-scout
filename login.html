@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in · Job Scout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Gelasio:opsz,wght@12..144,500;12..144,600&family=Work+Sans:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap"
+    />
+    <style>
+      /* Tokens copied from the dashboard bundle's :root so this standalone page
+         reads as the same product as index.html. */
+      :root {
+        --canvas: #fbfbfa;
+        --surface: #ffffff;
+        --ink: #211f1c;
+        --ink-soft: #6e6d67;
+        --ink-faint: #999891;
+        --line: #deded8;
+        --green: #356e59;
+        --green-deep: #245640;
+        --green-pale: #e8f0eb;
+        --clay: #9f5345;
+        --shadow: 0 12px 28px rgba(33, 31, 28, 0.055);
+        --card-radius: 14px;
+        --control-height: 48px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px 24px;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: "Work Sans", Arial, sans-serif;
+        font-size: 14px;
+      }
+      .shell {
+        width: 100%;
+        max-width: 440px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 20px;
+      }
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: var(--green-deep);
+        color: #fff;
+      }
+      .brand-name {
+        font-family: Gelasio, Georgia, serif;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.4px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--card-radius);
+        padding: clamp(24px, 3vw, 32px);
+        box-shadow: var(--shadow);
+      }
+      .card-icon {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--green-pale);
+        color: var(--green);
+        margin: 0 0 18px;
+      }
+      .eyebrow {
+        margin: 0 0 6px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--green);
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-family: Gelasio, Georgia, serif;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.55px;
+        line-height: 1.15;
+      }
+      p.lead {
+        margin: 0 0 22px;
+        line-height: 1.55;
+        color: var(--ink-soft);
+      }
+      label {
+        display: block;
+        margin: 0 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.585px;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+      }
+      input[type="email"] {
+        width: 100%;
+        height: var(--control-height);
+        padding: 13px 14px;
+        font-family: inherit;
+        font-size: 15px;
+        color: var(--ink);
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+      }
+      /* --ink-faint is only 2.9:1 on these surfaces, so placeholder and footer text
+         use --ink-soft (5:1) to clear WCAG AA. */
+      input[type="email"]::placeholder {
+        color: var(--ink-soft);
+        font-weight: 400;
+      }
+      button {
+        width: 100%;
+        margin-top: 16px;
+        min-height: 43px;
+        padding: 12px 15px;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--ink);
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      :is(a, button, input):focus-visible {
+        outline: 3px solid rgba(53, 110, 89, 0.28);
+        outline-offset: 3px;
+      }
+      .status {
+        margin: 14px 0 0;
+        font-size: 13px;
+        line-height: 1.55;
+        min-height: 1.55em;
+        color: var(--ink-soft);
+      }
+      .status[data-tone="ok"] {
+        color: var(--green-deep);
+      }
+      .status[data-tone="error"] {
+        color: var(--clay);
+      }
+      .foot {
+        margin: 22px 0 0;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--ink-soft);
+      }
+      .foot a {
+        color: var(--green-deep);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M15.5 8.5l-2 5-5 2 2-5z" />
+          </svg>
+        </span>
+        <span class="brand-name">Job Scout</span>
+      </div>
+
+      <main class="card">
+        <span class="card-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2.5" />
+            <path d="M3.5 7.5l8.5 5.5 8.5-5.5" />
+          </svg>
+        </span>
+        <p class="eyebrow">Private access</p>
+        <h1>Email me a sign-in link</h1>
+        <p class="lead">
+          Lost your invite code? Enter the email on your Job Scout profile and we’ll send you a
+          one-time link that signs you straight in.
+        </p>
+        <form id="form" novalidate>
+          <label for="email">Email address</label>
+          <input id="email" name="email" type="email" autocomplete="email" required
+            placeholder="you@example.com" />
+          <button id="submit" type="submit">Email me a sign-in link</button>
+        </form>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <p class="foot">Still have your code? <a href="./index.html">Open the dashboard</a>.</p>
+      </main>
+    </div>
+
+    <script>
+      // Wrapped in an IIFE so these never become globals — a top-level `var status`
+      // would alias the special window.status property and silently break the form.
+      (function () {
+        var form = document.getElementById("form");
+        var emailInput = document.getElementById("email");
+        var submitButton = document.getElementById("submit");
+        var statusEl = document.getElementById("status");
+
+        function setStatus(message, tone) {
+          statusEl.textContent = message;
+          statusEl.setAttribute("data-tone", tone || "");
+        }
+
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          var email = emailInput.value.trim();
+          if (!email || !emailInput.checkValidity()) {
+            setStatus("Enter a valid email address.", "error");
+            emailInput.focus();
+            return;
+          }
+          submitButton.disabled = true;
+          setStatus("Sending…", "");
+          fetch("https://job-scout-intake.vakalaktika.workers.dev/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "magic_request", email: email }),
+          })
+            .then(function (response) {
+              if (!response.ok) throw new Error("request_failed");
+              return response.json();
+            })
+            .then(function () {
+              // The endpoint always answers ok so it can't reveal which emails exist.
+              setStatus(
+                "If that email is on a Job Scout profile, a sign-in link is on its way. It expires in 15 minutes.",
+                "ok",
+              );
+            })
+            .catch(function () {
+              setStatus("Something went wrong. Please try again in a moment.", "error");
+              submitButton.disabled = false;
+            });
+        });
+      })();
+    </script>
+  </body>
+</html>
