@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  APPLICATION_STATUSES,
+  appendMatchContext,
   applySteerAway,
   buildBriefRequest,
   candidateProps,
@@ -11,6 +13,10 @@ import {
   extractJobPostingText,
   hasCompleteBrief,
   issueToken,
+  keepForSession,
+  lastDispatchAt,
+  MATCH_CONTEXT_ENTRIES,
+  matchContextEntry,
   magicLinkUrl,
   matchesTerm,
   parseBriefResponse,
@@ -409,6 +415,7 @@ test("the structured request redacts contact details and disables storage", () =
     "match_reason",
     "key_requirements",
     "workplace_type",
+    "salary_range",
   ]);
   assert.deepEqual(request.text.format.schema.properties.workplace_type.enum, WORKPLACE_TYPES);
   const userPayload = request.input[1].content;
@@ -577,4 +584,152 @@ test("the magic email embeds the link and states the single-use expiry", () => {
   assert.ok(html.includes("https://vakalaktika.github.io/?login=tok123"));
   assert.match(html, /once/i);
   assert.match(html, /15 minutes/);
+});
+
+test("the last dispatch is the newest send across every posting, filtered or not", () => {
+  assert.equal(
+    lastDispatchAt([
+      { sent_at: "2026-07-10T08:00:00.000Z" },
+      { sent_at: "2026-07-12T09:04:00.000Z" },
+      { sent_at: "2026-07-11T20:00:00.000Z" },
+    ]),
+    "2026-07-12T09:04:00.000Z",
+  );
+});
+
+test("an unknown last dispatch is empty rather than the epoch", () => {
+  assert.equal(lastDispatchAt([]), "");
+  assert.equal(lastDispatchAt([{ sent_at: "" }, { sent_at: "not a date" }, {}]), "");
+});
+
+test("a stated salary is captured and an unstated one stays empty", () => {
+  const brief = {
+    summary: "Owns the payments platform and its reliability targets across teams.",
+    match_reason: "Your resume shows five years running payment services at similar scale.",
+    key_requirements: "Go, distributed systems, and on-call ownership.",
+    workplace_type: "Remote",
+  };
+  const parsed = (salary_range) =>
+    parseBriefResponse({ output_text: JSON.stringify({ ...brief, salary_range }) });
+
+  assert.equal(parsed("$170k–$200k").salary, "$170k–$200k");
+  assert.equal(parsed("").salary, "");
+  assert.equal(parsed(undefined).salary, "");
+});
+
+test("a posting that states no pay keeps the salary the dispatcher already stored", async () => {
+  const writes = [];
+  const result = await enrichJobBrief({
+    job: {
+      id: "job-9",
+      title: "Staff Engineer",
+      company: "Arcadia Science",
+      url: "https://jobs.lever.co/arcadia/job-9",
+      salary: "$185k–$215k",
+    },
+    member: { name: "German", target_roles: "Software Engineer", seniority: "Senior" },
+    resumeText: "German built backend services, internal tools, and AWS data pipelines. ".repeat(3),
+    env: {},
+    fetcher: async () => new Response(postingHtml, { headers: { "content-type": "text/html" } }),
+    generate: async () => ({
+      summary: "Build and own internal web applications and scientific data pipelines for researchers.",
+      match_reason: "German's backend services and internal-tools experience maps directly to this role.",
+      key_requirements: "Python, TypeScript, AWS, Linux, and production data-pipeline experience matter most.",
+      salary: "",
+    }),
+    persist: async (_env, jobId, state) => writes.push({ jobId, state }),
+  });
+
+  assert.equal(result.salary, "$185k–$215k");
+  assert.equal(writes[0].state.salary, undefined);
+});
+
+const day = (offset) => {
+  const date = new Date();
+  date.setUTCHours(12, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() - offset);
+  return date.toISOString().slice(0, 10);
+};
+
+test("a reviewed posting outlives the freshness window so a change of mind has somewhere to go", () => {
+  assert.equal(keepForSession({ posted_at: day(30), decision: "Not interested" }, 7), true);
+  assert.equal(keepForSession({ posted_at: day(30), decision: "Interested" }, 7), true);
+  assert.equal(keepForSession({ posted_at: day(30), application_status: "Interviewing" }, 7), true);
+});
+
+test("an unreviewed posting still ages out of the session", () => {
+  assert.equal(keepForSession({ posted_at: day(3) }, 7), true);
+  assert.equal(keepForSession({ posted_at: day(8) }, 7), false);
+  assert.equal(keepForSession({ posted_at: "", decision: "" }, 7), false);
+});
+
+test("a pass reason becomes one dated line naming the posting it came from", () => {
+  const entry = matchContextEntry(
+    { title: "Staff Product Designer", company: "Cobalt" },
+    "Pay",
+    "well below my range",
+    new Date("2026-08-06T20:44:00.000Z"),
+  );
+
+  assert.equal(
+    entry,
+    "2026-08-06 · Not interested · Pay — well below my range · Staff Product Designer at Cobalt",
+  );
+});
+
+test("a skipped pass records nothing rather than an empty entry", () => {
+  const job = { title: "Staff Product Designer", company: "Cobalt" };
+  assert.equal(matchContextEntry(job, "", ""), "");
+  assert.equal(matchContextEntry(job, "  ", "   "), "");
+  assert.equal(appendMatchContext("existing line", ""), "existing line");
+});
+
+test("a free-text note stands alone when no reason label was chosen", () => {
+  assert.match(
+    matchContextEntry({ title: "Design Lead", company: "Northwind" }, "", "too much travel"),
+    /· Not interested · too much travel · Design Lead at Northwind$/,
+  );
+});
+
+test("match context keeps the newest reason first and drops the oldest past the cap", () => {
+  const context = Array.from({ length: MATCH_CONTEXT_ENTRIES + 3 }).reduce(
+    (stored, _value, index) => appendMatchContext(stored, `entry ${index}`),
+    "",
+  );
+  const lines = context.split("\n");
+
+  assert.equal(lines.length, MATCH_CONTEXT_ENTRIES);
+  assert.equal(lines[0], `entry ${MATCH_CONTEXT_ENTRIES + 2}`);
+  assert.equal(lines.includes("entry 0"), false);
+});
+
+test("repeating a reason moves it to the top instead of storing it twice", () => {
+  const context = appendMatchContext(appendMatchContext("a\nb\nc", "b"), "b");
+
+  assert.deepEqual(context.split("\n"), ["b", "a", "c"]);
+});
+
+test("application statuses run in the order an application actually progresses", () => {
+  assert.deepEqual(APPLICATION_STATUSES, [
+    "Applied",
+    "Interviewing",
+    "Offer",
+    "Rejected",
+    "No response",
+  ]);
+});
+
+test("hide mode never removes a posting the candidate already dealt with", () => {
+  const jobs = [
+    { id: "a", title: "Platform Engineer", decision: "Not interested" },
+    { id: "b", title: "Platform Architect", application_status: "Interviewing" },
+    { id: "c", title: "Platform Lead" },
+    { id: "d", title: "Product Designer" },
+  ];
+  const result = applySteerAway(jobs, { steer_away_terms: "Platform", steer_away_mode: "hide" });
+
+  // A dismissed posting has to survive, or the Not interested list it lives in
+  // could not offer it back.
+  assert.deepEqual(result.jobs.map((job) => job.id), ["a", "b", "d"]);
+  assert.equal(result.hiddenCount, 1, "only the unreviewed match counts as hidden");
 });

@@ -152,15 +152,17 @@ This grounding likely contributes to the product feeling precise: when the Worke
 
 ## 6. Candidate review data
 
-The dashboard lets the candidate mark a posting `Interested` or `Not interested`. A pass can optionally record one of four reasons: Role, Company, Location, or Pay. The Worker ownership-checks the posting, then persists the decision, feedback, and review timestamp in Notion.
+The dashboard lets the candidate mark a posting `Interested` or `Not interested`. A pass can record one of four reasons — Role, Company, Location, Pay — or free text the candidate types under "Something else". A separate "Already applied" option records where the candidate actually is instead of filing the posting away as a bad match. Beyond the decision, each posting carries an `Application status` (`Applied`, `Interviewing`, `Offer`, `Rejected`, `No response`) and an `Applied at` date. The Worker ownership-checks the posting for both writes, then persists to Notion.
 
 What that feedback demonstrably does today:
 
-- `Not interested` removes the posting from the active dashboard list;
-- `Interested` keeps the posting in the saved list even after it ages out; and
-- both decisions remain in the shared Notion record, where operations or the external dispatcher can read them.
+- `Not interested` removes the posting from the active dashboard list, but keeps it reachable under a "Not interested" filter, with a `Put back` control that clears the decision;
+- `Interested` keeps the posting in the saved list even after it ages out;
+- any reviewed or tracked posting now survives the freshness window (`keepForSession()`), so a change of mind and an application in progress both still exist a week later;
+- a pass reason is appended to the candidate's `Match context` — newest first, de-duplicated, capped at 12 lines — and shown back to the candidate in Settings; and
+- all of it remains in the shared Notion record, where operations or the external dispatcher can read it.
 
-What is **not demonstrated in this repository** is an automated learning loop that converts those decisions into new weights, prompts, exclusions, or future search queries. The UI says the feedback helps the scout improve, but the only verified in-repo behavior is persistence and current-list visibility.
+What is still **not demonstrated in this repository** is an automated learning loop that converts those decisions into new weights, prompts, exclusions, or future search queries. `Match context` gives the dispatcher one first-class field to read instead of a reason scattered across postings, but nothing in this repository consumes it.
 
 ## Why the results feel accurate and consistent
 
@@ -187,17 +189,43 @@ Five beta submissions plus two direct notes were reviewed. Sentiment was strong,
 
 3. **Remote status had nowhere to live.** No structured workplace field existed on the posting record, in the brief schema, or in the email template — it was free text inside `Location`. `workplace_type` is now part of the brief schema and persists to a `Workplace type` select on Sent postings.
 
+## Experience alignment (2026-08-06)
+
+`experience-mockup.html` is the reviewed end-to-end design. Intake, the invite gate, the email, and magic-link sign-in already matched it; the dashboard did not. Five gaps were closed.
+
+1. **The card and the inbox disagreed about freshness.** The email fades its pill through three bands and the card had one boundary, so the same posting read as fresher in one surface than the other. The card now uses the email's exact bands — green 0–2 days, amber 3–7, grey 8+ — and names the day once a posting is past a week, because "Posted 23 days ago" stops meaning anything.
+2. **Pay was in the email and nowhere else.** `Sent postings` had no salary column the Worker read, so members opened postings to find out what the alert had already told them. `jobState()` now reads `Salary` (or `Salary range` / `Compensation` / `Pay range`), `salary_range` joins the strict brief schema so enrichment can recover it from the posting text, and an unstated salary leaves whatever the dispatcher stored alone.
+3. **Link status only spoke up on failure.** A card that says nothing when a posting is open gives no way to tell "checked and live" from "nothing has looked at this". Both states are badged now, and a closed posting is muted and demoted rather than dropped.
+4. **A decision could not be taken back.** `Save`/`Pass` hid both controls the moment either was used, so a mis-tap needed an operator to edit Notion. `saveJobDecision()` accepts an empty decision to clear the review, and the card's `Interested` control is a toggle. This closes the "way to undo a decision" open item; free-text feedback is still outstanding.
+5. **One undifferentiated list.** Saved roles sat mixed in with unreviewed ones. A New / Saved / All filter splits them without moving anything off the page, and the heading now states when the scout last ran (`last_run_at` on the session response), so an empty list no longer reads the same as one that has never been filled.
+
+The pass-reason copy was also corrected. It promised the feedback taught the scout, which known gap 3 records as untrue; it now says only that the reason is saved with the posting.
+
+Dashboard behaviour is covered by `dashboard-helpers.test.mjs`, which lifts the injected helpers out of the built bundle rather than trusting the patch strings. `patch()` in `patch-dashboard.mjs` now accepts a list of anchors, because the shipped artifact is itself post-patch and a fix that supersedes an earlier fix has to match either state to stay idempotent.
+
 ## Known gaps and operational risks
 
 1. **The initial matching brain is outside version control here.** The behavior producing the shortlist cannot be reproduced, regression-tested, or fully handed off from this repository alone.
 2. **No measurable ranking contract is present.** There are no checked-in weights, thresholds, evaluation set, precision/recall metrics, or acceptance tests for the external dispatcher.
-3. **Feedback consumption is unverified.** Decisions are stored, but no local code uses them to change future sourcing. The four pass reasons are write-only telemetry, so the dashboard's "This helps your scout improve" copy is currently aspirational.
+3. **Feedback consumption is unverified. — Partly addressed.** The four pass reasons are no longer write-only telemetry scattered across postings: free text is captured, and every reason is rolled onto the candidate's `Match context` field, newest first and capped at 12 entries, then shown back to the candidate in Settings. What the copy claims is exactly what happens ("we save it with this posting and add it to your search context"). **Consuming that field is still the dispatcher's job and is not implemented anywhere in this repository** — no local code reads `Match context` to change future sourcing. That remains the open ask.
 4. **Unknown posting dates disappear from the dashboard.** This protects freshness but can hide a legitimately new posting whose source omitted a date, and it disagrees with the email, which renders an explicit "Posting date not listed" label for the same posting.
 5. **Notion filtering is partly in memory.** `loadMemberJobs()` pages through the shared Sent postings database and filters candidate email in Worker code, stopping pagination after at least 300 candidate matches; growth may affect latency and completeness.
 6. **A revoked invite code still grants access. — Fixed.** `authenticatedCandidate()` now rejects any session whose candidate `Status` is `Revoked`, and the `magic_request`, `magic_consume`, and code paths enforce the same check, so a revoked member loses access on their next request rather than at token expiry. This is what allowed `SESSION_SECONDS` to be raised to 30 days safely.
 7. **Three freshness thresholds disagree. — Fixed.** The exported `postingAgeDays()` measures age in whole UTC days and no longer swallows an explicit `Posted within: 0`. The dashboard's "aging" pill was moved from 15 days to the same 8+ (`>7`) boundary the email uses, and the bundle now parses a bare `YYYY-MM-DD` at local midnight so the day count matches the reader's calendar. The email's own band colours are filled by the external dispatcher and remain a handoff ask (see `.context/todos.md`).
 8. **A saved job can still disappear. — Fixed.** `applySteerAway()` now treats a posting the candidate marked `Interested` as never matching a steer term, so hide mode can no longer remove a saved job and rank mode keeps it in the preferred group. A regression test covers both modes.
 9. **The dashboard has no source.** It exists only as a 1.4 MB minified bundle with no `package.json` and no build, so every dashboard change is an exact-string patch in `patch-dashboard.mjs`. Worker-side fixes should be preferred wherever the same outcome is reachable.
+
+## Managing a posting past the first decision (2026-08-06)
+
+The review model stopped at one yes/no per posting. Three gaps followed from that, all closed here.
+
+1. **A pass was a dead end.** Role / Company / Location / Pay could not describe most passes — "already applied" and "wrong industry" have no button — and the chosen reason sat on the posting where nothing gathered it. "Something else" now opens a free-text field; `job_decision` accepts a `note` alongside the reason; and `recordMatchContext()` appends the result to the candidate's `Match context`. "Already applied" writes an application status rather than a rejection, because applying is not a complaint about the match.
+
+2. **A dismissed posting vanished.** `Not interested` removed it from the list with no way back short of an operator editing Notion, and `sessionResponse()` dropped it entirely once it aged past the freshness window. `keepForSession()` now keeps any posting the member has reviewed or tracked, a "Not interested" filter lists them, and the pass control is a toggle that reads `Put back`. A posting restored after aging out is held in the list for the rest of the session, so the undo cannot make it disappear at the moment it was asked for. `applySteerAway()` was the second way a dismissed posting could disappear — hide mode would drop it before the dashboard ever saw it — so its exemption now covers any posting the candidate has acted on, not just saved ones. That also keeps `hidden_count` meaning postings the candidate never saw.
+
+3. **Nothing survived the decision.** A saved job and one applied to three weeks ago with no reply were the same record. `Application status` and `Applied at` are new properties on Sent postings, written by a new `job_application` action; the card carries a status row, and `__jsAppNote()` names two weeks of silence rather than leaving the member to work it out from a date.
+
+The free-text field is an uncontrolled `<form>`, not a controlled input. The card list is a component defined inside the dashboard component, so it is re-created on every parent render; a controlled input would have remounted and lost focus after each keystroke. `required` gives non-empty validation and Enter-to-submit without any parent state.
 
 > The previous revision's gap 4 — résumé replacement on profile edit — is fixed. The update path now writes `Name` and replaces the candidate page-body résumé via `replaceResumeBlocks()`, so enrichment stops matching against a superseded résumé.
 
@@ -213,7 +241,7 @@ To make the system fully reproducible, export or document the external dispatche
 - URL normalization and candidate-specific de-duplication key;
 - Notion read/write property map;
 - email rendering and send provider;
-- feedback-consumption rules; and
+- feedback-consumption rules, including how `Match context` should shape the next run; and
 - a small anonymized gold set of candidates/postings with expected accept/reject outcomes.
 
 ## Source map

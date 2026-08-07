@@ -45,8 +45,8 @@ first," and lets them review, save, and refine matches from a web dashboard.
    one-line "why this fits you," and a direct link.
 4. **Dashboard review.** From the email or directly, the member opens a dashboard to
    read a fuller brief per job (summary, why it matched, key requirements), mark each
-   **Interested** / **Not interested**, leave feedback, and edit their preferences or
-   pause alerts at any time.
+   **Interested** / **Not interested**, say why in their own words, track an application
+   through to its outcome, and edit their preferences or pause alerts at any time.
 5. **Brief enrichment.** When a posting is missing its written brief, the backend
    repairs it on demand: it fetches the original public posting, extracts the job
    description, and generates an accurate three-part brief with an LLM — grounded only
@@ -158,11 +158,26 @@ action. The Worker returns the member's recent postings (within their posting-ag
 plus anything already marked Interested), each enriched with a written brief, with
 steer-away rules applied. In the dashboard the member can:
 
-- Read each job's **summary**, **why it matched**, and **key requirements**.
-- Mark **Interested** / **Not interested**, optionally tagging a pass with one of four
-  reasons — Role, Company, Location, Pay — persisted to Notion via the `job_decision`
-  action. The reason is stored but nothing consumes it yet; free-text feedback and a
-  way to undo a decision are both open items in `.context/todos.md`.
+- Filter the list by **New / Saved / Applied / Not interested / All**, each with a live
+  count. Applied and Not interested appear only once there is something in them.
+- See, on every card, a **freshness pill** using the same three bands as the email
+  (green 0–2 days, amber 3–7, grey 8+, with an explicit date past a week), the
+  **workplace type**, the **link status** (`Link live` / `No longer accepting`), and
+  the **salary**. A closed posting is demoted and muted, never dropped.
+- Read each job's **job summary**, **why it matched**, and **key requirements** (listed
+  one per line).
+- Mark **Interested** / **Not interested**, tagging a pass with Role, Company, Location,
+  Pay, **Already applied**, or **Something else** — which opens a free-text field for the
+  member's own words. Both controls are toggles, so either decision can be taken back;
+  a dismissed card reads **Put back** and shows the reason that was given. A posting put
+  back stays in the list for the rest of the session even if the freshness window had
+  already aged it out.
+- Track what happened next. Every saved or applied posting carries a status row —
+  **Applied / Interviewing / Offer / Rejected / No response** — and says how long it has
+  been waiting ("Applied 21 days ago · still no reply" past two weeks). "Already applied"
+  files a posting straight into the tracker rather than recording it as a bad match.
+- See **what you've told us** in Settings: the pass reasons, newest first, as they are
+  stored on the candidate record for the next run to read.
 - Edit preferences (re-enter intake as unlocked tabs) or **pause** alerts.
 
 ---
@@ -173,6 +188,7 @@ steer-away rules applied. In the dashboard the member can:
 .
 ├── worker.mjs              # Cloudflare Worker — the entire backend API
 ├── worker.test.mjs         # node:test suite for the Worker's pure logic (no network)
+├── dashboard-helpers.test.mjs  # node:test suite for the helpers patched into the bundle
 ├── wrangler.jsonc          # Worker deploy config (name, vars, required secrets)
 ├── BRIEF_ENRICHMENT.md     # Design notes for the job-brief enrichment feature
 │
@@ -206,7 +222,8 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 | `validate` / `state` | access code (+ optional session) | Look up a code, return whether setup is needed, and — if linked — the full member session (profile + jobs). |
 | _(create/update)_ | valid access code | With no dedicated action, a POST carrying profile fields **creates** a candidate on first use of an `Unused` code, or **updates** the linked candidate on subsequent submits. `frequency: "Paused"` pauses the member. |
 | `session` | session token | Return the member profile + enriched, steer-filtered job list for a signed-in member. |
-| `job_decision` | session token | Record **Interested / Not interested** + feedback on one posting (ownership-checked by email). |
+| `job_decision` | session token | Record **Interested / Not interested** + a `feedback` reason and free-text `note` on one posting (ownership-checked by email). An empty `decision` clears the review, which is how the dashboard's toggles undo a mis-tap. A pass reason is also appended to the candidate's `Match context` and returned as `match_context`. |
+| `job_application` | session token | Set the posting's application status to one of `Applied`, `Interviewing`, `Offer`, `Rejected`, `No response` (ownership-checked by email). An empty status clears the tracking. `Applied at` is stamped on the first move into a status and preserved through later ones. |
 | `job_brief` | session token | Force brief enrichment for a single posting the member owns and return the updated public job. |
 | `magic_request` | email | Send a one-time sign-in link to the email on a candidate's profile. Always returns `{ ok: true }` regardless of whether the email matches, so it can't be used to probe which emails have accounts. |
 | `magic_consume` | magic token | Exchange a valid, unexpired, unconsumed magic token for a full member session. |
@@ -322,8 +339,9 @@ Three databases, referenced by id in `worker.mjs`:
 | `Name`, `Email`, `Status` | title / email / select | `Active` / `Paused` / `Revoked` — `Revoked` ends live sessions on the next request |
 | `Target roles`, `Regions`, `Min salary` | rich text | core preferences |
 | `Seniority`, `Remote OK`, `Frequency` | select | `3x daily` / `Daily` / `Weekly` (+ `Paused`) |
-| `Steer away`, `Steer mode` | rich text / select | `Rank lower` / `Hide` |
+| `Steer away`, `Steer mode` | rich text / select | `Rank lower` / `Hide`; never applied to a posting the member has reviewed or is tracking |
 | `Resume suggestions` | rich text | keyword chips surfaced in the UI |
+| `Match context` | rich text | pass reasons in the member's own words, newest first, capped at 12 lines — the one place a future run can read what to stop sending |
 | `Magic nonce` | rich text | one-time nonce for the outstanding sign-in link; cleared when consumed |
 | `Notes` | rich text | keywords, max salary, posted-within window, résumé filename |
 | _(page body)_ | blocks | the parsed **résumé text**, chunked into paragraphs |
@@ -336,13 +354,15 @@ Three databases, referenced by id in `worker.mjs`:
 | `Candidate email` | — | ties a posting to a member |
 | `Date sent`, `Date posted` | date | delivery + freshness |
 | `Workplace type` | select | `Remote` / `Hybrid` / `On-site`; absent when the posting does not say |
+| `Salary` | rich text | pay as the posting states it; also read from `Salary range` / `Compensation` / `Pay range`. Shown on the dashboard card beside the location |
 | `Link status` | select | `Live` / `Gone` / `Unknown` — whether the posting is still open |
 | `Link checked at` | date | last liveness check; re-checked once every 24h |
 | `Job description` / `Description` / `Posting text` | rich text | raw text used for enrichment |
 | `Job summary`, `Why it matched`, `Key requirements` | rich text | the written brief |
 | `Brief status`, `Brief error`, `Brief updated at` | select / rich text / date | enrichment bookkeeping |
 | `Primary domain` / `Domain` / `Job family` | rich text | canonical classification for steer-away |
-| `Dashboard decision`, `Dashboard feedback`, `Reviewed at` | select / rich text / date | member's review |
+| `Dashboard decision`, `Dashboard feedback`, `Reviewed at` | select / rich text / date | member's review; feedback is the chosen reason plus any free text |
+| `Application status`, `Applied at` | select / date | `Applied` / `Interviewing` / `Offer` / `Rejected` / `No response`, and when the application went in |
 
 The Worker **self-heals the schema**: on first use it patches in any missing brief,
 preference, or decision properties so a fresh Notion database works without manual setup.
@@ -364,8 +384,12 @@ concurrently (default 4, clamped 1–6 via `BRIEF_ENRICH_LIMIT`); the authentica
    rejecting login/anti-bot pages.
 4. Generate a structured brief with the **OpenAI Responses API** (`gpt-5.4-nano` by
    default), constrained to a **strict JSON schema** (`summary`, `match_reason`,
-   `key_requirements`), grounded only in the posting and the member's résumé.
-5. Persist the three fields plus `Brief status` / `Brief error` / `Brief updated at`.
+   `key_requirements`, `workplace_type`, `salary_range`), grounded only in the posting
+   and the member's résumé. `workplace_type` and `salary_range` are copied from the
+   posting or left unset — never estimated from the title, level, or location.
+5. Persist the three fields plus `Workplace type`, `Salary`, and
+   `Brief status` / `Brief error` / `Brief updated at`. An unstated salary leaves any
+   value the dispatcher already stored untouched.
 6. Cache `Unavailable` / `Failed` outcomes for **24 hours** before retrying.
 
 See [`BRIEF_ENRICHMENT.md`](./BRIEF_ENRICHMENT.md) for the full design and failure
@@ -386,8 +410,8 @@ job or fails the member session.
 - **Single-use magic links.** Sign-in links are `magic`-purpose tokens that expire in
   15 minutes and are bound to a one-time nonce stored on the candidate; consuming a link
   clears the nonce, and requesting a new link invalidates any outstanding one.
-- **Ownership checks.** `job_decision` and `job_brief` verify the posting's
-  `Candidate email` matches the authenticated member before reading or writing.
+- **Ownership checks.** `job_decision`, `job_application`, and `job_brief` verify the
+  posting's `Candidate email` matches the authenticated member before reading or writing.
 - **SSRF guards.** Posting fetches only follow public `http(s)` URLs; loopback,
   link-local, and RFC-1918 / unique-local ranges and credentialed URLs are rejected.
 - **Size & time caps.** Fetched bodies capped at 512 KiB; posting text ≤ 24 000 chars;
@@ -473,8 +497,15 @@ completeness and retry timing, JSON-LD extraction, anti-bot page rejection, SSRF
 rejection, résumé redaction, Responses-API parsing, and the enrich/persist happy and
 failure paths.
 
+`dashboard-helpers.test.mjs` covers the other half. The dashboard has no source to
+import, so it lifts the helpers `patch-dashboard.mjs` injects straight out of the built
+bundle and exercises them: the freshness bands, the posting-age label, requirement
+splitting, the New/Saved/All filters, and the last-run line. Extraction throws if a
+patch stopped applying, so a bundle that silently lost a fix fails the suite instead of
+shipping.
+
 ```sh
-node --test worker.test.mjs
+node --test worker.test.mjs dashboard-helpers.test.mjs
 ```
 
 ---
