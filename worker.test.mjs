@@ -576,12 +576,14 @@ test("a token verified with the wrong secret is rejected", async () => {
 
 test("the magic link carries the token on the dashboard origin", () => {
   const url = magicLinkUrl("body.signature");
-  assert.equal(url, "https://vakalaktika.github.io/?login=body.signature");
+  // Pages serves this repository as a project site, so a link built from the bare
+  // CORS origin lands on the user-site root, which is not a Pages site at all.
+  assert.equal(url, "https://vakalaktika.github.io/job-scout/?login=body.signature");
 });
 
 test("the magic email embeds the link and states the single-use expiry", () => {
-  const html = renderMagicEmail("https://vakalaktika.github.io/?login=tok123");
-  assert.ok(html.includes("https://vakalaktika.github.io/?login=tok123"));
+  const html = renderMagicEmail("https://vakalaktika.github.io/job-scout/?login=tok123");
+  assert.ok(html.includes("https://vakalaktika.github.io/job-scout/?login=tok123"));
   assert.match(html, /once/i);
   assert.match(html, /15 minutes/);
 });

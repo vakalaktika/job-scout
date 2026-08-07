@@ -205,7 +205,10 @@ steer-away rules applied. In the dashboard the member can:
 ```
 
 The site is served from the repository root as a GitHub Pages project site
-(`https://vakalaktika.github.io/job-scout/`).
+(`https://vakalaktika.github.io/job-scout/`). The Worker keeps that base in
+`APP_URL` and uses it for every link into the app. `ORIGIN` is the bare browser
+origin and exists only for the CORS header, which cannot carry a path — building
+a link from it aims at `vakalaktika.github.io`, where no Pages site exists.
 
 ---
 
@@ -226,7 +229,7 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 | `job_application` | session token | Set the posting's application status to one of `Applied`, `Interviewing`, `Offer`, `Rejected`, `No response` (ownership-checked by email). An empty status clears the tracking. `Applied at` is stamped on the first move into a status and preserved through later ones. |
 | `job_brief` | session token | Force brief enrichment for a single posting the member owns and return the updated public job. |
 | `magic_request` | email | Send a one-time sign-in link to the email on a candidate's profile. Always returns `{ ok: true }` regardless of whether the email matches, so it can't be used to probe which emails have accounts. |
-| `magic_consume` | magic token | Exchange a valid, unexpired, unconsumed magic token for a full member session. |
+| `magic_consume` | magic token | Exchange a valid, unexpired, unconsumed magic token for a full member session. The app calls this on load when the URL carries `?login=`, strips the token from the address bar first, and falls through to the invite gate if the link has expired or was already used. |
 
 ### Authentication
 
