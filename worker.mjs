@@ -192,6 +192,10 @@ function memberState(page) {
       plain(properties["Steer away"]) || noteValue(notes, "Steer away"),
     steer_away_mode: storedMode.toLowerCase() === "hide" ? "hide" : "rank",
     resume_suggestions: splitTerms(suggestions),
+    // What the member has told us when passing on a posting, newest first. It is
+    // returned to the dashboard so they can see what their scout has been told
+    // rather than having to trust that the reason went somewhere.
+    match_context: plain(properties["Match context"]),
   };
 }
 
@@ -224,6 +228,14 @@ function jobState(page) {
     brief_error: plain(properties["Brief error"]),
     brief_updated_at: plain(properties["Brief updated at"]),
     workplace_type: plain(properties["Workplace type"]),
+    // The email has carried pay on every card since launch, but the dashboard had
+    // nowhere to read it from, so the same posting looked less informative in the
+    // app than in the inbox. Accept whichever column the dispatcher wrote.
+    salary:
+      plain(properties.Salary) ||
+      plain(properties["Salary range"]) ||
+      plain(properties.Compensation) ||
+      plain(properties["Pay range"]),
     link_status: plain(properties["Link status"]).toLowerCase(),
     link_checked_at: plain(properties["Link checked at"]),
     primary_domain:
@@ -232,6 +244,11 @@ function jobState(page) {
       plain(properties["Job family"]),
     decision: plain(properties["Dashboard decision"]),
     feedback: plain(properties["Dashboard feedback"]),
+    // Where the member is with this posting once they have acted on it. A saved
+    // job and one they applied to three weeks ago with no reply are not the same
+    // thing, and the record had no way to tell them apart.
+    application_status: plain(properties["Application status"]),
+    applied_at: plain(properties["Applied at"]),
   };
 }
 
@@ -509,11 +526,18 @@ export function applySteerAway(jobs, member) {
   if (!terms.length) return { jobs, hiddenCount: 0 };
   const classified = jobs.map((job) => ({
     job,
-    // A saved posting is an explicit choice, so steer-away never touches it. Without
-    // this, adding a steer term in hide mode silently removed a job the candidate
-    // had already saved — the freshness gate protects saved jobs from ageing out,
-    // but this filter used to run afterwards and drop them anyway.
-    matches: job.decision === "Interested" ? [] : terms.filter((term) => matchesTerm(job, term)),
+    // A posting the candidate has acted on is an explicit choice, so steer-away
+    // never touches it. Without this, adding a steer term in hide mode silently
+    // removed a job the candidate had already saved — the freshness gate protects
+    // reviewed jobs from ageing out, but this filter used to run afterwards and
+    // drop them anyway. A dismissed posting needs the same protection now that it
+    // stays reachable for undo, and an application in progress needs it most of
+    // all. It also keeps the "N hidden" count meaning what it says: postings the
+    // candidate never saw, not ones they already dealt with.
+    matches:
+      job.decision || job.application_status
+        ? []
+        : terms.filter((term) => matchesTerm(job, term)),
   }));
   if (member.steer_away_mode === "hide") {
     const visible = classified.filter(({ matches }) => matches.length === 0);
@@ -599,6 +623,7 @@ async function ensureBriefProperties(env) {
       },
       "Brief error": { rich_text: {} },
       "Brief updated at": { date: {} },
+      Salary: { rich_text: {} },
       "Workplace type": {
         select: {
           options: [
@@ -642,6 +667,9 @@ async function persistBriefState(env, jobId, state) {
     if (state.workplace_type && state.workplace_type !== "Unclear") {
       properties["Workplace type"] = { select: { name: state.workplace_type } };
     }
+    // An empty salary means the posting did not state one. Leave whatever the
+    // dispatcher stored alone rather than blanking a good value with a guess.
+    if (state.salary) properties.Salary = richText(state.salary);
   }
   if (state.link_status) {
     properties["Link status"] = { select: { name: LINK_STATUS_NAMES[state.link_status] } };
@@ -686,8 +714,13 @@ const briefSchema = {
       description:
         'Whether the posting states the role is Remote, Hybrid, or On-site. Use "Unclear" unless the posting says so explicitly.',
     },
+    salary_range: {
+      type: "string",
+      description:
+        'The compensation range exactly as the posting states it, for example "$170k–$200k". Use an empty string when the posting does not state pay.',
+    },
   },
-  required: ["summary", "match_reason", "key_requirements", "workplace_type"],
+  required: ["summary", "match_reason", "key_requirements", "workplace_type", "salary_range"],
   additionalProperties: false,
 };
 
@@ -706,7 +739,9 @@ export function buildBriefRequest({ job, member, resumeText, postingText, model 
           "Use only facts present in those sources. Never invent compensation, responsibilities, " +
           "requirements, or candidate experience. Write direct prose without headings or bullets. " +
           "Keep summary and match_reason to 2-4 sentences and key_requirements to 1-2 sentences. " +
-          'Set workplace_type only when the posting states it; otherwise use "Unclear".',
+          'Set workplace_type only when the posting states it; otherwise use "Unclear". ' +
+          "Copy salary_range from the posting's stated compensation and leave it empty otherwise; " +
+          "never estimate a range from the title, level, or location.",
       },
       {
         role: "user",
@@ -767,6 +802,9 @@ export function parseBriefResponse(response) {
     workplace_type: WORKPLACE_TYPES.includes(value?.workplace_type)
       ? value.workplace_type
       : "Unclear",
+    // Stored under the same key jobState() reads, so an enriched job carries pay
+    // the moment it is spread over the record.
+    salary: normalizeText(value?.salary_range).slice(0, 120),
   };
   if (result.summary.length < 40 || result.match_reason.length < 40 || result.key_requirements.length < 20) {
     throw new Error("brief_generation_incomplete");
@@ -846,7 +884,10 @@ export async function enrichJobBrief({
     };
   }
   try {
-    const brief = await generate(env, { job, member, resumeText, postingText }, fetcher);
+    const { salary, ...rest } = await generate(env, { job, member, resumeText, postingText }, fetcher);
+    // An empty salary means the posting states no pay. Dropping the key keeps the
+    // spreads below from blanking a range the dispatcher already stored.
+    const brief = salary ? { ...rest, salary } : rest;
     const state = { status: "Ready", error: "", ...brief, ...linkState };
     await persist(env, job.id, state);
     return {
@@ -955,6 +996,7 @@ async function ensureCandidatePreferenceProperties(env) {
         },
       },
       "Resume suggestions": { rich_text: {} },
+      "Match context": { rich_text: {} },
     },
   });
 }
@@ -972,20 +1014,64 @@ async function ensureDecisionProperties(env) {
       },
       "Dashboard feedback": { rich_text: {} },
       "Reviewed at": { date: {} },
+      "Application status": {
+        select: {
+          options: APPLICATION_STATUSES.map((name) => ({
+            name,
+            color: APPLICATION_STATUS_COLOURS[name],
+          })),
+        },
+      },
+      "Applied at": { date: {} },
     },
   });
 }
 
-async function saveJobDecision(env, member, jobId, decision, feedback) {
-  if (!["Interested", "Not interested"].includes(decision)) throw new Error("invalid_decision");
-  const job = await notion(env, `pages/${jobId}`, "GET");
-  if (plain(job.properties?.["Candidate email"]).toLowerCase() !== member.email.toLowerCase()) {
+// An empty decision clears the review. Beta members had no way back from a
+// mis-tap: "Not interested" dropped the posting out of the list for good and
+// "Interested" hid the controls, so the only recovery was asking an operator to
+// edit Notion.
+export const DECISION_NAMES = ["Interested", "Not interested"];
+
+// What happens after the decision. Ordered as the application actually
+// progresses, so the dashboard can render them in this order without holding a
+// second copy of the sequence. "No response" is how a member records a posting
+// that went quiet, which is otherwise indistinguishable from one still in play.
+export const APPLICATION_STATUSES = [
+  "Applied",
+  "Interviewing",
+  "Offer",
+  "Rejected",
+  "No response",
+];
+
+const APPLICATION_STATUS_COLOURS = {
+  Applied: "blue",
+  Interviewing: "purple",
+  Offer: "green",
+  Rejected: "red",
+  "No response": "gray",
+};
+
+// Every posting write is scoped to the member who was sent it. Reading the page
+// first is what makes that check possible, so the callers below reuse the page
+// rather than fetching it twice.
+async function loadOwnedJob(env, member, jobId) {
+  const page = await notion(env, `pages/${jobId}`, "GET");
+  if (plain(page.properties?.["Candidate email"]).toLowerCase() !== member.email.toLowerCase()) {
     throw new Error("job_forbidden");
   }
+  return page;
+}
+
+async function saveJobDecision(env, member, jobId, decision, feedback) {
+  const cleared = !String(decision || "").trim();
+  if (!cleared && !DECISION_NAMES.includes(decision)) throw new Error("invalid_decision");
+  await loadOwnedJob(env, member, jobId);
   const properties = {
-    "Dashboard decision": { select: { name: decision } },
-    "Dashboard feedback": richText(feedback || ""),
-    "Reviewed at": { date: { start: new Date().toISOString() } },
+    "Dashboard decision": cleared ? { select: null } : { select: { name: decision } },
+    "Dashboard feedback": richText(cleared ? "" : feedback || ""),
+    "Reviewed at": { date: cleared ? null : { start: new Date().toISOString() } },
   };
   try {
     return await notion(env, `pages/${jobId}`, "PATCH", { properties });
@@ -994,6 +1080,71 @@ async function saveJobDecision(env, member, jobId, decision, feedback) {
     await ensureDecisionProperties(env);
     return notion(env, `pages/${jobId}`, "PATCH", { properties });
   }
+}
+
+// The first move into a status is when the member applied; later moves through
+// interviewing, rejection, or silence are updates to that same application, so
+// the date is set once and preserved until the status is cleared entirely.
+async function saveApplicationStatus(env, member, jobId, status) {
+  const cleared = !String(status || "").trim();
+  if (!cleared && !APPLICATION_STATUSES.includes(status)) {
+    throw new Error("invalid_application_status");
+  }
+  const page = await loadOwnedJob(env, member, jobId);
+  const appliedAt = plain(page.properties?.["Applied at"]);
+  const properties = {
+    "Application status": cleared ? { select: null } : { select: { name: status } },
+    "Applied at": cleared ? { date: null } : { date: { start: appliedAt || new Date().toISOString() } },
+  };
+  try {
+    return await notion(env, `pages/${jobId}`, "PATCH", { properties });
+  } catch (error) {
+    if (!String(error.message).includes("Applic")) throw error;
+    await ensureDecisionProperties(env);
+    return notion(env, `pages/${jobId}`, "PATCH", { properties });
+  }
+}
+
+// The pass reasons were write-only telemetry on the posting: nothing gathered
+// them into anything a future run could read. This rolls them up onto the
+// candidate record, newest first, as the one place that states in the member's
+// own words what to stop sending them.
+export const MATCH_CONTEXT_ENTRIES = 12;
+
+export const matchContextEntry = (job, reason, note, now = new Date()) => {
+  const label = [String(reason || "").trim(), String(note || "").trim()]
+    .filter(Boolean)
+    .join(" — ")
+    .slice(0, 200);
+  if (!label) return "";
+  const role = [job?.title, job?.company].filter(Boolean).join(" at ");
+  return [now.toISOString().slice(0, 10), "Not interested", label, role]
+    .filter(Boolean)
+    .join(" · ");
+};
+
+export const appendMatchContext = (existing, entry, limit = MATCH_CONTEXT_ENTRIES) => {
+  if (!entry) return String(existing ?? "");
+  const previous = String(existing ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && line !== entry);
+  return [entry, ...previous].slice(0, limit).join("\n").slice(0, 1900);
+};
+
+async function recordMatchContext(env, candidate, member, job, reason, note) {
+  const entry = matchContextEntry(job, reason, note);
+  if (!entry) return member.match_context;
+  const updated = appendMatchContext(member.match_context, entry);
+  const properties = { "Match context": richText(updated) };
+  try {
+    await notion(env, `pages/${candidate.id}`, "PATCH", { properties });
+  } catch (error) {
+    if (!String(error.message).includes("Match context")) throw error;
+    await ensureCandidatePreferenceProperties(env);
+    await notion(env, `pages/${candidate.id}`, "PATCH", { properties });
+  }
+  return updated;
 }
 
 function resumeBlocks(text) {
@@ -1184,6 +1335,27 @@ export const postingAgeDays = (postedAt, now = Date.now()) => {
   return Math.max(0, Math.floor(now / 86400000) - Math.floor(posted / 86400000));
 };
 
+// Any posting the member has already acted on survives the freshness window.
+// Saved roles always did; dismissed ones did not, so a change of mind had nowhere
+// to go once the posting aged out, and an application still in progress dropped
+// out of the tracker the week after it was sent.
+export const keepForSession = (job, maxPostingAge) => {
+  if (job?.decision || job?.application_status) return true;
+  const age = postingAgeDays(job?.posted_at);
+  return age !== null && age <= maxPostingAge;
+};
+
+// The newest "Date sent" across everything the dispatcher has ever delivered to
+// this member. Postings the freshness window drops still count: the question is
+// when the scout last ran, not what survived the filter.
+export const lastDispatchAt = (jobs) => {
+  const newest = (jobs || []).reduce((best, job) => {
+    const sent = Date.parse(String(job?.sent_at ?? ""));
+    return Number.isFinite(sent) && sent > best ? sent : best;
+  }, 0);
+  return newest ? new Date(newest).toISOString() : "";
+};
+
 const DEFAULT_POSTING_AGE_DAYS = 7;
 
 async function sessionResponse(env, candidate, extra = {}) {
@@ -1192,11 +1364,8 @@ async function sessionResponse(env, candidate, extra = {}) {
   // instead of being swallowed by a truthiness fallback back to seven.
   const storedAge = Number(member.notes.match(/Posted within:\s*(\d+)/i)?.[1]);
   const maxPostingAge = Number.isFinite(storedAge) ? storedAge : DEFAULT_POSTING_AGE_DAYS;
-  const recentJobs = (await loadMemberJobs(env, member.email)).filter((job) => {
-    if (job.decision === "Interested") return true;
-    const age = postingAgeDays(job.posted_at);
-    return age !== null && age <= maxPostingAge;
-  });
+  const memberJobs = await loadMemberJobs(env, member.email);
+  const recentJobs = memberJobs.filter((job) => keepForSession(job, maxPostingAge));
   const jobsWithBriefs = await enrichMissingBriefs(env, candidate, member, recentJobs);
   const jobsWithLinks = await sweepLinkStatus(env, jobsWithBriefs);
   const steered = applySteerAway(jobsWithLinks, member);
@@ -1211,6 +1380,11 @@ async function sessionResponse(env, candidate, extra = {}) {
     member,
     jobs: demoteClosedPostings(steered.jobs).map(clientJob),
     hidden_count: steered.hiddenCount,
+    // When the scout last delivered, so the dashboard can say so instead of
+    // leaving members guessing whether an empty list means "nothing found" or
+    // "nothing has run yet".
+    last_run_at: lastDispatchAt(memberJobs),
+
     session_token: sessionToken,
     session_expires_at: sessionExpiresAt,
     ...extra,
@@ -1294,12 +1468,33 @@ export default {
       if (payload.action === "job_decision") {
         const candidate = await authenticatedCandidate(env, payload.session_token);
         if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
+        const member = memberState(candidate);
+        // The reason is a chosen label; the note is whatever the member typed
+        // under "Something else". They are stored as one readable line.
+        const note = normalizeText(payload.note).slice(0, 300);
+        const reason = normalizeText(payload.feedback).slice(0, 60);
         await saveJobDecision(
+          env,
+          member,
+          payload.job_id,
+          payload.decision,
+          [reason, note].filter(Boolean).join(" — "),
+        );
+        const job = jobState(await notion(env, `pages/${payload.job_id}`, "GET"));
+        const matchContext =
+          payload.decision === "Not interested"
+            ? await recordMatchContext(env, candidate, member, job, reason, note)
+            : member.match_context;
+        return json({ ok: true, job: clientJob(job), match_context: matchContext });
+      }
+      if (payload.action === "job_application") {
+        const candidate = await authenticatedCandidate(env, payload.session_token);
+        if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
+        await saveApplicationStatus(
           env,
           memberState(candidate),
           payload.job_id,
-          payload.decision,
-          payload.feedback,
+          payload.application_status,
         );
         return json({
           ok: true,
