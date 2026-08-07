@@ -233,6 +233,35 @@ patch(
     'Y.jsx("a",{href:"./login.html",style:{color:"var(--green-deep)",fontWeight:600},children:"Lost your code? Email me a sign-in link"})})]})',
 );
 
+// ---------------------------------------------------------------------------
+// The magic link had no other end.
+//
+// The Worker mints a token, emails it, and exposes `magic_consume` to exchange
+// it for a session — all of it tested. Nothing in the front end ever read the
+// token back: the mount effect looked only at `?preview=` and localStorage, so a
+// member who followed their sign-in link landed on the invite-code gate, which
+// is the one screen the link exists to let them skip.
+//
+// Consume it before the stored session is considered, and strip it from the
+// address bar first: it is a bearer credential, and leaving it in the URL puts
+// it into history, the referrer, and anything the member pastes. A link that
+// fails — expired, already used, or nonce-rotated — falls through to the normal
+// flow rather than dead-ending, because the invite code still works.
+// ---------------------------------------------------------------------------
+patch(
+  "exchange a magic-link token for a session on load",
+  "return W.useEffect(()=>{let _=!1;return(async()=>{let A=null;",
+  "return W.useEffect(()=>{let _=!1;return(async()=>{" +
+    'const __jsT=new URLSearchParams(window.location.search).get("login");' +
+    "if(__jsT){const __jsU=new URL(window.location.href);" +
+    '__jsU.searchParams.delete("login");window.history.replaceState({},"",__jsU);' +
+    'try{const __jsR=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},' +
+    'body:JSON.stringify({action:"magic_consume",magic_token:__jsT})}),__jsD=await __jsR.json();' +
+    'if(!__jsR.ok||!__jsD.ok)throw new Error(__jsD.error||"invalid_link");' +
+    '_||(w("",__jsD),v(!1));return}catch(__jsE){console.error(__jsE)}}' +
+    "let A=null;",
+);
+
 // The same one-week promise is repeated on the landing hero and on the signed-in
 // settings panel. Both are now wrong, so correct them alongside the invite form.
 patch(

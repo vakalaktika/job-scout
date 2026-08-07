@@ -203,6 +203,16 @@ The pass-reason copy was also corrected. It promised the feedback taught the sco
 
 Dashboard behaviour is covered by `dashboard-helpers.test.mjs`, which lifts the injected helpers out of the built bundle rather than trusting the patch strings. `patch()` in `patch-dashboard.mjs` now accepts a list of anchors, because the shipped artifact is itself post-patch and a fix that supersedes an earlier fix has to match either state to stay idempotent.
 
+## Sign-in by magic link was never wired up (2026-08-07)
+
+The link in the sign-in email 404'd, and two independent defects were behind it. Both predate the experience work and neither was introduced by it.
+
+1. **The link pointed outside the site.** `magicLinkUrl()` built `${ORIGIN}/?login=…`, but `ORIGIN` is the CORS origin and an origin cannot carry a path. Pages serves this repository as a project site at `https://vakalaktika.github.io/job-scout/`, so the link resolved to the user-site root, where no Pages site exists. Every other reference in the repository — the README, the email template, even the brief enricher's `User-Agent` — already used the `/job-scout/` base; the sign-in link was the one place that did not. `APP_URL` now holds the site base and `ORIGIN` is used only by the CORS header.
+
+2. **Nothing consumed the token.** The Worker mints the token, emails it, and exposes `magic_consume`, all covered by tests, but the front end never read it back: the mount effect looked only at `?preview=` and `localStorage`. A member who followed a corrected link would still have landed on the invite-code gate — the one screen the link exists to let them skip. The dashboard now exchanges `?login=` for a session on load, strips the token from the address bar before the request so it does not reach history or the referrer, and falls through to the invite gate when the link has expired, been used, or had its nonce rotated.
+
+The lesson worth carrying into the handoff: `magicLinkUrl()` and `renderMagicEmail()` both had passing tests, and the tests asserted the wrong URL. Neither end of the flow was exercised against the deployed site.
+
 ## Known gaps and operational risks
 
 1. **The initial matching brain is outside version control here.** The behavior producing the shortlist cannot be reproduced, regression-tested, or fully handed off from this repository alone.

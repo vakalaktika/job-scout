@@ -1,4 +1,12 @@
+// ORIGIN is the browser origin for CORS and nothing else. An origin has no path
+// by definition and an Access-Control-Allow-Origin carrying one is invalid, so
+// this constant has to stay bare.
 const ORIGIN = "https://vakalaktika.github.io";
+// APP_URL is where the site actually lives. Pages serves this repository as a
+// project site, so every link into the app needs the /job-scout/ base. Building
+// the sign-in link from ORIGIN instead aimed it at the user-site root, which is
+// not a Pages site at all, so every magic link 404'd.
+const APP_URL = `${ORIGIN}/job-scout/`;
 const CODES_DB = "111ed911-f8ea-4e69-b6a5-c8c6f7479058";
 const CAND_DB = "87f58043-765a-4b49-ae7e-6903e48b6996";
 const SENT_POSTINGS_DB = "236b97b7-af8b-4c3d-8d67-f57fdc6386c6";
@@ -1232,7 +1240,7 @@ export async function verifyToken(env, token, purpose) {
   return payload;
 }
 
-export const magicLinkUrl = (token) => `${ORIGIN}/?login=${token}`;
+export const magicLinkUrl = (token) => `${APP_URL}?login=${token}`;
 
 const EMAIL_SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
