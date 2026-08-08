@@ -213,6 +213,12 @@ The link in the sign-in email 404'd, and two independent defects were behind it.
 
 The lesson worth carrying into the handoff: `magicLinkUrl()` and `renderMagicEmail()` both had passing tests, and the tests asserted the wrong URL. Neither end of the flow was exercised against the deployed site.
 
+## The location reset had a second author (2026-08-07)
+
+Beta reports of locations reverting to San Francisco continued after the 2026-08-05 fix, and the deployed artifacts were not the reason: the Pages bundle carries `__jsRegion` and the live Worker answers `magic_consume` and `job_application`, both newer than that fix. The remaining writer was the résumé parser. `vP()` scans the entire résumé text against the location gazetteer, stops at the first state whose name or listed city appears anywhere in the text, and — when only the state name matches — falls back to that state's *first listed city*, which for California is literally San Francisco. The upload handler then merged every suggestion into profile state unconditionally, including in edit mode, where location lives on a tab the member never opened. So a member in Austin who replaced their résumé — one that mentioned a California employer, client, or university anywhere — had their saved location silently rewritten, and the edit flow's full-snapshot submit persisted it. California enumerates before Texas, so this happened even when the résumé also said Austin.
+
+`__jsResumePrefill()` in `intake-flow.source.js` now gates the merge: first-time intake keeps the full prefill (the member still reviews every step), but editing a saved profile takes only the steer-away suggestions, which render as optional chips rather than writing into a field. `intake-prefill.test.mjs` lifts the gate out of the shipped bundle, in the same style as `dashboard-helpers.test.mjs`, so the test fails if the injection stops carrying the fix.
+
 ## Known gaps and operational risks
 
 1. **The initial matching brain is outside version control here.** The behavior producing the shortlist cannot be reproduced, regression-tested, or fully handed off from this repository alone.
