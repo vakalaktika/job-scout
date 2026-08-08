@@ -39,12 +39,17 @@
                       (omit the salary segment if not listed)
                       Do NOT put remote status here — use {{WORKPLACE_LABEL}} so it
                       reads as its own badge instead of being buried in this line.
-    {{WORKPLACE_LABEL}}  "Remote" / "Hybrid" / "On-site", from the posting's
-                      Workplace type. When the posting does not say, delete that
-                      badge's whole <tr> from the card rather than guessing or
-                      leaving an empty pill. "Is this fully remote?" was the most
-                      common question from beta users, so an honest blank beats a
-                      confident wrong answer.
+    {{WORKPLACE_LABEL}}  "Remote" / "Hybrid" / "On-site", taken verbatim from the
+                      posting's "Workplace type" select. That field is always one
+                      of exactly four values: Remote, Hybrid, On-site, or Unclear.
+                      For the first three, print the value. For "Unclear" (or a
+                      missing field), delete this badge's ENTIRE <tr> — the whole
+                      workplace-badge row in the exemplar — rather than filling it.
+                      Never print the word "Unclear", never leave an empty pill,
+                      and never let the {{WORKPLACE_LABEL}} token itself survive:
+                      a leaked token is a shipped bug, exactly like {{JOB_CARDS}}.
+                      "Is this fully remote?" was the most common question from
+                      beta users, so an honest blank beats a confident wrong answer.
     {{MATCH_REASON}}  one sentence on why it fits their profile
     {{POSTED_LABEL}}  "Posted today" / "Posted yesterday" / "Posted 3 days ago" /
                       "Posted Jul 3 (9 days ago)" / "Posting date not listed"
