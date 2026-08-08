@@ -75,6 +75,78 @@ export function buildEmail(templateHtml, email, postings, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Pipeline record -> Posting mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * @typedef {Object} PipelineRecord
+ * A sent-posting record as the pipeline stores it (worker brief fields, mirrored
+ * to the Notion "Sent Postings" source of truth). Field names are the enriched
+ * job-record keys; "Date posted" also accepted under its Notion label.
+ * @property {string}  title
+ * @property {string}  company
+ * @property {string}  location
+ * @property {string}  source
+ * @property {string}  url
+ * @property {string=} workplace_type
+ * @property {string=} salary
+ * @property {string}  match_reason          Why it matched (Notion: "Why it matched").
+ * @property {(string|Date)=} date_posted    Notion: "Date posted". Also read as
+ *                                           record["Date posted"] or record.postedDate.
+ */
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Map a pipeline/Notion sent-posting record onto a buildEmail Posting.
+ *
+ * Every field is a direct carry-over except:
+ *   - match_reason -> matchReason   (the one real name mismatch)
+ *   - "Date posted" -> postedDaysAgo + postedDate  (computed for the freshness pill)
+ *
+ * @param {PipelineRecord} record
+ * @param {{ now?: Date }} [opts] now defaults to the current time; injectable for tests.
+ * @returns {Posting}
+ */
+export function toPosting(record, opts = {}) {
+  const now = opts.now instanceof Date ? opts.now : new Date();
+  const rawDate = record.date_posted ?? record["Date posted"] ?? record.postedDate ?? null;
+  const { postedDaysAgo, postedDate } = resolvePostedAge(rawDate, now);
+  return {
+    title: record.title,
+    company: record.company,
+    location: record.location,
+    source: record.source,
+    url: record.url,
+    workplace_type: record.workplace_type,
+    salary: record.salary,
+    matchReason: record.match_reason, // <-- rename; everything else is direct
+    postedDaysAgo,
+    postedDate,
+  };
+}
+
+/**
+ * Whole days between a posting date and now (UTC calendar days, never negative).
+ * Missing or unparseable dates map to unknown so the pill falls back to neutral.
+ */
+function resolvePostedAge(rawDate, now) {
+  if (rawDate == null || String(rawDate).trim() === "") {
+    return { postedDaysAgo: undefined, postedDate: undefined };
+  }
+  const posted = rawDate instanceof Date ? rawDate : new Date(rawDate);
+  if (Number.isNaN(posted.getTime())) {
+    return { postedDaysAgo: undefined, postedDate: undefined };
+  }
+  const days = Math.max(0, Math.floor((utcMidnight(now) - utcMidnight(posted)) / MS_PER_DAY));
+  return { postedDaysAgo: days, postedDate: posted };
+}
+
+function utcMidnight(d) {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+// ---------------------------------------------------------------------------
 // Per-card fill
 // ---------------------------------------------------------------------------
 
