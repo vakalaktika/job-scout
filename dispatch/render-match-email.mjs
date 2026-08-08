@@ -1,10 +1,19 @@
 // dispatch/render-match-email.mjs
 // Reference call site for the deterministic match-alert email builder.
 //
-// This is the shape the EXTERNAL dispatcher routine (trig_01LZtNUf7LVFzw3C2Fyy9QEw)
-// should adopt: instead of having an LLM hand-fill email-template.html — the step that
-// leaked {{WORKPLACE_LABEL}} into sent mail — it maps its sent-posting records through
-// toPosting() and fills the template deterministically with buildEmail().
+// Where the real dispatcher lives (as of 2026-08-07): the scheduled routine
+// (trig_01LZtNUf7LVFzw3C2Fyy9QEw) no longer builds HTML at all — it POSTs job JSON to
+// the `job-scout-backup-dispatcher` Cloudflare Worker's /send-email endpoint, which
+// fetches the published template and fills it. That worker is deployed from the
+// Cloudflare dashboard (not from any repo); fetch/redeploy its source via the Workers
+// Scripts API. It now applies the same deterministic fill as buildEmail() below —
+// including the {{WORKPLACE_LABEL}} badge fill/strip and a leak guard that falls back
+// to plain text if any {{token}} would survive.
+//
+// This module remains the reference implementation: any future dispatcher should map
+// its sent-posting records through toPosting() and fill the template with buildEmail()
+// instead of having an LLM hand-fill email-template.html — the step that originally
+// leaked {{WORKPLACE_LABEL}} into sent mail.
 //
 // Node + Deno/Supabase Edge both resolve `node:` specifiers, so this reads the shipped
 // template relative to itself. buildEmail() / toPosting() stay pure; only this call
