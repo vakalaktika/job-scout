@@ -53,6 +53,16 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     );
   const O = g1[l.country] || {};
   const X = O[l.state] || [];
+  // Resume suggestions prefill a blank first-time form, but on a saved profile
+  // they must not overwrite preferences the member already curated. The parser
+  // scans the whole resume against the location gazetteer and falls back to a
+  // state's first listed city, so a resume that mentioned "California" anywhere
+  // rewrote a saved Austin to San Francisco the moment the member replaced
+  // their file — on a tab they never opened. When editing, only the steer-away
+  // suggestions survive: they render as optional chips instead of writing into
+  // a field.
+  const __jsResumePrefill = (ee, ie) =>
+    ie ? (Array.isArray(ee.resumeSuggestions) && ee.resumeSuggestions.length ? { resumeSuggestions: ee.resumeSuggestions } : {}) : ee;
   const q = async (Q) => {
     if (!Q) return;
     w("");
@@ -64,7 +74,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     try {
       const Z = await bP(Q);
       d(Z);
-      const ee = vP(Z);
+      const ee = __jsResumePrefill(vP(Z), H);
       const te = Object.keys(ee);
       if (te.length) e((ne) => ({ ...ne, ...ee }));
       b(te);
