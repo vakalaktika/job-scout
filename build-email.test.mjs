@@ -103,6 +103,22 @@ test('toPosting reads the Notion "Date posted" label and computes whole days', (
   assert.ok(p.postedDate instanceof Date);
 });
 
+test("toPosting reads the live dispatcher's posted_at ISO field for the pill", () => {
+  const now = new Date("2026-07-12T09:00:00Z");
+  const p = toPosting({ match_reason: "x", posted_at: "2026-07-10T00:00:00Z" }, { now });
+  assert.equal(p.postedDaysAgo, 2);
+  assert.ok(p.postedDate instanceof Date);
+});
+
+test("toPosting prefers date_posted over posted_at when both are present", () => {
+  const now = new Date("2026-07-12T09:00:00Z");
+  const p = toPosting(
+    { match_reason: "x", date_posted: "2026-07-05", posted_at: "2026-07-11T00:00:00Z" },
+    { now },
+  );
+  assert.equal(p.postedDaysAgo, 7);
+});
+
 // ---------------------------------------------------------------------------
 // Freshness buckets: 0 / 2 (green) · 3 / 7 (amber) · 8 (gray) · unknown (neutral)
 // ---------------------------------------------------------------------------

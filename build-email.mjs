@@ -92,7 +92,9 @@ export function buildEmail(templateHtml, email, postings, opts = {}) {
  * @property {string=} salary
  * @property {string}  match_reason          Why it matched (Notion: "Why it matched").
  * @property {(string|Date)=} date_posted    Notion: "Date posted". Also read as
- *                                           record["Date posted"] or record.postedDate.
+ *                                           record["Date posted"], record.posted_at
+ *                                           (the live dispatcher's ISO field), or
+ *                                           record.postedDate.
  */
 
 const MS_PER_DAY = 86_400_000;
@@ -110,7 +112,12 @@ const MS_PER_DAY = 86_400_000;
  */
 export function toPosting(record, opts = {}) {
   const now = opts.now instanceof Date ? opts.now : new Date();
-  const rawDate = record.date_posted ?? record["Date posted"] ?? record.postedDate ?? null;
+  const rawDate =
+    record.date_posted ??
+    record["Date posted"] ??
+    record.posted_at ?? // the live backup-dispatcher sends the date under posted_at (ISO)
+    record.postedDate ??
+    null;
   const { postedDaysAgo, postedDate } = resolvePostedAge(rawDate, now);
   return {
     title: record.title,
