@@ -41,12 +41,13 @@ import {
   WORKPLACE_TYPES,
 } from "./worker.mjs";
 
-test("first-scout state is available only to an active member who has never received jobs", () => {
-  assert.deepEqual(firstScoutPublicState({ status: "Active" }, [], null), {
+test("first-scout state is available only to an entitled active member with no jobs", () => {
+  assert.deepEqual(firstScoutPublicState({ status: "Active", first_scout_status: "Available" }, [], null), {
     status: "available",
     requested_at: "",
     completed_at: "",
   });
+  assert.equal(firstScoutPublicState({ status: "Active" }, [], null).status, "unavailable");
   assert.equal(firstScoutPublicState({ status: "Paused" }, [], null).status, "unavailable");
   assert.equal(firstScoutPublicState({ status: "Revoked" }, [], null).status, "unavailable");
   assert.equal(firstScoutPublicState({ status: "Active" }, [{ id: "job-1" }], null).status, "complete");
