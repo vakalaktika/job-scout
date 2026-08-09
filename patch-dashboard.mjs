@@ -129,7 +129,23 @@ const cardHelpers =
   'if(!Number.isFinite(t))return e?"Freshest first":"Your first run is still to come";' +
   'const a=new Date(t),s=a.toLocaleTimeString(void 0,{hour:"numeric",minute:"2-digit"});' +
   "return a.toDateString()===new Date().toDateString()?`${n}today, ${s}`:" +
-  '`${n}${a.toLocaleDateString(void 0,{month:"short",day:"numeric"})}, ${s}`}';
+  '`${n}${a.toLocaleDateString(void 0,{month:"short",day:"numeric"})}, ${s}`},' +
+  '__jsScoutView=l=>{const e=String(l&&l.status||"unavailable");' +
+  'if(e==="available")return{eyebrow:"Your first run",title:"See what your scout can find now.",' +
+  'copy:"Run one search now instead of waiting for the regular schedule. You can only use this once.",canStart:!0};' +
+  'if(e==="queued"||e==="running")return{eyebrow:"Searching now",title:"Your scout is searching",' +
+  'copy:"We’re checking your preferences against fresh postings. You can leave this page; results will also arrive by email.",canStart:!1};' +
+  'if(e==="complete")return{eyebrow:"Search complete",title:"Your first scout finished.",' +
+  'copy:"There weren’t any strong matches this time. Your regular scout schedule is active and will keep looking.",canStart:!1};' +
+  'if(e==="failed"||e==="needs_review")return{eyebrow:"Search update",title:"Your first scout needs another try.",' +
+  'copy:"We couldn’t finish the one-time search. Your regular scout schedule is still active.",canStart:!1};' +
+  'return{eyebrow:"Your first run",title:"Your preferences are saved.",' +
+  'copy:"Your scout will run on its regular schedule. Matching jobs will arrive by email and appear here.",canStart:!1}}';
+
+// The bundle already carried the helpers above before __jsScoutView was added.
+// Keep that exact prior form as a migration anchor so replacing the helper list
+// never appends a second declaration beside the first.
+const previousCardHelpers = cardHelpers.slice(0, cardHelpers.indexOf(",__jsScoutView="));
 
 // The three-filter form the shipped bundle already carries. Kept verbatim so this
 // patch supersedes its own previous revision instead of appending a second copy
@@ -157,8 +173,66 @@ const postedHelper =
 
 patch(
   "inject the freshness, requirement, run-label, and tracking helpers",
-  [`${postedHelper},${shippedCardHelpers}`, postedHelper],
-  `${postedHelper},${cardHelpers}`,
+  [
+    `${postedHelper},${cardHelpers},${previousCardHelpers}`,
+    `${postedHelper},${previousCardHelpers}`,
+    `${postedHelper},${shippedCardHelpers}`,
+    postedHelper,
+  ],
+  `${postedHelper},/*first-scout-helpers*/${cardHelpers}`,
+);
+
+patch(
+  "start the authenticated one-time scout",
+  '},P=({items:ue,saved:z=!1})=>Y.jsx(Ut.div,{layout:!0,className:"history-list job-review-list"',
+  '},__jsStartScout=async()=>{if(__jsScoutBusy)return;__jsSetScoutBusy(!0);try{' +
+    'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+    'body:JSON.stringify({action:"run_scout_once",session_token:n})}),__jsD=await __jsR.json();' +
+    'if(__jsD&&__jsD.first_scout)__jsSetScout(__jsD.first_scout);' +
+    'if(!__jsR.ok||!__jsD.ok)throw new Error(__jsD.error||"first_scout_failed");' +
+    'K(__jsD.already_requested?"Your first scout is already in progress.":"Your first scout is searching now.")' +
+    '}catch(__jsE){console.error(__jsE),K("We couldn’t start that search. Your regular schedule is still active.")}' +
+    'finally{__jsSetScoutBusy(!1)}},' +
+    'P=({items:ue,saved:z=!1})=>Y.jsx(Ut.div,{layout:!0,className:"history-list job-review-list"',
+);
+
+const firstScoutPollOriginal =
+  'te=[{label:"For you",icon:BL},{label:"Saved",icon:a3,count:j.length},{label:"Settings",icon:LL}];return Y.jsxs("div"';
+const firstScoutPollBase =
+  'te=[{label:"For you",icon:BL},{label:"Saved",icon:a3,count:j.length},{label:"Settings",icon:LL}];' +
+    'W.useEffect(()=>{if(!["queued","running"].includes(String(__jsScout&&__jsScout.status||"")))return;' +
+    'let __jsStopped=!1,__jsPolling=!1;const __jsPoll=async()=>{if(__jsStopped||__jsPolling||document.hidden)return;' +
+    '__jsPolling=!0;try{const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+    'body:JSON.stringify({action:"scout_status",session_token:n})}),__jsD=await __jsR.json();' +
+    'if(!__jsR.ok||!__jsD.ok)throw new Error(__jsD.error||"scout_status_failed");' +
+    'const __jsNext=__jsD.first_scout||{status:"needs_review"};if(!__jsStopped)__jsSetScout(__jsNext);' +
+    'if(__jsNext.status==="complete"&&!__jsStopped){const __jsS=await fetch(I3,{method:"POST",' +
+    'headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"session",session_token:n})}),' +
+    '__jsB=await __jsS.json();if(__jsS.ok&&__jsB.ok&&!__jsStopped){T(Array.isArray(__jsB.jobs)?__jsB.jobs:[]);' +
+    '__jsSetScout(__jsB.first_scout||__jsNext)}}}catch(__jsE){console.error(__jsE)}finally{__jsPolling=!1}};' +
+    '__jsPoll();const __jsTimer=window.setInterval(__jsPoll,5000);return()=>{__jsStopped=!0;window.clearInterval(__jsTimer)}' +
+    '},[n,__jsScout&&__jsScout.status]);return Y.jsxs("div"';
+const firstScoutPollGuarded = firstScoutPollBase.replace(
+  'W.useEffect(()=>{if(!["queued","running"]',
+  'W.useEffect(()=>{if(!n||!["queued","running"]',
+);
+const firstScoutPollFinal = firstScoutPollGuarded
+  .replace(
+    'const __jsNext=__jsD.first_scout||{status:"needs_review"};if(!__jsStopped)__jsSetScout(__jsNext);' +
+      'if(__jsNext.status==="complete"&&!__jsStopped){const',
+    'const __jsNext=__jsD.first_scout||{status:"needs_review"};' +
+      'if(__jsNext.status==="complete"&&!__jsStopped){const',
+  )
+  .replace(
+    '__jsSetScout(__jsB.first_scout||__jsNext)}}}catch(__jsE)',
+    '__jsSetScout(__jsB.first_scout||__jsNext)}else if(!__jsStopped)__jsSetScout(__jsNext)}' +
+      'else if(!__jsStopped)__jsSetScout(__jsNext)}catch(__jsE)',
+  );
+
+patch(
+  "poll first-scout status and refresh matches once complete",
+  [firstScoutPollOriginal, firstScoutPollBase, firstScoutPollGuarded],
+  firstScoutPollFinal,
 );
 
 // ---------------------------------------------------------------------------
@@ -398,6 +472,11 @@ patch(
 patch(
   "add the filter, disclosure, restored, and search-context state",
   [
+    'const[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),' +
+      "[__jsOther,__jsSetOther]=W.useState(!1)," +
+      "[__jsRestored,__jsSetRestored]=W.useState([])," +
+      '[__jsContext,__jsSetContext]=W.useState(e&&e.member&&e.member.match_context||""),' +
+      "[d,p]=W.useState(null),",
     'const[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),[d,p]=W.useState(null),',
     'const[c,h]=W.useState("For you"),[d,p]=W.useState(null),',
   ],
@@ -405,6 +484,8 @@ patch(
     "[__jsOther,__jsSetOther]=W.useState(!1)," +
     "[__jsRestored,__jsSetRestored]=W.useState([])," +
     '[__jsContext,__jsSetContext]=W.useState(e&&e.member&&e.member.match_context||""),' +
+    '[__jsScout,__jsSetScout]=W.useState(e&&e.first_scout||{status:"unavailable"}),' +
+    '[__jsScoutBusy,__jsSetScoutBusy]=W.useState(!1),' +
     "[d,p]=W.useState(null),",
 );
 
@@ -611,6 +692,29 @@ patch(
     '"You have reviewed everything from this run. Switch to All to look again."})})()]}):',
 );
 
+patch(
+  "show the first-scout CTA and live empty states",
+  'Y.jsxs("section",{className:"empty-saved first-run-empty",children:[' +
+    'Y.jsx("div",{className:"empty-icon",children:Y.jsx(m2,{size:28,weight:"fill"})}),' +
+    'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:"Your first run"}),' +
+    'Y.jsx("h2",{children:"Your preferences are saved."}),' +
+    'Y.jsx("p",{children:"The first scouting run hasn’t finished yet. When it does, matching jobs will arrive by email and appear here. You don’t need to keep this page open."}),' +
+    'Y.jsxs(Ut.button,{type:"button",onClick:s,whileTap:{scale:.97},transition:La,children:[' +
+    'Y.jsx(c3,{size:17})," Review preferences"]})]})]})',
+  '(()=>{const __jsV=__jsScoutView(__jsScout);return Y.jsxs(Ut.section,{' +
+    'className:"empty-saved first-run-empty first-scout-status",role:"status","aria-live":"polite",layout:!0,' +
+    'initial:a?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:oh,children:[' +
+    'Y.jsx("div",{className:"empty-icon",children:Y.jsx(m2,{size:28,weight:"fill"})}),' +
+    'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:__jsV.eyebrow}),' +
+    'Y.jsx("h2",{children:__jsV.title}),Y.jsx("p",{children:__jsV.copy}),' +
+    'Y.jsxs("div",{className:"first-scout-actions",children:[' +
+    '__jsV.canStart?Y.jsxs(Ut.button,{type:"button",className:"first-scout-cta",onClick:__jsStartScout,' +
+    'disabled:__jsScoutBusy,whileTap:a?void 0:{scale:.97},transition:La,children:[' +
+    '__jsScoutBusy?"Starting your scout…":"Find my first matches",Y.jsx(ax,{size:16})]}):null,' +
+    'Y.jsxs(Ut.button,{type:"button",className:"first-scout-review",onClick:s,' +
+    'whileTap:a?void 0:{scale:.97},transition:La,children:[Y.jsx(c3,{size:17})," Review preferences"]})]})]})]})})()',
+);
+
 // What the member has told us, in their own words, beside the preferences it
 // belongs with. A reason that goes nowhere visible is a reason members stop
 // giving, and this is the same field the next run reads.
@@ -666,6 +770,23 @@ patch(
   "span the tracker across the narrow card",
   ".job-card-footer{grid-column:1 / -1}",
   ".job-track{grid-column:1 / -1}.job-card-footer{grid-column:1 / -1}",
+  "css",
+);
+
+patch(
+  "style the one-time first-scout surfaces",
+  ".ready-card{width:min(100%,760px);border:1px solid var(--line);",
+  ".first-scout-status{border-color:#bfd8c8;background:linear-gradient(145deg,#f7fbf8,#eef7f1);overflow:hidden}" +
+    ".first-scout-status>div:last-child{display:flex;flex-direction:column;align-items:flex-start;gap:10px}" +
+    ".first-scout-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}" +
+    ".first-scout-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--green-deep);" +
+    "border-radius:9px;background:var(--green-deep);color:#fff;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer}" +
+    ".first-scout-cta:disabled{cursor:wait;opacity:.68}" +
+    ".first-scout-review{display:inline-flex;align-items:center;gap:6px}" +
+    ".ready-skip{align-self:center;border:0;background:transparent;color:var(--ink-soft);padding:7px 10px;font:inherit;font-size:13px;cursor:pointer}" +
+    ".ready-skip:hover{text-decoration:underline}" +
+    "@media(prefers-reduced-motion:reduce){.first-scout-status,.first-scout-cta{animation:none!important;transition:none!important;transform:none!important}}" +
+    ".ready-card{width:min(100%,760px);border:1px solid var(--line);",
   "css",
 );
 

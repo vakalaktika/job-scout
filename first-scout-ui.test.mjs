@@ -14,9 +14,14 @@ test("the onboarding review offers the authenticated one-time first-scout CTA", 
 
 test("the dashboard polls session state while a first scout is queued", () => {
   assert.match(bundle, /first_scout/);
-  assert.match(bundle, /className:"first-scout-status"/);
+  assert.match(bundle, /className:"[^"]*first-scout-status/);
+  assert.match(bundle, /action:"scout_status",session_token:/);
   assert.match(bundle, /action:"session",session_token:/);
   assert.match(bundle, /Your scout is searching/);
+  assert.doesNotMatch(
+    bundle,
+    /const __jsNext=[^;]+;if\(!__jsStopped\)__jsSetScout\(__jsNext\);if\(__jsNext\.status==="complete"/,
+  );
 });
 
 test("first-scout motion is transform/opacity-only and respects reduced motion", () => {

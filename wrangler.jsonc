@@ -6,9 +6,30 @@
   "keep_vars": true,
   "vars": {
     "OPENAI_BRIEF_MODEL": "gpt-5.4-nano",
-    "BRIEF_ENRICH_LIMIT": "4"
+    "BRIEF_ENRICH_LIMIT": "4",
+    "FIRST_SCOUT_ROUTINE_ID": "trig_01LZtNUf7LVFzw3C2Fyy9QEw"
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "FIRST_SCOUT_GATE",
+        "class_name": "FirstScoutGate"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-first-scout",
+      "new_sqlite_classes": ["FirstScoutGate"]
+    }
+  ],
   "secrets": {
-    "required": ["NOTION_TOKEN", "SESSION_SECRET", "OPENAI_API_KEY", "RESEND_API_KEY"]
+    "required": [
+      "NOTION_TOKEN",
+      "SESSION_SECRET",
+      "OPENAI_API_KEY",
+      "RESEND_API_KEY",
+      "FIRST_SCOUT_ROUTINE_TOKEN"
+    ]
   }
 }
