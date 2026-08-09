@@ -3,19 +3,27 @@ import { readFile, writeFile } from "node:fs/promises";
 const bundlePath = new URL("./assets/index-BdD4MZod.js", import.meta.url);
 const sourcePath = new URL("./intake-flow.source.js", import.meta.url);
 const parserPath = new URL("./resume-parser.source.js", import.meta.url);
+const readyPath = new URL("./ready-flow.source.js", import.meta.url);
 let bundle = await readFile(bundlePath, "utf8");
 const intake = await readFile(sourcePath, "utf8");
 const parser = await readFile(parserPath, "utf8");
+const ready = await readFile(readyPath, "utf8");
 
 const standardAppStart = 'function xP(){const l=uL(),[e,t]=W.useState("invite"),[n,a]=W.useState(!1),[s,o]=W.useState(V3),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(null),[b,v]=W.useState(!0),';
 const previousPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview")==="intake",P0=P?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P?"intake":"invite"),[n,a]=W.useState(P),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(null),[b,v]=W.useState(!P),';
 const previewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P1=P==="intake"||P==="edit",P2=P==="edit",P0=P1?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P1?"intake":"invite"),[n,a]=W.useState(P1),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(null),[b,v]=W.useState(!P1),';
+const firstScoutPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),';
+const localFirstScoutPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState((P3||P4)&&(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1")?"preview-session":""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),';
 
 if (bundle.includes(standardAppStart)) {
-  bundle = bundle.replace(standardAppStart, previewAppStart);
+  bundle = bundle.replace(standardAppStart, localFirstScoutPreviewAppStart);
 } else if (bundle.includes(previousPreviewAppStart)) {
-  bundle = bundle.replace(previousPreviewAppStart, previewAppStart);
-} else if (!bundle.includes(previewAppStart)) {
+  bundle = bundle.replace(previousPreviewAppStart, localFirstScoutPreviewAppStart);
+} else if (bundle.includes(previewAppStart)) {
+  bundle = bundle.replace(previewAppStart, localFirstScoutPreviewAppStart);
+} else if (bundle.includes(firstScoutPreviewAppStart)) {
+  bundle = bundle.replace(firstScoutPreviewAppStart, localFirstScoutPreviewAppStart);
+} else if (!bundle.includes(localFirstScoutPreviewAppStart)) {
   throw new Error("Could not add the local intake preview entry point to the current bundle.");
 }
 
@@ -25,6 +33,14 @@ if (bundle.includes(standardIntakeCall)) {
   bundle = bundle.replace(standardIntakeCall, editingIntakeCall);
 } else if (!bundle.includes(editingIntakeCall)) {
   throw new Error("Could not connect dashboard editing state to the intake component.");
+}
+
+const standardReadyCall = 'e==="ready"?Y.jsx(AP,{profile:s,onBack:()=>D("intake"),onContinue:()=>D("dashboard"),shouldReduceMotion:l}):null';
+const firstScoutReadyCall = 'e==="ready"?Y.jsx(AP,{profile:s,onBack:()=>D("intake"),onContinue:()=>D("dashboard"),onQueued:_=>{g(E=>({...E,first_scout:_.first_scout})),D("dashboard")},memberState:m,sessionToken:d,shouldReduceMotion:l}):null';
+if (bundle.includes(standardReadyCall)) {
+  bundle = bundle.replace(standardReadyCall, firstScoutReadyCall);
+} else if (!bundle.includes(firstScoutReadyCall)) {
+  throw new Error("Could not connect the one-time scout CTA to the app session.");
 }
 
 const standardJourneyBar = 'children:[e!=="dashboard"?Y.jsx(DP,{step:e,unlocked:n,onNavigate:D}):null,';
@@ -111,8 +127,17 @@ if (start < 0 || end < 0) {
   throw new Error("Could not find the intake component boundaries in the current bundle.");
 }
 
-const nextBundle = `${bundle.slice(0, start)}${intake.trim()}${bundle.slice(end)}`;
+bundle = `${bundle.slice(0, start)}${intake.trim()}${bundle.slice(end)}`;
+
+const readyStart = bundle.indexOf("function AP(");
+const readyEnd = bundle.indexOf("dk.createRoot(", readyStart);
+if (readyStart < 0 || readyEnd < 0) {
+  throw new Error("Could not find the ready component boundaries in the current bundle.");
+}
+
+const nextBundle = `${bundle.slice(0, readyStart)}${ready.trim()}${bundle.slice(readyEnd)}`;
 await writeFile(bundlePath, nextBundle);
 
 console.log(`Replaced resume parser (${parserEnd - parserStart} bytes → ${parser.trim().length} bytes).`);
 console.log(`Replaced intake component (${end - start} bytes → ${intake.length} bytes).`);
+console.log(`Replaced ready component (${readyEnd - readyStart} bytes → ${ready.length} bytes).`);

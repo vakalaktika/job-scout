@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import worker, {
+  buildFirstScoutRunText,
+  FirstScoutGate,
+  firstScoutPublicState,
+} from "./worker.mjs";
 import {
   APPLICATION_STATUSES,
   appendMatchContext,
@@ -32,6 +37,176 @@ import {
   WORKPLACE_TYPES,
 } from "./worker.mjs";
 
+test("first-scout state is available only to an entitled active member with no jobs", () => {
+  assert.deepEqual(firstScoutPublicState({
+    status: "Active",
+    first_scout_status: "Available",
+    first_scout_request_id: "internal-request",
+    first_scout_session_id: "internal-session",
+    first_scout_error: "internal-error",
+  }, [], null), {
+    status: "available",
+    requested_at: "",
+    completed_at: "",
+  });
+  assert.equal(firstScoutPublicState({ status: "Active" }, [], null).status, "unavailable");
+  assert.equal(firstScoutPublicState({ status: "Paused" }, [], null).status, "unavailable");
+  assert.equal(firstScoutPublicState({ status: "Revoked" }, [], null).status, "unavailable");
+  assert.equal(firstScoutPublicState({ status: "Active" }, [{ id: "job-1" }], null).status, "complete");
+});
+
+test("candidate completion wins over a stale queued gate even when no jobs matched", () => {
+  const state = firstScoutPublicState(
+    {
+      status: "Active",
+      first_scout_status: "Complete",
+      first_scout_requested_at: "2026-08-08T10:00:00.000Z",
+      first_scout_completed_at: "2026-08-08T10:04:00.000Z",
+    },
+    [],
+    { status: "queued", requested_at: "2026-08-08T10:00:00.000Z" },
+  );
+
+  assert.deepEqual(state, {
+    status: "complete",
+    requested_at: "2026-08-08T10:00:00.000Z",
+    completed_at: "2026-08-08T10:04:00.000Z",
+  });
+});
+
+test("a queued Notion state remains visible while the routine is in progress", () => {
+  assert.deepEqual(
+    firstScoutPublicState({
+      status: "Active",
+      first_scout_status: "Queued",
+      first_scout_requested_at: "2026-08-08T10:00:00.000Z",
+    }),
+    {
+      status: "queued",
+      requested_at: "2026-08-08T10:00:00.000Z",
+      completed_at: "",
+    },
+  );
+});
+
+test("a terminal candidate failure wins over a stale queued gate", () => {
+  assert.equal(
+    firstScoutPublicState(
+      { status: "Active", first_scout_status: "Failed" },
+      [],
+      { status: "queued" },
+    ).status,
+    "failed",
+  );
+});
+
+test("a terminal gate failure wins when Notion is still queued", () => {
+  assert.equal(
+    firstScoutPublicState(
+      { status: "Active", first_scout_status: "Queued" },
+      [],
+      { status: "needs_review" },
+    ).status,
+    "needs_review",
+  );
+});
+
+test("the routine payload is candidate-scoped, contains no email, and forbids a global fallback", () => {
+  const payload = JSON.parse(buildFirstScoutRunText("candidate-123", "request-456"));
+
+  assert.equal(payload.task, "job_scout_onboarding_run");
+  assert.equal(payload.mode, "single_candidate");
+  assert.equal(payload.candidate_id, "candidate-123");
+  assert.equal(payload.request_id, "request-456");
+  assert.equal(payload.constraints.process_only_candidate_id, "candidate-123");
+  assert.equal(payload.constraints.never_fallback_to_all_candidates, true);
+  assert.equal(JSON.stringify(payload).includes("email"), false);
+});
+
+const createGateState = () => {
+  const values = new Map();
+  return {
+    storage: {
+      get: async (key) => values.get(key),
+      put: async (key, value) => values.set(key, value),
+    },
+    blockConcurrencyWhile: async (callback) => callback(),
+  };
+};
+
+test("the durable gate fires the external routine once and reuses the queued result", async () => {
+  const originalFetch = globalThis.fetch;
+  let routineCalls = 0;
+  globalThis.fetch = async (url, init) => {
+    routineCalls += 1;
+    assert.match(String(url), /trig_test\/fire$/);
+    assert.equal(init.headers.Authorization, "Bearer routine-secret");
+    assert.equal(
+      init.headers["anthropic-beta"],
+      "experimental-cc-routine-2026-04-01",
+    );
+    return new Response(
+      JSON.stringify({
+        type: "routine_fire",
+        claude_code_session_id: "session-1",
+        claude_code_session_url: "https://claude.ai/code/session-1",
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  };
+
+  try {
+    const gate = new FirstScoutGate(createGateState(), {
+      FIRST_SCOUT_ROUTINE_ID: "trig_test",
+      FIRST_SCOUT_ROUTINE_TOKEN: "routine-secret",
+    });
+    const request = () =>
+      new Request("https://first-scout.internal/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_id: "candidate-123" }),
+      });
+
+    const first = await (await gate.fetch(request())).json();
+    const second = await (await gate.fetch(request())).json();
+
+    assert.equal(first.status, "queued");
+    assert.equal(first.session_id, "session-1");
+    assert.equal(second.status, "queued");
+    assert.equal(second.already_requested, true);
+    assert.equal(second.request_id, first.request_id);
+    assert.equal(routineCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("the durable gate returns a safe configuration error without consuming the entitlement", async () => {
+  const gate = new FirstScoutGate(createGateState(), {});
+  const response = await gate.fetch(new Request("https://first-scout.internal/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ candidate_id: "candidate-123" }),
+  }));
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { ok: false, error: "first_scout_unconfigured" });
+  assert.equal(await (await gate.fetch(new Request("https://first-scout.internal/status"))).json(), null);
+});
+
+test("run_scout_once rejects a request without a valid signed session", async () => {
+  const response = await worker.fetch(
+    new Request("https://worker.example", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "run_scout_once" }),
+    }),
+    { SESSION_SECRET: "test-secret" },
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { ok: false, error: "invalid_session" });
+});
 test("an unstated workplace type is recorded as unclear rather than guessed", () => {
   const brief = {
     summary: "Owns the payments platform and its reliability targets across teams.",

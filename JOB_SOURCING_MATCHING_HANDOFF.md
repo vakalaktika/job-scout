@@ -66,6 +66,21 @@ The external dispatcher owns the actual discovery loop. The documented contract 
 
 Each accepted posting can carry title, company, URL, location, source, date posted, date sent, raw posting text, a primary domain/job family, and the three brief fields.
 
+### Candidate-scoped first run
+
+New candidates are created with `First scout status = Available`. After onboarding they
+may consume that entitlement once. The authenticated Worker resolves the candidate from
+the signed session, and a candidate-keyed Cloudflare Durable Object records the claim
+before it fires the dispatcher routine. The trigger text contains only `candidate_id`, an
+opaque `request_id`, mode `single_candidate`, and constraints forbidding a global
+fallback. No name, email, résumé, or preference content crosses that trigger boundary.
+
+The external dispatcher must validate the exact candidate and request against Notion,
+set `Running`, and then use its normal sourcing and per-candidate de-duplication path for
+that person only. It must set `Completed` plus `First scout completed at` even when no
+postings match; a zero-match run sends no email. The full operational prompt and deploy
+order are in `FIRST_SCOUT_SETUP.md`.
+
 What is not recoverable from this repository:
 
 - the complete source list and whether each source is queried through search, an API, or page retrieval;

@@ -20,6 +20,16 @@ const MAX_POSTING_CHARACTERS = 24000;
 const MAX_RESUME_CHARACTERS = 24000;
 const MIN_POSTING_CHARACTERS = 400;
 const DEFAULT_BRIEF_MODEL = "gpt-5.4-nano";
+const ROUTINE_ANTHROPIC_VERSION = "2023-06-01";
+const ROUTINE_ANTHROPIC_BETA = "experimental-cc-routine-2026-04-01";
+const FIRST_SCOUT_STATUS = {
+  available: "Available",
+  queued: "Queued",
+  running: "Running",
+  complete: "Completed",
+  failed: "Failed",
+  needs_review: "Needs review",
+};
 let briefPropertiesEnsured = false;
 
 const CORS = {
@@ -204,6 +214,9 @@ function memberState(page) {
     // returned to the dashboard so they can see what their scout has been told
     // rather than having to trust that the reason went somewhere.
     match_context: plain(properties["Match context"]),
+    first_scout_status: plain(properties["First scout status"]),
+    first_scout_requested_at: plain(properties["First scout requested at"]),
+    first_scout_completed_at: plain(properties["First scout completed at"]),
   };
 }
 
@@ -1005,6 +1018,23 @@ async function ensureCandidatePreferenceProperties(env) {
       },
       "Resume suggestions": { rich_text: {} },
       "Match context": { rich_text: {} },
+      "First scout status": {
+        select: {
+          options: [
+            { name: FIRST_SCOUT_STATUS.available, color: "gray" },
+            { name: FIRST_SCOUT_STATUS.queued, color: "yellow" },
+            { name: FIRST_SCOUT_STATUS.running, color: "blue" },
+            { name: FIRST_SCOUT_STATUS.complete, color: "green" },
+            { name: FIRST_SCOUT_STATUS.failed, color: "red" },
+            { name: FIRST_SCOUT_STATUS.needs_review, color: "orange" },
+          ],
+        },
+      },
+      "First scout requested at": { date: {} },
+      "First scout completed at": { date: {} },
+      "First scout request": { rich_text: {} },
+      "First scout session": { rich_text: {} },
+      "First scout error": { rich_text: {} },
     },
   });
 }
@@ -1364,6 +1394,255 @@ export const lastDispatchAt = (jobs) => {
   return newest ? new Date(newest).toISOString() : "";
 };
 
+const normalizeFirstScoutStatus = (status) => {
+  const value = String(status || "").trim().toLowerCase();
+  if (value === "available") return "available";
+  if (value === "dispatching") return "queued";
+  if (value === "queued") return "queued";
+  if (value === "running") return "running";
+  if (value === "complete" || value === "completed") return "complete";
+  if (value === "failed") return "failed";
+  if (value === "needs review" || value === "needs_review") return "needs_review";
+  return "";
+};
+
+const routineConfig = (env) => {
+  const routineId = String(env.FIRST_SCOUT_ROUTINE_ID || "").trim();
+  const token = String(env.FIRST_SCOUT_ROUTINE_TOKEN || "").trim();
+  if (!/^trig_[A-Za-z0-9]+$/.test(routineId) || !token) {
+    throw new Error("first_scout_unconfigured");
+  }
+  return {
+    url: `https://api.anthropic.com/v1/claude_code/routines/${routineId}/fire`,
+    token,
+  };
+};
+
+export function buildFirstScoutRunText(candidateId, requestId) {
+  return JSON.stringify({
+    task: "job_scout_onboarding_run",
+    version: 1,
+    mode: "single_candidate",
+    candidate_id: String(candidateId || "").slice(0, 100),
+    request_id: String(requestId || "").slice(0, 100),
+    constraints: {
+      process_only_candidate_id: String(candidateId || "").slice(0, 100),
+      never_fallback_to_all_candidates: true,
+      use_existing_deduplication: true,
+      mark_complete_when_zero_matches: true,
+    },
+  });
+}
+
+export function firstScoutPublicState(member, jobs = [], gate = null) {
+  const candidateStatus = normalizeFirstScoutStatus(member?.first_scout_status);
+  const requestedAt = String(member?.first_scout_requested_at || gate?.requested_at || "");
+  const completedAt = String(member?.first_scout_completed_at || lastDispatchAt(jobs) || "");
+  if (candidateStatus === "complete" || candidateStatus === "completed") {
+    return {
+      status: "complete",
+      requested_at: requestedAt,
+      completed_at: completedAt,
+    };
+  }
+  if ((jobs || []).length) {
+    return {
+      status: "complete",
+      requested_at: requestedAt,
+      completed_at: completedAt,
+    };
+  }
+  if (["failed", "needs_review"].includes(candidateStatus)) {
+    return {
+      status: candidateStatus,
+      requested_at: requestedAt,
+      completed_at: completedAt,
+    };
+  }
+  const gateStatus = normalizeFirstScoutStatus(gate?.status) ||
+    (gate?.status === "needs_review" ? "needs_review" : gate?.status === "dispatching" ? "queued" : "");
+  if (["failed", "needs_review"].includes(gateStatus)) {
+    return {
+      status: gateStatus,
+      requested_at: gate.requested_at || requestedAt,
+      completed_at: gate.completed_at || completedAt,
+    };
+  }
+  if (["queued", "running"].includes(candidateStatus)) {
+    return {
+      status: candidateStatus,
+      requested_at: requestedAt,
+      completed_at: completedAt,
+    };
+  }
+  if (gate?.status) {
+    return {
+      status: gateStatus || "needs_review",
+      requested_at: gate.requested_at || requestedAt,
+      completed_at: gate.completed_at || completedAt,
+    };
+  }
+  if (member?.status !== "Active" || candidateStatus !== "available") {
+    return {
+      status: "unavailable",
+      requested_at: requestedAt,
+      completed_at: completedAt,
+    };
+  }
+  return {
+    status: "available",
+    requested_at: "",
+    completed_at: "",
+  };
+}
+
+const routineSessionFields = (body) => ({
+  session_id: String(body.claude_code_session_id || body.session_id || "").slice(0, 200),
+});
+
+export async function fireFirstScoutRoutine(env, candidateId, requestId, fetcher = fetch) {
+  const { url, token } = routineConfig(env);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetcher(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-version": ROUTINE_ANTHROPIC_VERSION,
+        "anthropic-beta": ROUTINE_ANTHROPIC_BETA,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: buildFirstScoutRunText(candidateId, requestId) }),
+    });
+    if (!response.ok) {
+      const error = new Error(`routine_fire_${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    const session = routineSessionFields(await response.json());
+    if (!session.session_id) throw new Error("routine_fire_invalid_response");
+    return session;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function patchFirstScoutCandidate(env, candidateId, properties) {
+  try {
+    return await notion(env, `pages/${candidateId}`, "PATCH", { properties });
+  } catch (error) {
+    if (!String(error.message).includes("First scout")) throw error;
+    await ensureCandidatePreferenceProperties(env);
+    return notion(env, `pages/${candidateId}`, "PATCH", { properties });
+  }
+}
+
+export class FirstScoutGate {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    if (request.method === "GET") {
+      return json((await this.state.storage.get("run")) || null);
+    }
+    if (request.method !== "POST") return json({ ok: false, error: "POST only" }, 405);
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return json({ ok: false, error: "bad json" }, 400);
+    }
+    const candidateId = String(payload.candidate_id || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(candidateId)) {
+      return json({ ok: false, error: "invalid_candidate" }, 400);
+    }
+    return this.state.blockConcurrencyWhile(async () => {
+      const key = "run";
+      const existing = await this.state.storage.get(key);
+      if (existing?.status) {
+        return json({ ...existing, already_requested: true });
+      }
+      try {
+        routineConfig(this.env);
+      } catch {
+        return json({ ok: false, error: "first_scout_unconfigured" }, 503);
+      }
+      const requestId = crypto.randomUUID();
+      const claim = {
+        status: "dispatching",
+        requested_at: new Date().toISOString(),
+        completed_at: "",
+        request_id: requestId,
+      };
+      await this.state.storage.put(key, claim);
+      try {
+        if (this.env.NOTION_TOKEN) {
+          await ensureCandidatePreferenceProperties(this.env);
+          await patchFirstScoutCandidate(this.env, candidateId, {
+            "First scout status": { select: { name: FIRST_SCOUT_STATUS.queued } },
+            "First scout requested at": { date: { start: claim.requested_at } },
+            "First scout request": richText(requestId),
+            "First scout error": richText(""),
+          });
+        }
+        const session = await fireFirstScoutRoutine(this.env, candidateId, requestId);
+        const queued = { ...claim, status: "queued", ...session };
+        await this.state.storage.put(key, queued);
+        if (this.env.NOTION_TOKEN) {
+          await patchFirstScoutCandidate(this.env, candidateId, {
+            "First scout session": richText(session.session_id),
+          });
+        }
+        return json(queued);
+      } catch (error) {
+        const explicitRejection = Number(error?.status) >= 400 && Number(error?.status) < 500;
+        const failed = {
+          ...claim,
+          status: explicitRejection ? "failed" : "needs_review",
+          error: String(error?.message || "routine_fire_failed").slice(0, 120),
+        };
+        await this.state.storage.put(key, failed);
+        if (this.env.NOTION_TOKEN) {
+          await patchFirstScoutCandidate(this.env, candidateId, {
+            "First scout status": {
+              select: {
+                name: explicitRejection
+                  ? FIRST_SCOUT_STATUS.failed
+                  : FIRST_SCOUT_STATUS.needs_review,
+              },
+            },
+            "First scout error": richText(failed.error),
+          }).catch(() => null);
+        }
+        return json(failed, 502);
+      }
+    });
+  }
+}
+
+const firstScoutGateStub = (env, candidateId) => {
+  if (!env.FIRST_SCOUT_GATE) return null;
+  return env.FIRST_SCOUT_GATE.get(env.FIRST_SCOUT_GATE.idFromName(candidateId));
+};
+
+async function firstScoutSnapshot(env, candidate, jobs = []) {
+  const member = memberState(candidate);
+  const stored = firstScoutPublicState(member, jobs, null);
+  if (!["available", "queued", "running"].includes(stored.status)) return stored;
+  const stub = firstScoutGateStub(env, candidate.id);
+  if (!stub) return stored;
+  try {
+    const response = await stub.fetch("https://first-scout.internal/status");
+    return firstScoutPublicState(member, jobs, await response.json());
+  } catch {
+    return stored;
+  }
+}
+
 const DEFAULT_POSTING_AGE_DAYS = 7;
 
 async function sessionResponse(env, candidate, extra = {}) {
@@ -1377,6 +1656,8 @@ async function sessionResponse(env, candidate, extra = {}) {
   const jobsWithBriefs = await enrichMissingBriefs(env, candidate, member, recentJobs);
   const jobsWithLinks = await sweepLinkStatus(env, jobsWithBriefs);
   const steered = applySteerAway(jobsWithLinks, member);
+  const lastRunAt = lastDispatchAt(memberJobs);
+  const firstScout = await firstScoutSnapshot(env, candidate, memberJobs);
   const sessionExpiresAt = new Date(Date.now() + SESSION_SECONDS * 1000).toISOString();
   const sessionToken = await issueToken(
     env,
@@ -1391,7 +1672,8 @@ async function sessionResponse(env, candidate, extra = {}) {
     // When the scout last delivered, so the dashboard can say so instead of
     // leaving members guessing whether an empty list means "nothing found" or
     // "nothing has run yet".
-    last_run_at: lastDispatchAt(memberJobs),
+    last_run_at: lastRunAt || firstScout.completed_at,
+    first_scout: firstScout,
 
     session_token: sessionToken,
     session_expires_at: sessionExpiresAt,
@@ -1472,6 +1754,42 @@ export default {
         const candidate = await authenticatedCandidate(env, payload.session_token);
         if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
         return json(await sessionResponse(env, candidate));
+      }
+      if (payload.action === "scout_status") {
+        const candidate = await authenticatedCandidate(env, payload.session_token);
+        if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
+        return json({ ok: true, first_scout: await firstScoutSnapshot(env, candidate) });
+      }
+      if (payload.action === "run_scout_once" || payload.action === "initial_scout_run") {
+        const candidate = await authenticatedCandidate(env, payload.session_token);
+        if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
+        const member = memberState(candidate);
+        if (member.status !== "Active") {
+          return json({ ok: false, error: "member_inactive" }, 409);
+        }
+        const current = await firstScoutSnapshot(env, candidate);
+        if (current.status !== "available") {
+          return json({ ok: true, first_scout: current, already_requested: true });
+        }
+        const gate = firstScoutGateStub(env, candidate.id);
+        if (!gate) return json({ ok: false, error: "first_scout_unconfigured" }, 503);
+        const response = await gate.fetch("https://first-scout.internal/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidate_id: candidate.id }),
+        });
+        const gateState = await response.json();
+        const firstScout = firstScoutPublicState(member, [], gateState);
+        if (!response.ok) {
+          const status = response.status === 503 ? 503 : 502;
+          const publicError = status === 503
+            ? "first_scout_unconfigured"
+            : firstScout.status === "needs_review"
+              ? "first_scout_needs_review"
+              : "first_scout_failed";
+          return json({ ok: false, error: publicError, first_scout: firstScout }, status);
+        }
+        return json({ ok: true, first_scout: firstScout, already_requested: !!gateState.already_requested });
       }
       if (payload.action === "job_decision") {
         const candidate = await authenticatedCandidate(env, payload.session_token);
@@ -1585,6 +1903,7 @@ export default {
             },
             Email: { email: payload.email || null },
             Status: { select: { name: "Active" } },
+            "First scout status": { select: { name: FIRST_SCOUT_STATUS.available } },
             ...candidateProps(payload),
           },
           children: resumeBlocks(payload.resume_text),
@@ -1627,10 +1946,11 @@ export default {
       const candidate = await notion(env, `pages/${linked}`, "GET");
       return json(await sessionResponse(env, candidate, { mode: "updated" }));
     } catch (error) {
-      return json(
-        { ok: false, error: "server_error", detail: String(error.message).slice(0, 200) },
-        500,
-      );
+      console.error("worker_request_failed", {
+        name: String(error?.name || "Error").slice(0, 80),
+        message: String(error?.message || "unknown").slice(0, 200),
+      });
+      return json({ ok: false, error: "server_error" }, 500);
     }
   },
 };
