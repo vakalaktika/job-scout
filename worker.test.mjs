@@ -239,6 +239,13 @@ test("a stored region splits back into the parts the location selects need", () 
   assert.deepEqual(parseRegions(undefined), { city: "", state: "", country: "" });
 });
 
+test("a multi-city region string restores its first city for legacy controls", () => {
+  assert.deepEqual(
+    parseRegions("Oakland, California, United States; Austin, Texas, United States"),
+    { city: "Oakland", state: "California", country: "United States" },
+  );
+});
+
 test("notes parse into labelled entries and tolerate values containing colons", () => {
   const entries = parseNotes("Keywords: react, node: js\nPosted within: 7 days\nnot a label");
   assert.equal(entries.get("Keywords"), "react, node: js");
@@ -271,6 +278,7 @@ test("a full preference payload still writes every field", () => {
       steer_away_mode: "hide",
       seniority: "Staff+",
       remote: "Yes",
+      work_modes: ["onsite", "hybrid"],
       role_keywords: "platform",
       max_posting_age: 14,
     },
@@ -284,11 +292,42 @@ test("a full preference payload still writes every field", () => {
   assert.match(notes, /Keywords: platform/, "an edited note entry is overwritten");
   assert.match(notes, /Resume file: cv\.pdf/, "an untouched note entry survives");
   assert.match(notes, /Posted within: 14 days/);
+  assert.match(notes, /Work modes: onsite, hybrid/);
 });
 
 test("an explicitly emptied preference is cleared rather than ignored", () => {
   const properties = candidateProps({ steer_away_terms: "" }, { notes: "" });
   assert.equal(plainText(properties["Steer away"]), "");
+});
+
+test("invalid work arrangements are not persisted into candidate notes", () => {
+  const properties = candidateProps({ work_modes: ["sometimes"] }, { notes: "Keywords: platform" });
+  assert.equal(properties.Notes, undefined);
+});
+
+test("the previous single-choice client remains compatible during rollout", () => {
+  const properties = candidateProps({ work_mode: "remote" }, { notes: "Keywords: platform" });
+  assert.match(plainText(properties.Notes), /Work mode: remote/);
+});
+
+test("a legacy single-choice save replaces stale multi-choice notes", () => {
+  const properties = candidateProps(
+    { work_mode: "remote" },
+    { notes: "Keywords: platform\nWork modes: onsite, hybrid" },
+  );
+  const notes = plainText(properties.Notes);
+  assert.match(notes, /Work mode: remote/);
+  assert.doesNotMatch(notes, /Work modes:/);
+});
+
+test("a current multi-choice save replaces a stale legacy note", () => {
+  const properties = candidateProps(
+    { work_modes: ["onsite", "hybrid"] },
+    { notes: "Keywords: platform\nWork mode: remote" },
+  );
+  const notes = plainText(properties.Notes);
+  assert.match(notes, /Work modes: onsite, hybrid/);
+  assert.doesNotMatch(notes, /^Work mode:/m);
 });
 
 test("splitTerms trims and de-duplicates terms case-insensitively", () => {

@@ -2,10 +2,12 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const bundlePath = new URL("./assets/index-BdD4MZod.js", import.meta.url);
 const sourcePath = new URL("./intake-flow.source.js", import.meta.url);
+const locationPreferencesPath = new URL("./location-preferences.mjs", import.meta.url);
 const parserPath = new URL("./resume-parser.source.js", import.meta.url);
 const readyPath = new URL("./ready-flow.source.js", import.meta.url);
 let bundle = await readFile(bundlePath, "utf8");
 const intake = await readFile(sourcePath, "utf8");
+const locationPreferences = (await readFile(locationPreferencesPath, "utf8")).replace(/^export\s+/gm, "");
 const parser = await readFile(parserPath, "utf8");
 const ready = await readFile(readyPath, "utf8");
 
@@ -110,6 +112,20 @@ if (bundle.includes(defaultLocation)) {
   throw new Error("Could not clear the default location in the current bundle.");
 }
 
+const legacyHydration = 'postedWithin:U.postedWithin||k.postedWithin,remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:';
+const previousMultiLocationHydration = 'postedWithin:U.postedWithin||k.postedWithin,preferredLocations:parsePreferredLocations(E.member.regions),workMode:workModeFromProfile({workMode:(String(E.member.notes||"").match(/^Work mode:\\s*(.+)$/im)||[])[1],remote:E.member.remote?E.member.remote==="Yes":k.remote}),remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:';
+const singleWorkModeHydration = 'postedWithin:U.postedWithin||k.postedWithin,preferredLocations:parsePreferredLocations(E.member.regions),workMode:workModeFromProfile({workMode:E.member.work_mode,remote:E.member.remote?E.member.remote==="Yes":k.remote}),remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:';
+const multiLocationHydration = 'postedWithin:U.postedWithin||k.postedWithin,preferredLocations:parsePreferredLocations(E.member.regions),workModes:normalizeWorkModes({workModes:E.member.work_modes,workMode:E.member.work_mode,remote:E.member.remote?E.member.remote==="Yes":k.remote}),remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:';
+if (bundle.includes(legacyHydration)) {
+  bundle = bundle.replace(legacyHydration, multiLocationHydration);
+} else if (bundle.includes(previousMultiLocationHydration)) {
+  bundle = bundle.replace(previousMultiLocationHydration, multiLocationHydration);
+} else if (bundle.includes(singleWorkModeHydration)) {
+  bundle = bundle.replace(singleWorkModeHydration, multiLocationHydration);
+} else if (!bundle.includes(multiLocationHydration)) {
+  throw new Error("Could not hydrate saved preferred locations and work arrangement.");
+}
+
 // The old parser's steer-away helper. The rewritten parser derives those terms
 // itself, so this is now unreachable; drop it rather than ship dead code.
 const orphanedSteerAwayHelper =
@@ -120,14 +136,16 @@ if (bundle.includes(orphanedSteerAwayHelper)) {
   throw new Error("The orphaned steer-away helper is present in an unexpected shape.");
 }
 
-const start = bundle.indexOf("function TP(");
-const end = bundle.indexOf("function AP(", start);
+const injectedLocationStart = "// Preferred location helpers are shared";
+const intakeStart = [bundle.indexOf(injectedLocationStart), bundle.indexOf("function TP(")].find((at) => at >= 0);
+const end = bundle.indexOf("function AP(", intakeStart);
 
-if (start < 0 || end < 0) {
+if (intakeStart === undefined || end < 0) {
   throw new Error("Could not find the intake component boundaries in the current bundle.");
 }
 
-bundle = `${bundle.slice(0, start)}${intake.trim()}${bundle.slice(end)}`;
+const intakeBlock = `${locationPreferences.trim()}\n${intake.trim()}`;
+bundle = `${bundle.slice(0, intakeStart)}${intakeBlock}${bundle.slice(end)}`;
 
 const readyStart = bundle.indexOf("function AP(");
 const readyEnd = bundle.indexOf("dk.createRoot(", readyStart);
@@ -139,5 +157,5 @@ const nextBundle = `${bundle.slice(0, readyStart)}${ready.trim()}${bundle.slice(
 await writeFile(bundlePath, nextBundle);
 
 console.log(`Replaced resume parser (${parserEnd - parserStart} bytes → ${parser.trim().length} bytes).`);
-console.log(`Replaced intake component (${end - start} bytes → ${intake.length} bytes).`);
+console.log(`Replaced intake component (${end - intakeStart} bytes → ${intakeBlock.length} bytes).`);
 console.log(`Replaced ready component (${readyEnd - readyStart} bytes → ${ready.length} bytes).`);

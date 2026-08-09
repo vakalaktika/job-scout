@@ -1,6 +1,6 @@
 # Job Scout sourcing and matching handoff
 
-Last verified: 2026-08-05
+Last verified: 2026-08-08
 
 ## Executive summary
 
@@ -40,8 +40,8 @@ The final matching contract sent to the Worker contains:
 - résumé text and filename;
 - target roles;
 - role keywords, skills, industries, or themes;
-- city, state/region, and country;
-- remote preference;
+- up to five preferred cities, each with state/region and country;
+- one or more acceptable work arrangements (`onsite`, `hybrid`, `remote`);
 - minimum and maximum salary;
 - seniority;
 - maximum posting age;
@@ -51,7 +51,7 @@ The final matching contract sent to the Worker contains:
 
 Readable payload construction lives in `intake-flow.source.js` inside the submit handler. The production résumé extraction and suggestion logic is in the shipped bundle referenced by `index.html`.
 
-The Worker maps these fields into the Candidates Notion database in `candidateProps()` in `worker.mjs`. Core fields are first-class Notion properties; keywords, maximum salary, posting-age window, and résumé filename are stored in `Notes`. On initial creation, parsed résumé text is written into the candidate page body in 1,900-character blocks.
+The Worker maps these fields into the Candidates Notion database in `candidateProps()` in `worker.mjs`. Core fields are first-class Notion properties. Preferred cities are stored in `Regions` as semicolon-separated `City, State, Country` entries. Work arrangements are stored as `Work modes` in `Notes`; `Remote OK` remains populated for compatibility with the existing dispatcher. Keywords, maximum salary, posting-age window, and résumé filename also live in `Notes`. On initial creation, parsed résumé text is written into the candidate page body in 1,900-character blocks.
 
 ## 2. Sourcing and initial matching
 
@@ -59,7 +59,7 @@ The external dispatcher owns the actual discovery loop. The documented contract 
 
 1. reads each active candidate's profile and résumé from Notion;
 2. searches fresh postings from job sources such as LinkedIn and direct ATS boards including Lever and Greenhouse;
-3. evaluates the postings against the candidate's target roles, experience, location, remote preference, salary, seniority, freshness window, and negative preferences;
+3. evaluates postings against the candidate's target roles, experience, every preferred city, every selected work arrangement, salary, seniority, freshness window, and negative preferences; selected cities and work arrangements are inclusive alternatives, so the first suitable role across any selected combination may be accepted;
 4. rejects postings already present for that candidate in Sent postings;
 5. writes accepted matches back to Sent postings; and
 6. sends an email only when there are new matches.
@@ -183,7 +183,7 @@ What is still **not demonstrated in this repository** is an automated learning l
 
 The strongest evidence-backed explanation is the combination of:
 
-1. **A rich profile instead of a title-only search.** The system receives parsed résumé text plus explicit roles, themes, location, pay, seniority, remote preference, and freshness limits.
+1. **A rich profile instead of a title-only search.** The system receives parsed résumé text plus explicit roles, themes, multiple acceptable cities and work arrangements, pay, seniority, and freshness limits.
 2. **Candidate-correctable extraction.** Résumé suggestions accelerate setup, but candidates review and edit the actual search contract.
 3. **Hard negative controls.** Steer-away terms remove predictable false positives or consistently demote them.
 4. **Freshness as a gate.** Old or undated results do not linger in the dashboard, while saved jobs are protected.

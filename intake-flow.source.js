@@ -8,6 +8,9 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
   const [T, R] = W.useState(H ? 1 : 0);
   const [L, F] = W.useState("");
   const [B, G] = W.useState([]);
+  const [__jsDraftLocation, __jsSetDraftLocation] = W.useState({ country: "", state: "", city: "" });
+  const [__jsLocations, __jsSetLocations] = W.useState(() => normalizePreferredLocations(l));
+  const [__jsLocationStatus, __jsSetLocationStatus] = W.useState("");
   const I = ["intake", "edit"].includes(new URLSearchParams(window.location.search).get("preview"));
 
   const N = H
@@ -50,12 +53,59 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
   // half-made choice reads as unfinished instead of as a real place.
   const __jsPickLocation = (re) => {
     F("");
+    __jsSetLocationStatus("");
     __jsSetTouched((oe) => ({ ...oe, country: true, state: true, city: true }));
-    e((oe) => ({ ...oe, ...re }));
+    __jsSetDraftLocation((oe) => ({ ...oe, ...re }));
   };
   const __jsPlaceholder = (re) => Y.jsx("option", { value: "", disabled: true, children: re }, "__jsPlaceholder");
-  const __jsLocationError = "Choose the country, state, and city your search should cover.";
-  const __jsLocationMissing = (re) => !re.country || !re.state || !re.city;
+  const __jsLocationError = "Add at least one city your search should cover.";
+  const __jsLocationMissing = (re) => {
+    const oe = Array.isArray(re.preferredLocations)
+      ? re.preferredLocations.some((ne) => ne && ne.country && ne.state && ne.city)
+      : false;
+    return !oe && (!re.country || !re.state || !re.city);
+  };
+  const __jsWriteLocations = (re) => {
+    const oe = re[0] || { country: "", state: "", city: "" };
+    __jsSetLocations(re);
+    e((ne) => ({ ...ne, preferredLocations: re, country: oe.country, state: oe.state, city: oe.city }));
+  };
+  const __jsAddLocation = () => {
+    if (!__jsDraftLocation.country || !__jsDraftLocation.state || !__jsDraftLocation.city) {
+      F("Choose a country, state, and city before adding it.");
+      return;
+    }
+    const re = addPreferredLocation(__jsLocations, __jsDraftLocation);
+    if (re.length === __jsLocations.length) {
+      F(__jsLocations.length >= 5 ? "You can add up to five preferred cities." : "That city is already in your preferred locations.");
+      return;
+    }
+    __jsWriteLocations(re);
+    __jsSetDraftLocation({ country: "", state: "", city: "" });
+    __jsSetLocationStatus(`${re[re.length - 1].city} added to preferred locations.`);
+  };
+  const __jsRemoveLocation = (re) => {
+    const oe = removePreferredLocation(__jsLocations, re);
+    __jsWriteLocations(oe);
+    __jsSetLocationStatus(`${re.city} removed from preferred locations.`);
+    requestAnimationFrame(() => document.querySelector(".add-location-button")?.focus());
+  };
+  const __jsWorkModes = normalizeWorkModes(l);
+  const __jsWorkModeOptions = [
+    { id: "onsite", label: "On-site", copy: "At the workplace" },
+    { id: "hybrid", label: "Hybrid", copy: "A mix of office and remote" },
+    { id: "remote", label: "Remote only", copy: "No office requirement" },
+  ];
+  const __jsToggleWorkMode = (re) => {
+    F("");
+    __jsSetTouched((oe) => (oe.workModes ? oe : { ...oe, workModes: true }));
+    const oe = toggleWorkMode(__jsWorkModes, re);
+    if (oe.length === __jsWorkModes.length && oe.every((ne, ae) => ne === __jsWorkModes[ae])) {
+      F("Keep at least one work arrangement selected.");
+      return;
+    }
+    e((ne) => ({ ...ne, workModes: oe, workMode: oe[0], remote: oe.includes("remote") }));
+  };
   const A = (j, O) => {
     F("");
     __jsSetTouched((X) => (X[j] ? X : { ...X, [j]: true }));
@@ -83,8 +133,12 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
       "steerAwayTerms",
       S.filter((X) => X.toLowerCase() !== O.toLowerCase()).join(", "),
     );
-  const O = g1[l.country] || {};
-  const X = O[l.state] || [];
+  const O = g1[__jsDraftLocation.country] || {};
+  const X = O[__jsDraftLocation.state] || [];
+  W.useEffect(() => {
+    const re = normalizePreferredLocations(l);
+    if (!__jsLocations.length && re.length) __jsSetLocations(re);
+  }, [l.preferredLocations, l.country, l.state, l.city]);
   // Resume suggestions prefill a blank first-time form, but on a saved profile
   // they must not overwrite preferences the member already curated. The parser
   // used to scan the whole resume against the location gazetteer and fall back to
@@ -267,8 +321,9 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
           resume_text: h,
           target_roles: l.roles,
           role_keywords: l.roleKeywords,
-          regions: `${l.city}, ${l.state}, ${l.country}`,
-          remote: l.remote ? "Yes" : "No",
+          regions: serializePreferredLocations(normalizePreferredLocations(l)),
+          remote: __jsWorkModes.includes("remote") ? "Yes" : "No",
+          work_modes: __jsWorkModes,
           min_salary: `$${l.salaryMin}k`,
           max_salary: `$${l.salaryMax}k+`,
           seniority: l.seniority,
@@ -481,48 +536,145 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
         children: [
           le(false),
           Y.jsxs("fieldset", {
-            className: "wizard-fieldset",
+            className: "wizard-fieldset preferred-locations-fieldset",
             children: [
-              Y.jsx("legend", { children: "Preferred location" }),
-              Y.jsxs("div", {
-                className: "field-grid three-up",
+              Y.jsxs("legend", {
                 children: [
-                  Y.jsxs("label", {
+                  Y.jsx("span", { children: "Preferred cities" }),
+                  Y.jsxs("small", { children: [__jsLocations.length, " of 5 added"] }),
+                ],
+              }),
+              Y.jsx("p", { className: "location-field-help", children: "Add every city you would genuinely consider. Your scout will search across all of them." }),
+              Y.jsx(Bc, {
+                mode: "popLayout",
+                initial: false,
+                children: __jsLocations.length
+                  ? Y.jsx(Ut.ul, {
+                      className: "preferred-location-list",
+                      layout: true,
+                      children: __jsLocations.map((re, oe) =>
+                        Y.jsxs(Ut.li, {
+                          layout: true,
+                          initial: s ? false : { opacity: 0, scale: 0.98 },
+                          animate: { opacity: 1, scale: 1 },
+                          exit: s ? { opacity: 0 } : { opacity: 0, scale: 0.98 },
+                          transition: Tr,
+                          children: [
+                            Y.jsxs("span", {
+                              children: [
+                                Y.jsx("strong", { children: re.city }),
+                                Y.jsxs("small", { children: [re.state, ", ", re.country, oe === 0 ? " · Primary" : ""] }),
+                              ],
+                            }),
+                            Y.jsx(Ut.button, {
+                              type: "button",
+                              onClick: () => __jsRemoveLocation(re),
+                              "aria-label": `Remove ${re.city}, ${re.state}`,
+                              whileTap: s ? undefined : { scale: 0.97 },
+                              transition: Tr,
+                              children: "Remove",
+                            }),
+                          ],
+                        }, `${re.city}-${re.state}-${re.country}`),
+                      ),
+                    })
+                  : Y.jsx(Ut.p, {
+                      className: "preferred-location-empty",
+                      initial: s ? false : { opacity: 0 },
+                      animate: { opacity: 1 },
+                      exit: { opacity: 0 },
+                      transition: Tr,
+                      children: "No cities added yet. Use the fields below to add your first.",
+                    }),
+              }),
+              Y.jsxs("div", {
+                className: "location-composer",
+                children: [
+                  Y.jsxs("div", {
+                    className: "field-grid three-up",
                     children: [
-                      Y.jsx("span", { children: "Country" }),
-                      Y.jsx("select", {
-                        value: l.country,
-                        required: true,
-                        onChange: (re) => __jsPickLocation({ country: re.target.value, state: "", city: "" }),
-                        children: [__jsPlaceholder("Select a country"), ...Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re))],
+                      Y.jsxs("label", {
+                        children: [
+                          Y.jsx("span", { children: "Country" }),
+                          Y.jsx("select", {
+                            value: __jsDraftLocation.country,
+                            onChange: (re) => __jsPickLocation({ country: re.target.value, state: "", city: "" }),
+                            children: [__jsPlaceholder("Select a country"), ...Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re))],
+                          }),
+                        ],
+                      }),
+                      Y.jsxs("label", {
+                        children: [
+                          Y.jsx("span", { children: "State / region" }),
+                          Y.jsx("select", {
+                            value: __jsDraftLocation.state,
+                            disabled: !__jsDraftLocation.country,
+                            onChange: (re) => __jsPickLocation({ state: re.target.value, city: "" }),
+                            children: [__jsPlaceholder(__jsDraftLocation.country ? "Select a state or region" : "Choose a country first"), ...Object.keys(O).map((re) => Y.jsx("option", { children: re }, re))],
+                          }),
+                        ],
+                      }),
+                      Y.jsxs("label", {
+                        children: [
+                          Y.jsx("span", { children: "City" }),
+                          Y.jsx("select", {
+                            value: __jsDraftLocation.city,
+                            disabled: !__jsDraftLocation.state,
+                            onChange: (re) => __jsPickLocation({ city: re.target.value }),
+                            children: [__jsPlaceholder(__jsDraftLocation.state ? "Select a city" : "Choose a state or region first"), ...X.map((re) => Y.jsx("option", { children: re }, re))],
+                          }),
+                        ],
                       }),
                     ],
                   }),
-                  Y.jsxs("label", {
-                    children: [
-                      Y.jsx("span", { children: "State / region" }),
-                      Y.jsx("select", {
-                        value: l.state,
-                        required: true,
-                        disabled: !l.country,
-                        onChange: (re) => __jsPickLocation({ state: re.target.value, city: "" }),
-                        children: [__jsPlaceholder(l.country ? "Select a state or region" : "Choose a country first"), ...Object.keys(O).map((re) => Y.jsx("option", { children: re }, re))],
-                      }),
-                    ],
-                  }),
-                  Y.jsxs("label", {
-                    children: [
-                      Y.jsx("span", { children: "City" }),
-                      Y.jsx("select", {
-                        value: l.city,
-                        required: true,
-                        disabled: !l.state,
-                        onChange: (re) => __jsPickLocation({ city: re.target.value }),
-                        children: [__jsPlaceholder(l.state ? "Select a city" : "Choose a state or region first"), ...X.map((re) => Y.jsx("option", { children: re }, re))],
-                      }),
-                    ],
+                  Y.jsx(Ut.button, {
+                    type: "button",
+                    className: "add-location-button",
+                    onClick: __jsAddLocation,
+                    disabled: __jsLocations.length >= 5,
+                    whileHover: s || __jsLocations.length >= 5 ? undefined : { y: -2 },
+                    whileTap: s || __jsLocations.length >= 5 ? undefined : { scale: 0.97 },
+                    transition: Tr,
+                    children: __jsLocations.length >= 5 ? "City limit reached" : "Add city",
                   }),
                 ],
+              }),
+              Y.jsx("p", { className: "sr-only", role: "status", "aria-live": "polite", children: __jsLocationStatus }),
+            ],
+          }),
+          Y.jsxs("fieldset", {
+            className: "wizard-fieldset work-mode-fieldset",
+            children: [
+              Y.jsx("legend", { children: "Work arrangement" }),
+              Y.jsx("p", { className: "location-field-help", children: "Choose every setup you would consider. Your scout can surface whichever becomes available first." }),
+              Y.jsx("div", {
+                className: "work-mode-options",
+                role: "group",
+                "aria-label": "Preferred work arrangement",
+                children: __jsWorkModeOptions.map((re) =>
+                  Y.jsxs(Ut.button, {
+                    type: "button",
+                    role: "checkbox",
+                    "aria-checked": __jsWorkModes.includes(re.id),
+                    "data-work-mode": re.id,
+                    className: __jsWorkModes.includes(re.id) ? "selected" : "",
+                    onClick: () => __jsToggleWorkMode(re.id),
+                    whileTap: s ? undefined : { scale: 0.97 },
+                    transition: Tr,
+                    children: [
+                      Y.jsx("span", {
+                        className: "work-mode-checkbox",
+                        "aria-hidden": "true",
+                        children: Y.jsx(Ut.span, {
+                          animate: { opacity: __jsWorkModes.includes(re.id) ? 1 : 0, scale: __jsWorkModes.includes(re.id) ? 1 : 0.6 },
+                          transition: Tr,
+                          children: Y.jsx(NL, { size: 12, weight: "bold" }),
+                        }),
+                      }),
+                      Y.jsxs("span", { children: [Y.jsx("strong", { children: re.label }), Y.jsx("small", { children: re.copy })] }),
+                    ],
+                  }, re.id),
+                ),
               }),
             ],
           }),
@@ -600,22 +752,6 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                   }),
                   Y.jsx("input", { type: "range", min: "1", max: "30", step: "1", value: l.postedWithin, onChange: (re) => A("postedWithin", Number(re.target.value)) }),
                 ],
-              }),
-            ],
-          }),
-          Y.jsxs("label", {
-            className: "form-toggle",
-            children: [
-              Y.jsxs("span", { children: [Y.jsx("strong", { children: "Prioritize remote roles" }), Y.jsx("small", { children: "Remote jobs will appear before roles that need a move." })] }),
-              Y.jsx(Ut.button, {
-                type: "button",
-                role: "switch",
-                "aria-checked": l.remote,
-                className: `switch ${l.remote ? "on" : ""}`,
-                onClick: () => A("remote", !l.remote),
-                whileTap: s ? undefined : { scale: 0.97 },
-                transition: Tr,
-                children: Y.jsx(Ut.span, { animate: { x: l.remote ? 16 : 0 }, transition: Tr }),
               }),
             ],
           }),

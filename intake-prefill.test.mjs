@@ -162,11 +162,20 @@ if (locationMissingStart < 0) {
   throw new Error("Could not find the location requirement in the current bundle.");
 }
 const __jsLocationMissing = new Function(
-  `${bundle.slice(locationMissingStart, bundle.indexOf(";", locationMissingStart))}; return __jsLocationMissing;`,
+  `${bundle.slice(locationMissingStart, bundle.indexOf("const __jsWriteLocations", locationMissingStart))} return __jsLocationMissing;`,
 )();
 
 test("a location is only complete once country, state, and city are all chosen", () => {
   assert.equal(__jsLocationMissing({ country: "United States", state: "Texas", city: "Austin" }), false);
+  assert.equal(
+    __jsLocationMissing({
+      country: "",
+      state: "",
+      city: "",
+      preferredLocations: [{ country: "United States", state: "California", city: "Oakland" }],
+    }),
+    false,
+  );
 });
 
 test("a half-made location choice is refused", () => {

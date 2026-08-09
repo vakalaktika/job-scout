@@ -690,7 +690,98 @@ function vP(l, warnings = []) {
     parserVersion: __jsParserVersion,
   };
 }
-function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Scout",children:[Y.jsx("span",{className:"brand-mark",children:Y.jsx(B5,{size:18,weight:"fill"})}),Y.jsx("span",{children:"Job Scout"})]})}const fw=[{id:"invite",label:"Sign in"},{id:"intake",label:"Tell us what you want"},{id:"ready",label:"Review your setup"}],V3={name:"",email:"",roles:"",roleKeywords:"",steerAwayTerms:"",steerAwayMode:"rank",resumeSuggestions:[],country:"",state:"",city:"",salaryMin:140,salaryMax:220,seniority:"Senior+",frequency:"Three times a day",postedWithin:7,remote:!0,resumeName:""};function __jsRegion(m,cur){const c=m&&m.region_country||"",s=m&&m.region_state||"",y=m&&m.region_city||"";if(!c||!g1[c])return{country:cur.country,state:cur.state,city:cur.city};const st=g1[c][s]?s:"",ct=st&&g1[c][st].indexOf(y)>=0?y:"";return{country:c,state:st,city:ct}}function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState((P3||P4)&&(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1")?"preview-session":""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),x=_=>{if(!(_!=null&&_.session_token)||!(_!=null&&_.session_expires_at))return;const E={token:_.session_token,expiresAt:_.session_expires_at};localStorage.setItem(Gf,JSON.stringify(E)),p(E.token)},D=_=>{if(!n&&_!=="invite")return;const E=new URL(window.location.href);E.searchParams.delete("preview"),E.searchParams.set("step",_),window.history.pushState({},"",E),t(_),window.scrollTo({top:0,behavior:l?"auto":"smooth"})},w=(_,E)=>{if(a(!0),h(_),g(E),x(E),E.member){const U=yP(E.member.notes);o(k=>({...k,name:E.member.name||"",email:E.member.email||"",roles:E.member.target_roles||"",roleKeywords:U.roleKeywords||k.roleKeywords,steerAwayTerms:E.member.steer_away_terms||U.steerAwayTerms||"",steerAwayMode:E.member.steer_away_mode||U.steerAwayMode||"rank",resumeSuggestions:E.member.resume_suggestions||U.resumeSuggestions||[],salaryMin:CM(E.member.min_salary,k.salaryMin),salaryMax:U.salaryMax||k.salaryMax,seniority:E.member.seniority||k.seniority,frequency:E.member.frequency==="3x daily"?"Three times a day":E.member.frequency||k.frequency,postedWithin:U.postedWithin||k.postedWithin,remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:U.resumeName||"Resume on file"}))}const A=E.member?"dashboard":"intake",S=new URL(window.location.href);S.searchParams.delete("preview"),S.searchParams.set("step",A),window.history.pushState({},"",S),t(A),window.scrollTo({top:0,behavior:l?"auto":"smooth"})},T=()=>{localStorage.removeItem(Gf),p(""),h(""),g(null),o(V3),a(!1),t("invite");const _=new URL(window.location.href);_.searchParams.delete("step"),window.history.replaceState({},"",_),window.scrollTo({top:0,behavior:l?"auto":"smooth"})};return W.useEffect(()=>{let _=!1;return(async()=>{const __jsT=new URLSearchParams(window.location.search).get("login");if(__jsT){const __jsU=new URL(window.location.href);__jsU.searchParams.delete("login");window.history.replaceState({},"",__jsU);try{const __jsR=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"magic_consume",magic_token:__jsT})}),__jsD=await __jsR.json();if(!__jsR.ok||!__jsD.ok)throw new Error(__jsD.error||"invalid_link");_||(w("",__jsD),v(!1));return}catch(__jsE){console.error(__jsE)}}let A=null;try{A=JSON.parse(localStorage.getItem(Gf)||"null")}catch{localStorage.removeItem(Gf)}A!=null&&A.expiresAt&&new Date(A.expiresAt).getTime()<=Date.now()&&(localStorage.removeItem(Gf),A=null);const S=A==null?void 0:A.token;if(!S){_||v(!1);return}try{const U=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"session",session_token:S})}),k=await U.json();if(!U.ok||!k.ok)throw new Error(k.error||"session_failed");_||w("",k)}catch(U){console.error(U),localStorage.removeItem(Gf)}finally{_||v(!1)}})(),()=>{_=!0}},[]),b?Y.jsxs("div",{className:"session-loading",children:[Y.jsx(vx,{}),Y.jsx("p",{children:"Opening your job list…"})]}):Y.jsxs("div",{className:e==="dashboard"?"member-shell":`journey-shell journey-${e}`,children:[e!=="dashboard"&&!(e==="intake"&&(P2||!!(m!=null&&m.member)))?Y.jsx(DP,{step:e,unlocked:n,onNavigate:D}):null,Y.jsx(Bc,{mode:"wait",initial:!1,children:Y.jsxs(Ut.div,{className:e==="dashboard"?"member-screen":"journey-screen",initial:l?!1:{opacity:0,y:4},animate:{opacity:1,y:0},exit:l?void 0:{opacity:0,y:-3},transition:Mu,children:[e==="invite"?Y.jsx(wP,{shouldReduceMotion:l,onContinue:w}):null,e==="intake"?Y.jsx(TP,{profile:s,onChange:o,inviteCode:c,sessionToken:d,onSubmitted:_=>{g(_),x(_),D(P2||!!(m!=null&&m.member)?"dashboard":"ready")},shouldReduceMotion:l,isEditing:P2||!!(m!=null&&m.member),onCancel:()=>D("dashboard")}):null,e==="ready"?Y.jsx(AP,{profile:s,onBack:()=>D("intake"),onContinue:()=>D("dashboard"),onQueued:_=>{g(E=>({...E,first_scout:_.first_scout})),D("dashboard")},memberState:m,sessionToken:d,shouldReduceMotion:l}):null,e==="dashboard"?Y.jsx(lP,{profile:s,memberState:m,inviteCode:c,sessionToken:d,shouldReduceMotion:l,onEdit:()=>D("intake"),onLogout:T}):null]},e)})]})}function DP({step:l,unlocked:e,onNavigate:t}){const n=fw.findIndex(({id:a})=>a===l);return Y.jsx("div",{className:"journey-bar",children:Y.jsxs("div",{className:"journey-bar-inner",children:[Y.jsx("span",{className:"journey-label",children:"Your setup"}),Y.jsx("nav",{"aria-label":"Experience steps",children:fw.map((a,s)=>Y.jsxs(Ut.button,{type:"button",className:a.id===l?"active":"","aria-current":a.id===l?"step":void 0,disabled:!e&&a.id!=="invite"||s>n,"aria-disabled":!e&&a.id!=="invite"||s>n,onClick:()=>t(a.id),whileTap:{scale:.97},transition:Tr,children:[a.id===l?Y.jsx(Ut.span,{layoutId:"journey-active",className:"journey-active",transition:Mu}):null,Y.jsx("b",{children:s+1}),Y.jsx("span",{children:a.label})]},a.id))}),Y.jsxs("span",{className:"journey-count",children:[n+1," of ",fw.length]})]})})}function wP({shouldReduceMotion:l,onContinue:e}){const[t,n]=W.useState(""),[a,s]=W.useState("idle"),[o,c]=W.useState(""),h=async d=>{d.preventDefault();const p=t.trim().toUpperCase();if(n(p),!fP(p)){s("idle"),c("That code doesn’t look right. Check the invitation and try again.");return}c(""),s("checking");try{const m=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"validate",access_code:p})}),g=await m.json();if(!m.ok||!g.ok)throw new Error(g.error||"invite_failed");s("accepted"),window.setTimeout(()=>e(p,g),l?80:450)}catch(m){console.error(m),s("idle"),c("We couldn’t confirm that invitation. Check the code and try again.")}};return Y.jsxs("div",{className:"invite-shell",children:[Y.jsxs("header",{className:"flow-topbar",children:[Y.jsx(vx,{}),Y.jsx("span",{children:"Invite-only access"})]}),Y.jsxs("main",{className:"invite-main",children:[Y.jsxs(Ut.section,{className:"invite-intro",initial:l?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:Mu,children:[Y.jsx("p",{className:"eyebrow",children:"For invited friends"}),Y.jsx("h1",{children:"Open your private Job Scout."}),Y.jsx("p",{children:"Use your invite code to set up Job Scout for the first time or sign back in. We’ll keep this device signed in for 30 days."}),Y.jsxs("div",{className:"invite-steps",children:[Y.jsxs("div",{children:[Y.jsx("span",{children:"1"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Set up or sign in"}),Y.jsx("small",{children:"Your invite code creates your private setup and signs you in when you return."})]})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"2"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Tell us what to find"}),Y.jsx("small",{children:"Add your resume and the kind of work you want."})]})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"3"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Use your private job list"}),Y.jsx("small",{children:"Open postings from email or return to your dashboard."})]})]})]})]}),Y.jsxs(Ut.form,{className:"invite-card",onSubmit:h,initial:l?!1:{opacity:0,y:5},animate:{opacity:1,y:0,scale:1},transition:Mu,children:[Y.jsx("div",{className:"invite-icon",children:Y.jsx(IL,{size:24,weight:"fill"})}),Y.jsx("p",{className:"eyebrow",children:"Private access"}),Y.jsx("h2",{children:"Enter your invite code"}),Y.jsxs("p",{className:"invite-card-copy",children:["Your code sets up your account the first time and signs you in when you return. It should look like ",Y.jsx("strong",{children:"SCOUT-XXXX-XXXX"}),"."]}),Y.jsx("p",{className:"invite-card-copy-mobile",children:"Enter the code from your invitation to continue."}),Y.jsxs("label",{className:"invite-code-field",children:[Y.jsx("span",{children:"Invite code"}),Y.jsx("input",{value:t,onChange:d=>{n(d.target.value.toUpperCase()),c("")},placeholder:"SCOUT-XXXX-XXXX",autoCapitalize:"characters",autoComplete:"off",spellCheck:"false","aria-invalid":!!o,"aria-describedby":o?"invite-error":"invite-help",autoFocus:!0})]}),Y.jsxs(Bc,{mode:"wait",children:[o?Y.jsx(Ut.p,{id:"invite-error",className:"form-error invite-error",role:"alert",initial:{opacity:0,y:4},animate:{opacity:1,y:0},exit:{opacity:0},transition:Tr,children:o}):null,a==="accepted"?Y.jsxs(Ut.div,{className:"invite-success",role:"status",initial:l?!1:{opacity:0,scale:.985},animate:{opacity:1,scale:1},exit:{opacity:0},transition:uP,children:[Y.jsx(Jd,{size:18,weight:"fill"})," Invite confirmed"]},"accepted"):null]}),Y.jsx(Ut.button,{type:"submit",className:"primary-flow-button invite-submit",disabled:a!=="idle"||!t.trim(),whileHover:{y:-2},whileTap:{scale:.97},transition:Tr,children:a==="checking"?"Checking invite…":a==="accepted"?"Opening your setup…":Y.jsxs(Y.Fragment,{children:["Continue ",Y.jsx(ax,{size:17})]})}),Y.jsx("p",{className:"invite-security-note",id:"invite-help",children:"You’ll stay signed in on this device for 30 days. You can log out anytime from Settings."}),Y.jsx("p",{className:"invite-security-note",style:{marginTop:"12px"},children:Y.jsx("a",{href:"./login.html",style:{color:"var(--green-deep)",fontWeight:600},children:"Lost your code? Email me a sign-in link"})})]}),Y.jsxs(Ut.section,{className:"invite-mobile-context",initial:l?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:Mu,children:[Y.jsx("p",{className:"eyebrow",children:"After you sign in"}),Y.jsx("h2",{children:"A short setup, then your job list."}),Y.jsxs("div",{className:"invite-mobile-steps",children:[Y.jsxs("div",{children:[Y.jsx("span",{children:"1"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Share what you want"}),Y.jsx("small",{children:"Add your resume and job preferences."})]})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"2"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Review your matches"}),Y.jsx("small",{children:"Open postings from email or your private dashboard."})]})]})]})]})]})]})}function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitted: a, shouldReduceMotion: s, isEditing: H = false, onCancel: M }) {
+function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Scout",children:[Y.jsx("span",{className:"brand-mark",children:Y.jsx(B5,{size:18,weight:"fill"})}),Y.jsx("span",{children:"Job Scout"})]})}const fw=[{id:"invite",label:"Sign in"},{id:"intake",label:"Tell us what you want"},{id:"ready",label:"Review your setup"}],V3={name:"",email:"",roles:"",roleKeywords:"",steerAwayTerms:"",steerAwayMode:"rank",resumeSuggestions:[],country:"",state:"",city:"",salaryMin:140,salaryMax:220,seniority:"Senior+",frequency:"Three times a day",postedWithin:7,remote:!0,resumeName:""};function __jsRegion(m,cur){const c=m&&m.region_country||"",s=m&&m.region_state||"",y=m&&m.region_city||"";if(!c||!g1[c])return{country:cur.country,state:cur.state,city:cur.city};const st=g1[c][s]?s:"",ct=st&&g1[c][st].indexOf(y)>=0?y:"";return{country:c,state:st,city:ct}}function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState((P3||P4)&&(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1")?"preview-session":""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),x=_=>{if(!(_!=null&&_.session_token)||!(_!=null&&_.session_expires_at))return;const E={token:_.session_token,expiresAt:_.session_expires_at};localStorage.setItem(Gf,JSON.stringify(E)),p(E.token)},D=_=>{if(!n&&_!=="invite")return;const E=new URL(window.location.href);E.searchParams.delete("preview"),E.searchParams.set("step",_),window.history.pushState({},"",E),t(_),window.scrollTo({top:0,behavior:l?"auto":"smooth"})},w=(_,E)=>{if(a(!0),h(_),g(E),x(E),E.member){const U=yP(E.member.notes);o(k=>({...k,name:E.member.name||"",email:E.member.email||"",roles:E.member.target_roles||"",roleKeywords:U.roleKeywords||k.roleKeywords,steerAwayTerms:E.member.steer_away_terms||U.steerAwayTerms||"",steerAwayMode:E.member.steer_away_mode||U.steerAwayMode||"rank",resumeSuggestions:E.member.resume_suggestions||U.resumeSuggestions||[],salaryMin:CM(E.member.min_salary,k.salaryMin),salaryMax:U.salaryMax||k.salaryMax,seniority:E.member.seniority||k.seniority,frequency:E.member.frequency==="3x daily"?"Three times a day":E.member.frequency||k.frequency,postedWithin:U.postedWithin||k.postedWithin,preferredLocations:parsePreferredLocations(E.member.regions),workModes:normalizeWorkModes({workModes:E.member.work_modes,workMode:E.member.work_mode,remote:E.member.remote?E.member.remote==="Yes":k.remote}),remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:U.resumeName||"Resume on file"}))}const A=E.member?"dashboard":"intake",S=new URL(window.location.href);S.searchParams.delete("preview"),S.searchParams.set("step",A),window.history.pushState({},"",S),t(A),window.scrollTo({top:0,behavior:l?"auto":"smooth"})},T=()=>{localStorage.removeItem(Gf),p(""),h(""),g(null),o(V3),a(!1),t("invite");const _=new URL(window.location.href);_.searchParams.delete("step"),window.history.replaceState({},"",_),window.scrollTo({top:0,behavior:l?"auto":"smooth"})};return W.useEffect(()=>{let _=!1;return(async()=>{const __jsT=new URLSearchParams(window.location.search).get("login");if(__jsT){const __jsU=new URL(window.location.href);__jsU.searchParams.delete("login");window.history.replaceState({},"",__jsU);try{const __jsR=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"magic_consume",magic_token:__jsT})}),__jsD=await __jsR.json();if(!__jsR.ok||!__jsD.ok)throw new Error(__jsD.error||"invalid_link");_||(w("",__jsD),v(!1));return}catch(__jsE){console.error(__jsE)}}let A=null;try{A=JSON.parse(localStorage.getItem(Gf)||"null")}catch{localStorage.removeItem(Gf)}A!=null&&A.expiresAt&&new Date(A.expiresAt).getTime()<=Date.now()&&(localStorage.removeItem(Gf),A=null);const S=A==null?void 0:A.token;if(!S){_||v(!1);return}try{const U=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"session",session_token:S})}),k=await U.json();if(!U.ok||!k.ok)throw new Error(k.error||"session_failed");_||w("",k)}catch(U){console.error(U),localStorage.removeItem(Gf)}finally{_||v(!1)}})(),()=>{_=!0}},[]),b?Y.jsxs("div",{className:"session-loading",children:[Y.jsx(vx,{}),Y.jsx("p",{children:"Opening your job list…"})]}):Y.jsxs("div",{className:e==="dashboard"?"member-shell":`journey-shell journey-${e}`,children:[e!=="dashboard"&&!(e==="intake"&&(P2||!!(m!=null&&m.member)))?Y.jsx(DP,{step:e,unlocked:n,onNavigate:D}):null,Y.jsx(Bc,{mode:"wait",initial:!1,children:Y.jsxs(Ut.div,{className:e==="dashboard"?"member-screen":"journey-screen",initial:l?!1:{opacity:0,y:4},animate:{opacity:1,y:0},exit:l?void 0:{opacity:0,y:-3},transition:Mu,children:[e==="invite"?Y.jsx(wP,{shouldReduceMotion:l,onContinue:w}):null,e==="intake"?Y.jsx(TP,{profile:s,onChange:o,inviteCode:c,sessionToken:d,onSubmitted:_=>{g(_),x(_),D(P2||!!(m!=null&&m.member)?"dashboard":"ready")},shouldReduceMotion:l,isEditing:P2||!!(m!=null&&m.member),onCancel:()=>D("dashboard")}):null,e==="ready"?Y.jsx(AP,{profile:s,onBack:()=>D("intake"),onContinue:()=>D("dashboard"),onQueued:_=>{g(E=>({...E,first_scout:_.first_scout})),D("dashboard")},memberState:m,sessionToken:d,shouldReduceMotion:l}):null,e==="dashboard"?Y.jsx(lP,{profile:s,memberState:m,inviteCode:c,sessionToken:d,shouldReduceMotion:l,onEdit:()=>D("intake"),onLogout:T}):null]},e)})]})}function DP({step:l,unlocked:e,onNavigate:t}){const n=fw.findIndex(({id:a})=>a===l);return Y.jsx("div",{className:"journey-bar",children:Y.jsxs("div",{className:"journey-bar-inner",children:[Y.jsx("span",{className:"journey-label",children:"Your setup"}),Y.jsx("nav",{"aria-label":"Experience steps",children:fw.map((a,s)=>Y.jsxs(Ut.button,{type:"button",className:a.id===l?"active":"","aria-current":a.id===l?"step":void 0,disabled:!e&&a.id!=="invite"||s>n,"aria-disabled":!e&&a.id!=="invite"||s>n,onClick:()=>t(a.id),whileTap:{scale:.97},transition:Tr,children:[a.id===l?Y.jsx(Ut.span,{layoutId:"journey-active",className:"journey-active",transition:Mu}):null,Y.jsx("b",{children:s+1}),Y.jsx("span",{children:a.label})]},a.id))}),Y.jsxs("span",{className:"journey-count",children:[n+1," of ",fw.length]})]})})}function wP({shouldReduceMotion:l,onContinue:e}){const[t,n]=W.useState(""),[a,s]=W.useState("idle"),[o,c]=W.useState(""),h=async d=>{d.preventDefault();const p=t.trim().toUpperCase();if(n(p),!fP(p)){s("idle"),c("That code doesn’t look right. Check the invitation and try again.");return}c(""),s("checking");try{const m=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"validate",access_code:p})}),g=await m.json();if(!m.ok||!g.ok)throw new Error(g.error||"invite_failed");s("accepted"),window.setTimeout(()=>e(p,g),l?80:450)}catch(m){console.error(m),s("idle"),c("We couldn’t confirm that invitation. Check the code and try again.")}};return Y.jsxs("div",{className:"invite-shell",children:[Y.jsxs("header",{className:"flow-topbar",children:[Y.jsx(vx,{}),Y.jsx("span",{children:"Invite-only access"})]}),Y.jsxs("main",{className:"invite-main",children:[Y.jsxs(Ut.section,{className:"invite-intro",initial:l?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:Mu,children:[Y.jsx("p",{className:"eyebrow",children:"For invited friends"}),Y.jsx("h1",{children:"Open your private Job Scout."}),Y.jsx("p",{children:"Use your invite code to set up Job Scout for the first time or sign back in. We’ll keep this device signed in for 30 days."}),Y.jsxs("div",{className:"invite-steps",children:[Y.jsxs("div",{children:[Y.jsx("span",{children:"1"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Set up or sign in"}),Y.jsx("small",{children:"Your invite code creates your private setup and signs you in when you return."})]})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"2"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Tell us what to find"}),Y.jsx("small",{children:"Add your resume and the kind of work you want."})]})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"3"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Use your private job list"}),Y.jsx("small",{children:"Open postings from email or return to your dashboard."})]})]})]})]}),Y.jsxs(Ut.form,{className:"invite-card",onSubmit:h,initial:l?!1:{opacity:0,y:5},animate:{opacity:1,y:0,scale:1},transition:Mu,children:[Y.jsx("div",{className:"invite-icon",children:Y.jsx(IL,{size:24,weight:"fill"})}),Y.jsx("p",{className:"eyebrow",children:"Private access"}),Y.jsx("h2",{children:"Enter your invite code"}),Y.jsxs("p",{className:"invite-card-copy",children:["Your code sets up your account the first time and signs you in when you return. It should look like ",Y.jsx("strong",{children:"SCOUT-XXXX-XXXX"}),"."]}),Y.jsx("p",{className:"invite-card-copy-mobile",children:"Enter the code from your invitation to continue."}),Y.jsxs("label",{className:"invite-code-field",children:[Y.jsx("span",{children:"Invite code"}),Y.jsx("input",{value:t,onChange:d=>{n(d.target.value.toUpperCase()),c("")},placeholder:"SCOUT-XXXX-XXXX",autoCapitalize:"characters",autoComplete:"off",spellCheck:"false","aria-invalid":!!o,"aria-describedby":o?"invite-error":"invite-help",autoFocus:!0})]}),Y.jsxs(Bc,{mode:"wait",children:[o?Y.jsx(Ut.p,{id:"invite-error",className:"form-error invite-error",role:"alert",initial:{opacity:0,y:4},animate:{opacity:1,y:0},exit:{opacity:0},transition:Tr,children:o}):null,a==="accepted"?Y.jsxs(Ut.div,{className:"invite-success",role:"status",initial:l?!1:{opacity:0,scale:.985},animate:{opacity:1,scale:1},exit:{opacity:0},transition:uP,children:[Y.jsx(Jd,{size:18,weight:"fill"})," Invite confirmed"]},"accepted"):null]}),Y.jsx(Ut.button,{type:"submit",className:"primary-flow-button invite-submit",disabled:a!=="idle"||!t.trim(),whileHover:{y:-2},whileTap:{scale:.97},transition:Tr,children:a==="checking"?"Checking invite…":a==="accepted"?"Opening your setup…":Y.jsxs(Y.Fragment,{children:["Continue ",Y.jsx(ax,{size:17})]})}),Y.jsx("p",{className:"invite-security-note",id:"invite-help",children:"You’ll stay signed in on this device for 30 days. You can log out anytime from Settings."}),Y.jsx("p",{className:"invite-security-note",style:{marginTop:"12px"},children:Y.jsx("a",{href:"./login.html",style:{color:"var(--green-deep)",fontWeight:600},children:"Lost your code? Email me a sign-in link"})})]}),Y.jsxs(Ut.section,{className:"invite-mobile-context",initial:l?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:Mu,children:[Y.jsx("p",{className:"eyebrow",children:"After you sign in"}),Y.jsx("h2",{children:"A short setup, then your job list."}),Y.jsxs("div",{className:"invite-mobile-steps",children:[Y.jsxs("div",{children:[Y.jsx("span",{children:"1"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Share what you want"}),Y.jsx("small",{children:"Add your resume and job preferences."})]})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"2"}),Y.jsxs("p",{children:[Y.jsx("strong",{children:"Review your matches"}),Y.jsx("small",{children:"Open postings from email or your private dashboard."})]})]})]})]})]})]})}// Preferred location helpers are shared by the readable intake source and its tests.
+const MAX_PREFERRED_LOCATIONS = 5;
+const WORK_MODE_ORDER = ["onsite", "hybrid", "remote"];
+const WORK_MODES = new Set(WORK_MODE_ORDER);
+
+const cleanLocation = (location = {}) => ({
+  city: String(location.city || "").trim(),
+  state: String(location.state || "").trim(),
+  country: String(location.country || "").trim(),
+});
+
+const isCompleteLocation = (location) =>
+  Boolean(location.city && location.state && location.country);
+
+const locationKey = (location) =>
+  [location.city, location.state, location.country].join("|").toLocaleLowerCase();
+
+const normalizePreferredLocations = (profile = {}) => {
+  const explicit = Array.isArray(profile.preferredLocations)
+    ? profile.preferredLocations
+    : [];
+  const candidates = explicit.length ? explicit : [profile];
+
+  return candidates.reduce((locations, candidate) => {
+    const location = cleanLocation(candidate);
+    if (!isCompleteLocation(location)) return locations;
+    if (locations.some((existing) => locationKey(existing) === locationKey(location))) {
+      return locations;
+    }
+    return [...locations, location];
+  }, []);
+};
+
+const addPreferredLocation = (locations, candidate) => {
+  const current = normalizePreferredLocations({ preferredLocations: locations });
+  const next = cleanLocation(candidate);
+  if (!isCompleteLocation(next) || current.length >= MAX_PREFERRED_LOCATIONS) {
+    return current;
+  }
+  if (current.some((location) => locationKey(location) === locationKey(next))) {
+    return current;
+  }
+  return [...current, next];
+};
+
+const removePreferredLocation = (locations, candidate) => {
+  const removeKey = locationKey(cleanLocation(candidate));
+  return normalizePreferredLocations({ preferredLocations: locations }).filter(
+    (location) => locationKey(location) !== removeKey,
+  );
+};
+
+const serializePreferredLocations = (locations) =>
+  normalizePreferredLocations({ preferredLocations: locations })
+    .map(({ city, state, country }) => `${city}, ${state}, ${country}`)
+    .join("; ");
+
+const parsePreferredLocations = (value) =>
+  normalizePreferredLocations({
+    preferredLocations: String(value || "")
+      .split(/;|\n/)
+      .map((entry) => {
+        const [city = "", state = "", country = ""] = entry
+          .split(",")
+          .map((part) => part.trim());
+        return { city, state, country };
+      }),
+  });
+
+const normalizeWorkModes = (profile = {}) => {
+  const explicit = Array.isArray(profile.workModes)
+    ? profile.workModes
+    : String(profile.workModes || "")
+        .split(",")
+        .map((mode) => mode.trim())
+        .filter(Boolean);
+  const valid = new Set(explicit.filter((mode) => WORK_MODES.has(mode)));
+  if (valid.size) return WORK_MODE_ORDER.filter((mode) => valid.has(mode));
+  if (WORK_MODES.has(profile.workMode)) return [profile.workMode];
+  return [profile.remote ? "remote" : "hybrid"];
+};
+
+const toggleWorkMode = (workModes, workMode) => {
+  const current = normalizeWorkModes({ workModes });
+  if (!WORK_MODES.has(workMode)) return current;
+  if (current.includes(workMode)) {
+    return current.length === 1 ? current : current.filter((mode) => mode !== workMode);
+  }
+  const selected = new Set([...current, workMode]);
+  return WORK_MODE_ORDER.filter((mode) => selected.has(mode));
+};
+function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitted: a, shouldReduceMotion: s, isEditing: H = false, onCancel: M }) {
   const [o, c] = W.useState(l.resumeName || "");
   const [h, d] = W.useState("");
   const [p, m] = W.useState(l.resumeName ? "stored" : "idle");
@@ -700,6 +791,9 @@ function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Sc
   const [T, R] = W.useState(H ? 1 : 0);
   const [L, F] = W.useState("");
   const [B, G] = W.useState([]);
+  const [__jsDraftLocation, __jsSetDraftLocation] = W.useState({ country: "", state: "", city: "" });
+  const [__jsLocations, __jsSetLocations] = W.useState(() => normalizePreferredLocations(l));
+  const [__jsLocationStatus, __jsSetLocationStatus] = W.useState("");
   const I = ["intake", "edit"].includes(new URLSearchParams(window.location.search).get("preview"));
 
   const N = H
@@ -742,12 +836,59 @@ function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Sc
   // half-made choice reads as unfinished instead of as a real place.
   const __jsPickLocation = (re) => {
     F("");
+    __jsSetLocationStatus("");
     __jsSetTouched((oe) => ({ ...oe, country: true, state: true, city: true }));
-    e((oe) => ({ ...oe, ...re }));
+    __jsSetDraftLocation((oe) => ({ ...oe, ...re }));
   };
   const __jsPlaceholder = (re) => Y.jsx("option", { value: "", disabled: true, children: re }, "__jsPlaceholder");
-  const __jsLocationError = "Choose the country, state, and city your search should cover.";
-  const __jsLocationMissing = (re) => !re.country || !re.state || !re.city;
+  const __jsLocationError = "Add at least one city your search should cover.";
+  const __jsLocationMissing = (re) => {
+    const oe = Array.isArray(re.preferredLocations)
+      ? re.preferredLocations.some((ne) => ne && ne.country && ne.state && ne.city)
+      : false;
+    return !oe && (!re.country || !re.state || !re.city);
+  };
+  const __jsWriteLocations = (re) => {
+    const oe = re[0] || { country: "", state: "", city: "" };
+    __jsSetLocations(re);
+    e((ne) => ({ ...ne, preferredLocations: re, country: oe.country, state: oe.state, city: oe.city }));
+  };
+  const __jsAddLocation = () => {
+    if (!__jsDraftLocation.country || !__jsDraftLocation.state || !__jsDraftLocation.city) {
+      F("Choose a country, state, and city before adding it.");
+      return;
+    }
+    const re = addPreferredLocation(__jsLocations, __jsDraftLocation);
+    if (re.length === __jsLocations.length) {
+      F(__jsLocations.length >= 5 ? "You can add up to five preferred cities." : "That city is already in your preferred locations.");
+      return;
+    }
+    __jsWriteLocations(re);
+    __jsSetDraftLocation({ country: "", state: "", city: "" });
+    __jsSetLocationStatus(`${re[re.length - 1].city} added to preferred locations.`);
+  };
+  const __jsRemoveLocation = (re) => {
+    const oe = removePreferredLocation(__jsLocations, re);
+    __jsWriteLocations(oe);
+    __jsSetLocationStatus(`${re.city} removed from preferred locations.`);
+    requestAnimationFrame(() => document.querySelector(".add-location-button")?.focus());
+  };
+  const __jsWorkModes = normalizeWorkModes(l);
+  const __jsWorkModeOptions = [
+    { id: "onsite", label: "On-site", copy: "At the workplace" },
+    { id: "hybrid", label: "Hybrid", copy: "A mix of office and remote" },
+    { id: "remote", label: "Remote only", copy: "No office requirement" },
+  ];
+  const __jsToggleWorkMode = (re) => {
+    F("");
+    __jsSetTouched((oe) => (oe.workModes ? oe : { ...oe, workModes: true }));
+    const oe = toggleWorkMode(__jsWorkModes, re);
+    if (oe.length === __jsWorkModes.length && oe.every((ne, ae) => ne === __jsWorkModes[ae])) {
+      F("Keep at least one work arrangement selected.");
+      return;
+    }
+    e((ne) => ({ ...ne, workModes: oe, workMode: oe[0], remote: oe.includes("remote") }));
+  };
   const A = (j, O) => {
     F("");
     __jsSetTouched((X) => (X[j] ? X : { ...X, [j]: true }));
@@ -775,8 +916,12 @@ function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Sc
       "steerAwayTerms",
       S.filter((X) => X.toLowerCase() !== O.toLowerCase()).join(", "),
     );
-  const O = g1[l.country] || {};
-  const X = O[l.state] || [];
+  const O = g1[__jsDraftLocation.country] || {};
+  const X = O[__jsDraftLocation.state] || [];
+  W.useEffect(() => {
+    const re = normalizePreferredLocations(l);
+    if (!__jsLocations.length && re.length) __jsSetLocations(re);
+  }, [l.preferredLocations, l.country, l.state, l.city]);
   // Resume suggestions prefill a blank first-time form, but on a saved profile
   // they must not overwrite preferences the member already curated. The parser
   // used to scan the whole resume against the location gazetteer and fall back to
@@ -959,8 +1104,9 @@ function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Sc
           resume_text: h,
           target_roles: l.roles,
           role_keywords: l.roleKeywords,
-          regions: `${l.city}, ${l.state}, ${l.country}`,
-          remote: l.remote ? "Yes" : "No",
+          regions: serializePreferredLocations(normalizePreferredLocations(l)),
+          remote: __jsWorkModes.includes("remote") ? "Yes" : "No",
+          work_modes: __jsWorkModes,
           min_salary: `$${l.salaryMin}k`,
           max_salary: `$${l.salaryMax}k+`,
           seniority: l.seniority,
@@ -1173,48 +1319,145 @@ function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Sc
         children: [
           le(false),
           Y.jsxs("fieldset", {
-            className: "wizard-fieldset",
+            className: "wizard-fieldset preferred-locations-fieldset",
             children: [
-              Y.jsx("legend", { children: "Preferred location" }),
-              Y.jsxs("div", {
-                className: "field-grid three-up",
+              Y.jsxs("legend", {
                 children: [
-                  Y.jsxs("label", {
+                  Y.jsx("span", { children: "Preferred cities" }),
+                  Y.jsxs("small", { children: [__jsLocations.length, " of 5 added"] }),
+                ],
+              }),
+              Y.jsx("p", { className: "location-field-help", children: "Add every city you would genuinely consider. Your scout will search across all of them." }),
+              Y.jsx(Bc, {
+                mode: "popLayout",
+                initial: false,
+                children: __jsLocations.length
+                  ? Y.jsx(Ut.ul, {
+                      className: "preferred-location-list",
+                      layout: true,
+                      children: __jsLocations.map((re, oe) =>
+                        Y.jsxs(Ut.li, {
+                          layout: true,
+                          initial: s ? false : { opacity: 0, scale: 0.98 },
+                          animate: { opacity: 1, scale: 1 },
+                          exit: s ? { opacity: 0 } : { opacity: 0, scale: 0.98 },
+                          transition: Tr,
+                          children: [
+                            Y.jsxs("span", {
+                              children: [
+                                Y.jsx("strong", { children: re.city }),
+                                Y.jsxs("small", { children: [re.state, ", ", re.country, oe === 0 ? " · Primary" : ""] }),
+                              ],
+                            }),
+                            Y.jsx(Ut.button, {
+                              type: "button",
+                              onClick: () => __jsRemoveLocation(re),
+                              "aria-label": `Remove ${re.city}, ${re.state}`,
+                              whileTap: s ? undefined : { scale: 0.97 },
+                              transition: Tr,
+                              children: "Remove",
+                            }),
+                          ],
+                        }, `${re.city}-${re.state}-${re.country}`),
+                      ),
+                    })
+                  : Y.jsx(Ut.p, {
+                      className: "preferred-location-empty",
+                      initial: s ? false : { opacity: 0 },
+                      animate: { opacity: 1 },
+                      exit: { opacity: 0 },
+                      transition: Tr,
+                      children: "No cities added yet. Use the fields below to add your first.",
+                    }),
+              }),
+              Y.jsxs("div", {
+                className: "location-composer",
+                children: [
+                  Y.jsxs("div", {
+                    className: "field-grid three-up",
                     children: [
-                      Y.jsx("span", { children: "Country" }),
-                      Y.jsx("select", {
-                        value: l.country,
-                        required: true,
-                        onChange: (re) => __jsPickLocation({ country: re.target.value, state: "", city: "" }),
-                        children: [__jsPlaceholder("Select a country"), ...Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re))],
+                      Y.jsxs("label", {
+                        children: [
+                          Y.jsx("span", { children: "Country" }),
+                          Y.jsx("select", {
+                            value: __jsDraftLocation.country,
+                            onChange: (re) => __jsPickLocation({ country: re.target.value, state: "", city: "" }),
+                            children: [__jsPlaceholder("Select a country"), ...Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re))],
+                          }),
+                        ],
+                      }),
+                      Y.jsxs("label", {
+                        children: [
+                          Y.jsx("span", { children: "State / region" }),
+                          Y.jsx("select", {
+                            value: __jsDraftLocation.state,
+                            disabled: !__jsDraftLocation.country,
+                            onChange: (re) => __jsPickLocation({ state: re.target.value, city: "" }),
+                            children: [__jsPlaceholder(__jsDraftLocation.country ? "Select a state or region" : "Choose a country first"), ...Object.keys(O).map((re) => Y.jsx("option", { children: re }, re))],
+                          }),
+                        ],
+                      }),
+                      Y.jsxs("label", {
+                        children: [
+                          Y.jsx("span", { children: "City" }),
+                          Y.jsx("select", {
+                            value: __jsDraftLocation.city,
+                            disabled: !__jsDraftLocation.state,
+                            onChange: (re) => __jsPickLocation({ city: re.target.value }),
+                            children: [__jsPlaceholder(__jsDraftLocation.state ? "Select a city" : "Choose a state or region first"), ...X.map((re) => Y.jsx("option", { children: re }, re))],
+                          }),
+                        ],
                       }),
                     ],
                   }),
-                  Y.jsxs("label", {
-                    children: [
-                      Y.jsx("span", { children: "State / region" }),
-                      Y.jsx("select", {
-                        value: l.state,
-                        required: true,
-                        disabled: !l.country,
-                        onChange: (re) => __jsPickLocation({ state: re.target.value, city: "" }),
-                        children: [__jsPlaceholder(l.country ? "Select a state or region" : "Choose a country first"), ...Object.keys(O).map((re) => Y.jsx("option", { children: re }, re))],
-                      }),
-                    ],
-                  }),
-                  Y.jsxs("label", {
-                    children: [
-                      Y.jsx("span", { children: "City" }),
-                      Y.jsx("select", {
-                        value: l.city,
-                        required: true,
-                        disabled: !l.state,
-                        onChange: (re) => __jsPickLocation({ city: re.target.value }),
-                        children: [__jsPlaceholder(l.state ? "Select a city" : "Choose a state or region first"), ...X.map((re) => Y.jsx("option", { children: re }, re))],
-                      }),
-                    ],
+                  Y.jsx(Ut.button, {
+                    type: "button",
+                    className: "add-location-button",
+                    onClick: __jsAddLocation,
+                    disabled: __jsLocations.length >= 5,
+                    whileHover: s || __jsLocations.length >= 5 ? undefined : { y: -2 },
+                    whileTap: s || __jsLocations.length >= 5 ? undefined : { scale: 0.97 },
+                    transition: Tr,
+                    children: __jsLocations.length >= 5 ? "City limit reached" : "Add city",
                   }),
                 ],
+              }),
+              Y.jsx("p", { className: "sr-only", role: "status", "aria-live": "polite", children: __jsLocationStatus }),
+            ],
+          }),
+          Y.jsxs("fieldset", {
+            className: "wizard-fieldset work-mode-fieldset",
+            children: [
+              Y.jsx("legend", { children: "Work arrangement" }),
+              Y.jsx("p", { className: "location-field-help", children: "Choose every setup you would consider. Your scout can surface whichever becomes available first." }),
+              Y.jsx("div", {
+                className: "work-mode-options",
+                role: "group",
+                "aria-label": "Preferred work arrangement",
+                children: __jsWorkModeOptions.map((re) =>
+                  Y.jsxs(Ut.button, {
+                    type: "button",
+                    role: "checkbox",
+                    "aria-checked": __jsWorkModes.includes(re.id),
+                    "data-work-mode": re.id,
+                    className: __jsWorkModes.includes(re.id) ? "selected" : "",
+                    onClick: () => __jsToggleWorkMode(re.id),
+                    whileTap: s ? undefined : { scale: 0.97 },
+                    transition: Tr,
+                    children: [
+                      Y.jsx("span", {
+                        className: "work-mode-checkbox",
+                        "aria-hidden": "true",
+                        children: Y.jsx(Ut.span, {
+                          animate: { opacity: __jsWorkModes.includes(re.id) ? 1 : 0, scale: __jsWorkModes.includes(re.id) ? 1 : 0.6 },
+                          transition: Tr,
+                          children: Y.jsx(NL, { size: 12, weight: "bold" }),
+                        }),
+                      }),
+                      Y.jsxs("span", { children: [Y.jsx("strong", { children: re.label }), Y.jsx("small", { children: re.copy })] }),
+                    ],
+                  }, re.id),
+                ),
               }),
             ],
           }),
@@ -1292,22 +1535,6 @@ function vx(){return Y.jsxs("div",{className:"brand-lockup","aria-label":"Job Sc
                   }),
                   Y.jsx("input", { type: "range", min: "1", max: "30", step: "1", value: l.postedWithin, onChange: (re) => A("postedWithin", Number(re.target.value)) }),
                 ],
-              }),
-            ],
-          }),
-          Y.jsxs("label", {
-            className: "form-toggle",
-            children: [
-              Y.jsxs("span", { children: [Y.jsx("strong", { children: "Prioritize remote roles" }), Y.jsx("small", { children: "Remote jobs will appear before roles that need a move." })] }),
-              Y.jsx(Ut.button, {
-                type: "button",
-                role: "switch",
-                "aria-checked": l.remote,
-                className: `switch ${l.remote ? "on" : ""}`,
-                onClick: () => A("remote", !l.remote),
-                whileTap: s ? undefined : { scale: 0.97 },
-                transition: Tr,
-                children: Y.jsx(Ut.span, { animate: { x: l.remote ? 16 : 0 }, transition: Tr }),
               }),
             ],
           }),
@@ -1596,6 +1823,11 @@ function AP({
   const [s, o] = W.useState("idle");
   const [c, h] = W.useState("");
   const d = i?.first_scout?.status === "available";
+  const __jsReadyLocations = normalizePreferredLocations(l);
+  const __jsReadyWorkModes = normalizeWorkModes(l);
+  const __jsReadyWorkModeLabel = __jsReadyWorkModes
+    .map((mode) => ({ onsite: "On-site", hybrid: "Hybrid", remote: "Remote only" })[mode])
+    .join(", ");
 
   // Forward arrow (→) for navigation CTAs. The bundled icon set only ships an
   // up-right arrow (↗), which reads as "opens in a new tab"; this plain
@@ -1667,7 +1899,13 @@ function AP({
                 Y.jsxs("div", {
                   children: [
                     Y.jsx("span", { children: "Where" }),
-                    Y.jsxs("strong", { children: [l.city, ", ", l.state, ", ", l.country, " · ", l.remote ? "Remote first" : "On-site is okay"] }),
+                    Y.jsxs("strong", {
+                      children: [
+                        __jsReadyLocations.map((location) => location.city).join(", "),
+                        " · ",
+                        __jsReadyWorkModeLabel,
+                      ],
+                    }),
                   ],
                 }),
                 Y.jsxs("div", {

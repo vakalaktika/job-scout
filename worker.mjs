@@ -91,11 +91,11 @@ export const splitTerms = (value) =>
 const noteValue = (notes, label) =>
   String(notes ?? "").match(new RegExp(`^${label}:\\s*(.+)$`, "im"))?.[1]?.trim() ?? "";
 
-// Stored as a single "City, State, Country" string. Splitting it here keeps the
-// dashboard from having to parse it, which is why it previously never restored a
-// saved location and silently rewrote every candidate back to its own default.
+// Regions stores one or more semicolon-separated "City, State, Country" values.
+// Older controls still need the first city split into its three select values.
 export const parseRegions = (value) => {
-  const parts = String(value ?? "")
+  const primaryRegion = String(value ?? "").split(";")[0];
+  const parts = primaryRegion
     .split(",")
     .map((part) => part.trim());
   return { city: parts[0] || "", state: parts[1] || "", country: parts[2] || "" };
@@ -160,6 +160,17 @@ export function candidateProps(payload, existing = null) {
   if (hasField(payload, "resume_name")) {
     notes.set("Resume file", String(payload.resume_name).slice(0, 180));
   }
+  if (hasField(payload, "work_modes")) {
+    const workModes = (Array.isArray(payload.work_modes) ? payload.work_modes : splitTerms(payload.work_modes))
+      .filter((mode) => ["onsite", "hybrid", "remote"].includes(mode));
+    if (workModes.length) {
+      notes.delete("Work mode");
+      notes.set("Work modes", [...new Set(workModes)].join(", "));
+    }
+  } else if (hasField(payload, "work_mode") && ["onsite", "hybrid", "remote"].includes(payload.work_mode)) {
+    notes.delete("Work modes");
+    notes.set("Work mode", payload.work_mode);
+  }
   const after = serializeNotes(notes);
   if (after !== before) properties.Notes = richText(after);
 
@@ -204,6 +215,8 @@ function memberState(page) {
     min_salary: plain(properties["Min salary"]),
     seniority: plain(properties.Seniority),
     remote: plain(properties["Remote OK"]),
+    work_mode: noteValue(notes, "Work mode"),
+    work_modes: splitTerms(noteValue(notes, "Work modes")),
     frequency: plain(properties.Frequency),
     notes,
     steer_away_terms:
