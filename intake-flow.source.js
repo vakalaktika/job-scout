@@ -7,6 +7,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
   const [D, w] = W.useState("");
   const [T, R] = W.useState(H ? 1 : 0);
   const [L, F] = W.useState("");
+  const [B, G] = W.useState([]);
   const I = ["intake", "edit"].includes(new URLSearchParams(window.location.search).get("preview"));
 
   const N = H
@@ -25,8 +26,24 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
         { label: "Delivery", title: "How often should we check in?", copy: "Choose a rhythm that keeps the search useful, not noisy." },
       ];
   const C = H ? [1, 2, 3, 4, 0] : [0, 1, 2, 3, 4];
+  // Which fields the member has set themselves. A field they touched is theirs, and a
+  // later resume upload may suggest a different value but never writes over it.
+  const [__jsTouched, __jsSetTouched] = W.useState({});
+
+  // Location is chosen, never assumed. Picking a country clears the state and city
+  // below it rather than jumping to whichever happened to be listed first, so a
+  // half-made choice reads as unfinished instead of as a real place.
+  const __jsPickLocation = (re) => {
+    F("");
+    __jsSetTouched((oe) => ({ ...oe, country: true, state: true, city: true }));
+    e((oe) => ({ ...oe, ...re }));
+  };
+  const __jsPlaceholder = (re) => Y.jsx("option", { value: "", disabled: true, children: re }, "__jsPlaceholder");
+  const __jsLocationError = "Choose the country, state, and city your search should cover.";
+  const __jsLocationMissing = (re) => !re.country || !re.state || !re.city;
   const A = (j, O) => {
     F("");
+    __jsSetTouched((X) => (X[j] ? X : { ...X, [j]: true }));
     e((X) => ({ ...X, [j]: O }));
   };
   const S = RP(l.steerAwayTerms);
@@ -55,14 +72,55 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
   const X = O[l.state] || [];
   // Resume suggestions prefill a blank first-time form, but on a saved profile
   // they must not overwrite preferences the member already curated. The parser
-  // scans the whole resume against the location gazetteer and falls back to a
-  // state's first listed city, so a resume that mentioned "California" anywhere
+  // used to scan the whole resume against the location gazetteer and fall back to
+  // a state's first listed city, so a resume that mentioned "California" anywhere
   // rewrote a saved Austin to San Francisco the moment the member replaced
   // their file — on a tab they never opened. When editing, only the steer-away
   // suggestions survive: they render as optional chips instead of writing into
   // a field.
-  const __jsResumePrefill = (ee, ie) =>
-    ie ? (Array.isArray(ee.resumeSuggestions) && ee.resumeSuggestions.length ? { resumeSuggestions: ee.resumeSuggestions } : {}) : ee;
+  //
+  // The parser no longer invents a city, and now reports how far it trusts each
+  // suggestion. Writing one is gated twice over: the parser has to clear its own
+  // accept threshold, and the field has to be one the member has not set.
+  const __jsConfident = (re) => !!re && re.confidence >= __jsAcceptConfidence;
+  const __jsValues = (re) => (re || []).map((ne) => ne.value);
+  const __jsBlank = (ne) => !__jsTouched[ne] && !String(l[ne] || "").trim();
+
+  // A location is only written when the parser resolved a real city inside a real
+  // state. A state-only suggestion stays pending rather than filling in a city the
+  // resume never mentioned.
+  const __jsResumeLocation = (ne) => {
+    if (!__jsConfident(ne) || !ne.city) return {};
+    if (__jsTouched.country || __jsTouched.state || __jsTouched.city) return {};
+    if (!(g1[ne.country] || {})[ne.state] || !g1[ne.country][ne.state].includes(ne.city)) return {};
+    return { country: ne.country, state: ne.state, city: ne.city };
+  };
+
+  // Describe what the upload actually did. Steer-away terms are offered as chips the
+  // member clicks, so they are never reported as a field we filled in.
+  const __jsFieldLabels = { name: "your name", email: "your email", roles: "roles", roleKeywords: "keywords", country: "location", state: "location", city: "location" };
+  const __jsFilledCopy = (ne) => {
+    const ae = ne.filter((le) => le !== "resumeSuggestions").map((le) => __jsFieldLabels[le] || le);
+    const ie = ae.filter((le, se, ue) => ue.indexOf(le) === se);
+    const oe = ne.includes("resumeSuggestions") ? " We also suggested a few filters to steer away from." : "";
+    if (!ie.length) return `We found nothing safe to fill in for you.${oe}`;
+    return `We filled ${ie.join(", ")}. You can review each choice as you go.${oe}`;
+  };
+
+  const __jsResumePrefill = (ne, ie) => {
+    const ae = __jsValues(ne.steerAway);
+    const le = ae.length ? { resumeSuggestions: ae } : {};
+    if (ie) return le;
+    return {
+      ...le,
+      ...(__jsConfident(ne.name) && __jsBlank("name") ? { name: ne.name.value } : {}),
+      ...(__jsConfident(ne.email) && __jsBlank("email") ? { email: ne.email.value } : {}),
+      ...(ne.roles.length && __jsBlank("roles") ? { roles: __jsValues(ne.roles).join(", ") } : {}),
+      ...(ne.keywords.length && __jsBlank("roleKeywords") ? { roleKeywords: __jsValues(ne.keywords).join(", ") } : {}),
+      ...__jsResumeLocation(ne.location),
+    };
+  };
+
   const q = async (Q) => {
     if (!Q) return;
     w("");
@@ -71,12 +129,15 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     A("resumeName", Q.name);
     m("reading");
     b([]);
+    G([]);
     try {
       const Z = await bP(Q);
-      d(Z);
-      const ee = __jsResumePrefill(vP(Z), H);
-      const te = Object.keys(ee);
-      if (te.length) e((ne) => ({ ...ne, ...ee }));
+      d(Z.text);
+      const ee = vP(Z.text, Z.warnings);
+      G(ee.warnings);
+      const ie = __jsResumePrefill(ee.suggestions, H);
+      const te = Object.keys(ie);
+      if (te.length) e((ne) => ({ ...ne, ...ie }));
       b(te);
       m(te.length ? "complete" : "empty");
     } catch (Z) {
@@ -97,6 +158,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
       if (!h && !n && !l.resumeName) return "Add your resume so your scout has enough context to find relevant roles.";
     }
     if (T === 1 && !l.roles.trim()) return "Add at least one role you would be happy to apply for.";
+    if (T === 2 && __jsLocationMissing(l)) return __jsLocationError;
     return "";
   };
   const ce = (ne, ae = false) => {
@@ -157,6 +219,11 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     if (H && !l.roles.trim()) {
       te(1);
       F("Add at least one role you would be happy to apply for.");
+      return;
+    }
+    if (H && __jsLocationMissing(l)) {
+      te(2);
+      F(__jsLocationError);
       return;
     }
     const ie = ee();
@@ -323,9 +390,10 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                           Y.jsx("strong", { children: "Resume details added" }),
                           Y.jsxs("small", {
                             children: [
-                              "We filled ",
-                              g.map((re) => ({ roleKeywords: "keywords", resumeSuggestions: "filter suggestions" })[re] || re).join(", "),
-                              ". You can review each choice as you go.",
+                              __jsFilledCopy(g),
+                              B.includes("pdf_reading_order_uncertain")
+                                ? " This PDF did not mark its own line breaks, so double-check anything that looks out of order."
+                                : "",
                             ],
                           }),
                         ],
@@ -409,13 +477,9 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                       Y.jsx("span", { children: "Country" }),
                       Y.jsx("select", {
                         value: l.country,
-                        onChange: (re) => {
-                          const oe = re.target.value;
-                          const se = Object.keys(g1[oe])[0];
-                          F("");
-                          e((he) => ({ ...he, country: oe, state: se, city: g1[oe][se][0] }));
-                        },
-                        children: Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re)),
+                        required: true,
+                        onChange: (re) => __jsPickLocation({ country: re.target.value, state: "", city: "" }),
+                        children: [__jsPlaceholder("Select a country"), ...Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re))],
                       }),
                     ],
                   }),
@@ -424,12 +488,10 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                       Y.jsx("span", { children: "State / region" }),
                       Y.jsx("select", {
                         value: l.state,
-                        onChange: (re) => {
-                          const oe = re.target.value;
-                          F("");
-                          e((se) => ({ ...se, state: oe, city: O[oe][0] }));
-                        },
-                        children: Object.keys(O).map((re) => Y.jsx("option", { children: re }, re)),
+                        required: true,
+                        disabled: !l.country,
+                        onChange: (re) => __jsPickLocation({ state: re.target.value, city: "" }),
+                        children: [__jsPlaceholder(l.country ? "Select a state or region" : "Choose a country first"), ...Object.keys(O).map((re) => Y.jsx("option", { children: re }, re))],
                       }),
                     ],
                   }),
@@ -438,8 +500,10 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                       Y.jsx("span", { children: "City" }),
                       Y.jsx("select", {
                         value: l.city,
-                        onChange: (re) => A("city", re.target.value),
-                        children: X.map((re) => Y.jsx("option", { children: re }, re)),
+                        required: true,
+                        disabled: !l.state,
+                        onChange: (re) => __jsPickLocation({ city: re.target.value }),
+                        children: [__jsPlaceholder(l.state ? "Select a city" : "Choose a state or region first"), ...X.map((re) => Y.jsx("option", { children: re }, re))],
                       }),
                     ],
                   }),

@@ -36,7 +36,10 @@ first," and lets them review, save, and refine matches from a web dashboard.
 1. **Invite-only onboarding.** A member enters an access code (`SCOUT-XXXX-YYYY`),
    uploads a résumé (PDF / DOCX / TXT), and completes a short five-step intake:
    basics, target roles, location & pay, filters ("off my list" terms), and delivery
-   cadence. The résumé is parsed **in the browser** to prefill the later steps.
+   cadence. The résumé is parsed **in the browser** to prefill the later steps, and only
+   ever fills a field the member has left blank. Country, state, and city start unset and
+   must be chosen explicitly — the search runs against a place the member named, never a
+   default.
 2. **Automated searching.** A scheduled AI agent (the *dispatcher routine*) periodically
    searches job sources, matches new postings to each member's profile, and records the
    matches — de-duplicated so a member never sees the same posting twice.
@@ -189,13 +192,16 @@ steer-away rules applied. In the dashboard the member can:
 ├── worker.mjs              # Cloudflare Worker — the entire backend API
 ├── worker.test.mjs         # node:test suite for the Worker's pure logic (no network)
 ├── dashboard-helpers.test.mjs  # node:test suite for the helpers patched into the bundle
+├── resume-parser.test.mjs  # node:test suite for the resume parser and its shipped artifact
+├── intake-prefill.test.mjs # node:test suite for the rules gating what a resume may fill in
 ├── wrangler.jsonc          # Worker deploy config (name, vars, required secrets)
 ├── BRIEF_ENRICHMENT.md     # Design notes for the job-brief enrichment feature
 │
 ├── index.html              # Static SPA entry (loads the prebuilt bundle)
 ├── assets/                 # Prebuilt Vite/React bundle (JS, CSS, pdf.js worker)
 ├── intake-flow.source.js   # Readable source of the intake component (patched into the bundle)
-├── patch-intake-flow.mjs   # Script that injects intake-flow.source.js into the minified bundle
+├── resume-parser.source.js # Readable source of the resume parser (patched into the bundle)
+├── patch-intake-flow.mjs   # Script that injects both readable sources into the minified bundle
 ├── patch-dashboard.mjs     # Dashboard-side fixes as guarded, idempotent bundle patches
 │
 ├── email-template.html     # Match-alert email; filled per run by the dispatcher routine
@@ -293,18 +299,22 @@ is what ships.
 
 ### Editing the intake without a full rebuild
 
-The production bundle is minified, but the intake component is the part that changes most
-often, so it is kept as **readable source** in `intake-flow.source.js` and injected into
-the bundle by a patch script:
+The production bundle is minified, but the intake component and the resume parser are the
+parts that change most often, so they are kept as **readable source** in
+`intake-flow.source.js` and `resume-parser.source.js` and injected into the bundle by a
+patch script:
 
 ```sh
 node patch-intake-flow.mjs
 node patch-dashboard.mjs
 ```
 
-`patch-intake-flow.mjs` locates the intake component boundaries in the minified bundle,
-swaps in the source component, wires up preview/edit entry points
+`patch-intake-flow.mjs` locates the intake component and resume parser boundaries in the
+minified bundle, swaps in the source versions, wires up preview/edit entry points
 (`?preview=intake`, `?preview=edit`), and normalizes the motion language across the app.
+Both injections are boundary-based and accept either the original minified code or an
+already-injected source, so re-running the script is a no-op and an unrecognized bundle
+throws instead of being patched blind.
 The cache-busting query string in `index.html` (e.g. `?v=mobile-tab-discovery`) is bumped
 when the bundle changes.
 
@@ -507,8 +517,21 @@ splitting, the New/Saved/All filters, and the last-run line. Extraction throws i
 patch stopped applying, so a bundle that silently lost a fix fails the suite instead of
 shipping.
 
+`resume-parser.test.mjs` exercises the parser directly from `resume-parser.source.js`,
+using the vocabularies and location gazetteer lifted out of the built bundle so the tests
+run against the data members actually get. It covers the name rules (employers, job
+titles, section headings, and single words are never names), city/state resolution, the
+state-with-no-city case, PDF line splitting with and without end-of-line markers, and a
+final assertion that the shipped bundle carries the current parser rather than the old
+flattening one.
+
+`intake-prefill.test.mjs` covers the merge rules that decide which suggestions may be
+written. It lifts them out of the built bundle and checks that a confident suggestion only
+fills a field the member has left blank, that a state-only location writes nothing, and
+that editing a saved profile takes the steer-away chips and nothing else.
+
 ```sh
-node --test worker.test.mjs dashboard-helpers.test.mjs
+node --test worker.test.mjs dashboard-helpers.test.mjs resume-parser.test.mjs intake-prefill.test.mjs build-email.test.mjs
 ```
 
 ---

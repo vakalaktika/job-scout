@@ -43,16 +43,27 @@ const patch = (name, from, to, target = "js") =>
 // Resolve the stored region against the gazetteer g1 so the cascading selects are
 // always given a country/state/city triple they can actually render. Anything the
 // gazetteer does not know falls back to the value already on screen.
-const regionHelper =
+// The first version of this helper fell back to a country's first listed state and
+// that state's first listed city, which is the same "invent a plausible location"
+// move that kept sending people to San Francisco. Anything the gazetteer does not
+// recognise now resolves to empty, and the intake requires the member to choose.
+const previousRegionHelper =
   "function __jsRegion(m,cur){" +
   'const c=m&&m.region_country||"",s=m&&m.region_state||"",y=m&&m.region_city||"";' +
   "if(!c||!g1[c])return{country:cur.country,state:cur.state,city:cur.city};" +
   "const st=g1[c][s]?s:Object.keys(g1[c])[0],ct=g1[c][st].indexOf(y)>=0?y:g1[c][st][0];" +
   "return{country:c,state:st,city:ct}}";
 
+const regionHelper =
+  "function __jsRegion(m,cur){" +
+  'const c=m&&m.region_country||"",s=m&&m.region_state||"",y=m&&m.region_city||"";' +
+  "if(!c||!g1[c])return{country:cur.country,state:cur.state,city:cur.city};" +
+  'const st=g1[c][s]?s:"",ct=st&&g1[c][st].indexOf(y)>=0?y:"";' +
+  "return{country:c,state:st,city:ct}}";
+
 patch(
   "inject region resolver",
-  'resumeName:""};function xP(){',
+  [`resumeName:""};${previousRegionHelper}function xP(){`, 'resumeName:""};function xP(){'],
   `resumeName:""};${regionHelper}function xP(){`,
 );
 
