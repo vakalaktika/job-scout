@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import jobScoutWorker, {
+  buildFirstScoutRunText,
+  FirstScoutGate,
+  firstScoutPublicState,
+} from "./worker.mjs";
 import {
   APPLICATION_STATUSES,
   appendMatchContext,
   applySteerAway,
   buildBriefRequest,
+  buildInitialScoutRoutineText,
   candidateProps,
   checkPostingLiveness,
   demoteClosedPostings,
@@ -12,6 +18,9 @@ import {
   enrichJobBrief,
   extractJobPostingText,
   hasCompleteBrief,
+  initialScoutRequestId,
+  initialScoutState,
+  fireInitialScoutRoutine,
   issueToken,
   keepForSession,
   lastDispatchAt,
@@ -31,6 +40,121 @@ import {
   verifyToken,
   WORKPLACE_TYPES,
 } from "./worker.mjs";
+
+test("first-scout state is available only to an active member who has never received jobs", () => {
+  assert.deepEqual(firstScoutPublicState({ status: "Active" }, [], null), {
+    status: "available",
+    requested_at: "",
+    completed_at: "",
+  });
+  assert.equal(firstScoutPublicState({ status: "Paused" }, [], null).status, "unavailable");
+  assert.equal(firstScoutPublicState({ status: "Revoked" }, [], null).status, "unavailable");
+  assert.equal(firstScoutPublicState({ status: "Active" }, [{ id: "job-1" }], null).status, "complete");
+});
+
+test("candidate completion wins over a stale queued gate even when no jobs matched", () => {
+  const state = firstScoutPublicState(
+    {
+      status: "Active",
+      first_scout_status: "Complete",
+      first_scout_requested_at: "2026-08-08T10:00:00.000Z",
+      first_scout_completed_at: "2026-08-08T10:04:00.000Z",
+    },
+    [],
+    { status: "queued", requested_at: "2026-08-08T10:00:00.000Z" },
+  );
+
+  assert.deepEqual(state, {
+    status: "complete",
+    requested_at: "2026-08-08T10:00:00.000Z",
+    completed_at: "2026-08-08T10:04:00.000Z",
+  });
+});
+
+test("the routine payload is candidate-scoped, contains no email, and forbids a global fallback", () => {
+  const payload = JSON.parse(buildFirstScoutRunText("candidate-123", "request-456"));
+
+  assert.equal(payload.task, "job_scout_onboarding_run");
+  assert.equal(payload.mode, "single_candidate");
+  assert.equal(payload.candidate_id, "candidate-123");
+  assert.equal(payload.request_id, "request-456");
+  assert.equal(payload.constraints.process_only_candidate_id, "candidate-123");
+  assert.equal(payload.constraints.never_fallback_to_all_candidates, true);
+  assert.equal(JSON.stringify(payload).includes("email"), false);
+});
+
+const createGateState = () => {
+  const values = new Map();
+  return {
+    storage: {
+      get: async (key) => values.get(key),
+      put: async (key, value) => values.set(key, value),
+    },
+    blockConcurrencyWhile: async (callback) => callback(),
+  };
+};
+
+test("the durable gate fires the external routine once and reuses the queued result", async () => {
+  const originalFetch = globalThis.fetch;
+  let routineCalls = 0;
+  globalThis.fetch = async (url, init) => {
+    routineCalls += 1;
+    assert.match(String(url), /trig_test\/fire$/);
+    assert.equal(init.headers.Authorization, "Bearer routine-secret");
+    assert.equal(
+      init.headers["anthropic-beta"],
+      "experimental-cc-routine-2026-04-01",
+    );
+    return new Response(
+      JSON.stringify({
+        type: "routine_fire",
+        claude_code_session_id: "session-1",
+        claude_code_session_url: "https://claude.ai/code/session-1",
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  };
+
+  try {
+    const gate = new FirstScoutGate(createGateState(), {
+      FIRST_SCOUT_ROUTINE_ID: "trig_test",
+      FIRST_SCOUT_ROUTINE_TOKEN: "routine-secret",
+    });
+    const request = () =>
+      new Request("https://first-scout.internal/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidate_id: "candidate-123" }),
+      });
+
+    const first = await (await gate.fetch(request())).json();
+    const second = await (await gate.fetch(request())).json();
+
+    assert.equal(first.status, "queued");
+    assert.equal(first.session_id, "session-1");
+    assert.equal(second.status, "queued");
+    assert.equal(second.already_requested, true);
+    assert.equal(second.request_id, first.request_id);
+    assert.equal(routineCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("run_scout_once rejects a request without a valid signed session", async () => {
+  const response = await jobScoutWorker.fetch(
+    new Request("https://worker.example", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "run_scout_once" }),
+    }),
+    { SESSION_SECRET: "test-secret" },
+  );
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { ok: false, error: "invalid_session" });
+});
+import worker from "./worker.mjs";
 
 test("an unstated workplace type is recorded as unclear rather than guessed", () => {
   const brief = {
@@ -602,6 +726,172 @@ test("the last dispatch is the newest send across every posting, filtered or not
 test("an unknown last dispatch is empty rather than the epoch", () => {
   assert.equal(lastDispatchAt([]), "");
   assert.equal(lastDispatchAt([{ sent_at: "" }, { sent_at: "not a date" }, {}]), "");
+});
+
+test("a new member with no run gets a one-time initial scout CTA", () => {
+  assert.deepEqual(
+    initialScoutState(
+      {
+        id: "cand-1",
+        name: "Maya Chen",
+        email: "maya@example.com",
+        initial_scout_status: "",
+        initial_scout_requested_at: "",
+      },
+      "",
+    ),
+    {
+      status: "available",
+      can_run: true,
+      requested_at: "",
+      completed_at: "",
+      request_id: "",
+      session_url: "",
+    },
+  );
+});
+
+test("an initial scout request is treated as completed once dispatch has delivered", () => {
+  const state = initialScoutState(
+    {
+      id: "cand-1",
+      initial_scout_status: "Queued",
+      initial_scout_requested_at: "2026-08-08T10:00:00.000Z",
+      initial_scout_request_id: "initial-cand-1",
+    },
+    "2026-08-08T10:05:00.000Z",
+  );
+
+  assert.equal(state.status, "completed");
+  assert.equal(state.can_run, false);
+  assert.equal(state.request_id, "initial-cand-1");
+});
+
+test("the initial scout routine text is scoped to exactly one candidate", () => {
+  const text = buildInitialScoutRoutineText({
+    requestId: "initial-cand-1",
+    candidate: { id: "cand-1" },
+    member: {
+      name: "Maya Chen",
+      email: "maya@example.com",
+      target_roles: "Staff Product Designer",
+      regions: "Seattle, Washington, United States",
+      frequency: "Daily",
+    },
+  });
+  const payload = JSON.parse(text);
+
+  assert.equal(payload.action, "run_initial_scout_once");
+  assert.equal(payload.request_id, "initial-cand-1");
+  assert.equal(payload.candidate.id, "cand-1");
+  assert.equal(payload.candidate.email, "maya@example.com");
+  assert.match(payload.instructions[0], /exactly one candidate/i);
+});
+
+test("firing the initial scout routine uses the official API headers", async () => {
+  const calls = [];
+  const result = await fireInitialScoutRoutine(
+    {
+      JOB_SCOUT_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_test/fire",
+      JOB_SCOUT_ROUTINE_TOKEN: "routine-secret",
+    },
+    { requestId: "initial-cand-1", candidate: { id: "cand-1" }, member: { email: "maya@example.com" } },
+    async (url, init) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ session_url: "https://claude.ai/code/routines/sessions/sess_1" }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  );
+
+  assert.equal(result.session_url, "https://claude.ai/code/routines/sessions/sess_1");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://api.anthropic.com/v1/claude_code/routines/trig_test/fire");
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer routine-secret");
+  assert.equal(calls[0].init.headers["anthropic-version"], "2023-06-01");
+  assert.equal(calls[0].init.headers["anthropic-beta"], "experimental-cc-routine-2026-04-01");
+  assert.equal(JSON.parse(calls[0].init.body).text.includes("run_initial_scout_once"), true);
+});
+
+test("the authenticated initial scout action claims and fires once for the session member", async () => {
+  const previousFetch = globalThis.fetch;
+  const env = {
+    SESSION_SECRET: "test-signing-secret",
+    NOTION_TOKEN: "notion-secret",
+    JOB_SCOUT_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_test/fire",
+    JOB_SCOUT_ROUTINE_TOKEN: "routine-secret",
+  };
+  const token = await issueToken(
+    env,
+    { purpose: "session", member_id: "cand-1", email: "maya@example.com" },
+    3600,
+  );
+  const candidate = {
+    id: "cand-1",
+    properties: {
+      Name: { type: "title", title: [{ plain_text: "Maya Chen" }] },
+      Email: { type: "email", email: "maya@example.com" },
+      Status: { type: "select", select: { name: "Active" } },
+    },
+  };
+  const routineCalls = [];
+  const patches = [];
+
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target === env.JOB_SCOUT_ROUTINE_FIRE_URL) {
+      routineCalls.push({ url: target, init });
+      return new Response(JSON.stringify({ session_url: "https://claude.ai/code/routines/sessions/sess_1" }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (target === "https://api.notion.com/v1/pages/cand-1" && init.method === "GET") {
+      return new Response(JSON.stringify(candidate), { headers: { "Content-Type": "application/json" } });
+    }
+    if (target === "https://api.notion.com/v1/pages/cand-1" && init.method === "PATCH") {
+      const body = JSON.parse(init.body);
+      patches.push(body.properties);
+      candidate.properties = { ...candidate.properties, ...body.properties };
+      return new Response(JSON.stringify(candidate), { headers: { "Content-Type": "application/json" } });
+    }
+    throw new Error(`unexpected fetch ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://worker.test/", {
+        method: "POST",
+        body: JSON.stringify({ action: "initial_scout_run", session_token: token }),
+      }),
+      env,
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.initial_scout.status, "queued");
+    assert.equal(body.initial_scout.request_id, initialScoutRequestId(candidate.id));
+    assert.equal(routineCalls.length, 1);
+    assert.equal(patches[0]["Initial scout status"].select.name, "Queued");
+    assert.equal(patches.at(-1)["Initial scout session URL"].url, "https://claude.ai/code/routines/sessions/sess_1");
+
+    const repeat = await worker.fetch(
+      new Request("https://worker.test/", {
+        method: "POST",
+        body: JSON.stringify({ action: "initial_scout_run", session_token: token }),
+      }),
+      env,
+    );
+    const repeatBody = await repeat.json();
+
+    assert.equal(repeat.status, 200);
+    assert.equal(repeatBody.ok, true);
+    assert.equal(repeatBody.initial_scout.status, "queued");
+    assert.equal(routineCalls.length, 1, "repeat call must not fire another routine");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
 
 test("a stated salary is captured and an unstated one stays empty", () => {
