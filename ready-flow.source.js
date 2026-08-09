@@ -14,6 +14,21 @@ function AP({
   const [c, h] = W.useState("");
   const d = i?.first_scout?.status === "available";
 
+  // Forward arrow (→) for navigation CTAs. The bundled icon set only ships an
+  // up-right arrow (↗), which reads as "opens in a new tab"; this plain
+  // right-pointing arrow inherits the button's text color instead.
+  const __jsForward = () =>
+    Y.jsx("svg", {
+      width: 17,
+      height: 17,
+      viewBox: "0 0 256 256",
+      fill: "currentColor",
+      "aria-hidden": "true",
+      children: Y.jsx("path", {
+        d: "M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z",
+      }),
+    });
+
   const p = async () => {
     if (s === "submitting") return;
     o("submitting");
@@ -134,7 +149,7 @@ function AP({
                       whileHover: n ? undefined : { y: -2 },
                       whileTap: n ? undefined : { scale: 0.97 },
                       transition: Tr,
-                      children: [s === "submitting" ? "Starting your scout…" : "Find my first matches", " ", Y.jsx(ax, { size: 17 })],
+                      children: [s === "submitting" ? "Starting your scout…" : "Find my first matches"],
                     })
                   : Y.jsxs(Ut.button, {
                       type: "button",
@@ -143,7 +158,7 @@ function AP({
                       whileHover: n ? undefined : { y: -2 },
                       whileTap: n ? undefined : { scale: 0.97 },
                       transition: Tr,
-                      children: ["Open your job list ", Y.jsx(ax, { size: 17 })],
+                      children: ["Open your job list ", __jsForward()],
                     }),
               ],
             }),

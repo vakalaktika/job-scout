@@ -30,6 +30,21 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
   // later resume upload may suggest a different value but never writes over it.
   const [__jsTouched, __jsSetTouched] = W.useState({});
 
+  // Forward arrow (→) for navigation CTAs. The bundled icon set only ships an
+  // up-right arrow (↗), which reads as "opens in a new tab"; this plain
+  // right-pointing arrow inherits the button's text color instead.
+  const __jsForward = () =>
+    Y.jsx("svg", {
+      width: 17,
+      height: 17,
+      viewBox: "0 0 256 256",
+      fill: "currentColor",
+      "aria-hidden": "true",
+      children: Y.jsx("path", {
+        d: "M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z",
+      }),
+    });
+
   // Location is chosen, never assumed. Picking a country clears the state and city
   // below it rather than jumping to whichever happened to be listed first, so a
   // half-made choice reads as unfinished instead of as a real place.
@@ -862,8 +877,8 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                         : H
                           ? Y.jsxs(Y.Fragment, { children: ["Save changes ", Y.jsx(Jd, { size: 17, weight: "fill" })] })
                         : T === N.length - 1
-                          ? Y.jsxs(Y.Fragment, { children: ["Save and review ", Y.jsx(ax, { size: 17 })] })
-                          : Y.jsxs(Y.Fragment, { children: [T === 3 && !l.steerAwayTerms.trim() ? "Skip for now" : "Continue", " ", Y.jsx(ax, { size: 17 })] }),
+                          ? Y.jsxs(Y.Fragment, { children: ["Save and review ", __jsForward()] })
+                          : Y.jsxs(Y.Fragment, { children: [T === 3 && !l.steerAwayTerms.trim() ? "Skip for now" : "Continue", " ", __jsForward()] }),
                   }),
                 ],
               }),
