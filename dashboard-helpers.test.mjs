@@ -179,3 +179,70 @@ test("a member whose scout has never run is told so rather than shown an empty o
   assert.equal(__jsRunLabel({ last_run_at: "" }, 0), "Your first run is still to come");
   assert.equal(__jsRunLabel(null, 3), "Freshest first");
 });
+
+// Session hydration resolves a stored region against the gazetteer. It used to
+// fall back to a country's first listed state and that state's first listed city,
+// which quietly relocated members the moment anything about their stored region
+// failed to match — the same invention that kept producing San Francisco.
+const regionStart = bundle.indexOf("function __jsRegion(");
+if (regionStart < 0) {
+  throw new Error("Could not find the region resolver in the current bundle.");
+}
+const gazetteerStart = bundle.indexOf("g1={");
+const readGazetteer = () => {
+  let depth = 0;
+  let quote = "";
+  const from = gazetteerStart + 3;
+  for (let at = from; at < bundle.length; at += 1) {
+    const character = bundle[at];
+    if (quote) {
+      if (character === "\\") at += 1;
+      else if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return new Function(`return ${bundle.slice(from, at + 1)};`)();
+    }
+  }
+  throw new Error("Could not read the end of the gazetteer in the current bundle.");
+};
+
+const __jsRegion = new Function(
+  "g1",
+  `${bundle.slice(regionStart, bundle.indexOf("function xP(", regionStart))} return __jsRegion;`,
+)(readGazetteer());
+
+const onScreen = { country: "", state: "", city: "" };
+
+test("a stored region the gazetteer recognises is restored exactly", () => {
+  assert.deepEqual(__jsRegion({ region_country: "United States", region_state: "Texas", region_city: "Austin" }, onScreen), {
+    country: "United States",
+    state: "Texas",
+    city: "Austin",
+  });
+});
+
+test("a stored state the gazetteer does not know leaves the state and city unset", () => {
+  assert.deepEqual(__jsRegion({ region_country: "United States", region_state: "Atlantis", region_city: "Austin" }, onScreen), {
+    country: "United States",
+    state: "",
+    city: "",
+  });
+});
+
+test("a stored city that does not belong to its state leaves the city unset", () => {
+  assert.deepEqual(__jsRegion({ region_country: "United States", region_state: "Texas", region_city: "San Francisco" }, onScreen), {
+    country: "United States",
+    state: "Texas",
+    city: "",
+  });
+});
+
+test("a member with no stored region keeps whatever is already on screen", () => {
+  const current = { country: "United States", state: "Texas", city: "Austin" };
+  assert.deepEqual(__jsRegion({}, current), current);
+  assert.deepEqual(__jsRegion(null, current), current);
+});
