@@ -694,13 +694,32 @@ patch(
 
 patch(
   "show the first-scout CTA and live empty states",
-  'Y.jsxs("section",{className:"empty-saved first-run-empty",children:[' +
-    'Y.jsx("div",{className:"empty-icon",children:Y.jsx(m2,{size:28,weight:"fill"})}),' +
-    'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:"Your first run"}),' +
-    'Y.jsx("h2",{children:"Your preferences are saved."}),' +
-    'Y.jsx("p",{children:"The first scouting run hasn’t finished yet. When it does, matching jobs will arrive by email and appear here. You don’t need to keep this page open."}),' +
-    'Y.jsxs(Ut.button,{type:"button",onClick:s,whileTap:{scale:.97},transition:La,children:[' +
-    'Y.jsx(c3,{size:17})," Review preferences"]})]})]})',
+  [
+    // Supersede the earlier version of this fix, whose "Find my first matches"
+    // CTA carried an up-right arrow (↗). That icon reads as "opens in a new tab"
+    // and makes no sense on what is an action trigger, not a navigation link, so
+    // the button now stands on its label alone.
+    '(()=>{const __jsV=__jsScoutView(__jsScout);return Y.jsxs(Ut.section,{' +
+      'className:"empty-saved first-run-empty first-scout-status",role:"status","aria-live":"polite",layout:!0,' +
+      'initial:a?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:oh,children:[' +
+      'Y.jsx("div",{className:"empty-icon",children:Y.jsx(m2,{size:28,weight:"fill"})}),' +
+      'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:__jsV.eyebrow}),' +
+      'Y.jsx("h2",{children:__jsV.title}),Y.jsx("p",{children:__jsV.copy}),' +
+      'Y.jsxs("div",{className:"first-scout-actions",children:[' +
+      '__jsV.canStart?Y.jsxs(Ut.button,{type:"button",className:"first-scout-cta",onClick:__jsStartScout,' +
+      'disabled:__jsScoutBusy,whileTap:a?void 0:{scale:.97},transition:La,children:[' +
+      '__jsScoutBusy?"Starting your scout…":"Find my first matches",Y.jsx(ax,{size:16})]}):null,' +
+      'Y.jsxs(Ut.button,{type:"button",className:"first-scout-review",onClick:s,' +
+      'whileTap:a?void 0:{scale:.97},transition:La,children:[Y.jsx(c3,{size:17})," Review preferences"]})]})]})]})})()',
+    // Original shipped markup.
+    'Y.jsxs("section",{className:"empty-saved first-run-empty",children:[' +
+      'Y.jsx("div",{className:"empty-icon",children:Y.jsx(m2,{size:28,weight:"fill"})}),' +
+      'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:"Your first run"}),' +
+      'Y.jsx("h2",{children:"Your preferences are saved."}),' +
+      'Y.jsx("p",{children:"The first scouting run hasn’t finished yet. When it does, matching jobs will arrive by email and appear here. You don’t need to keep this page open."}),' +
+      'Y.jsxs(Ut.button,{type:"button",onClick:s,whileTap:{scale:.97},transition:La,children:[' +
+      'Y.jsx(c3,{size:17})," Review preferences"]})]})]})',
+  ],
   '(()=>{const __jsV=__jsScoutView(__jsScout);return Y.jsxs(Ut.section,{' +
     'className:"empty-saved first-run-empty first-scout-status",role:"status","aria-live":"polite",layout:!0,' +
     'initial:a?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:oh,children:[' +
@@ -710,7 +729,7 @@ patch(
     'Y.jsxs("div",{className:"first-scout-actions",children:[' +
     '__jsV.canStart?Y.jsxs(Ut.button,{type:"button",className:"first-scout-cta",onClick:__jsStartScout,' +
     'disabled:__jsScoutBusy,whileTap:a?void 0:{scale:.97},transition:La,children:[' +
-    '__jsScoutBusy?"Starting your scout…":"Find my first matches",Y.jsx(ax,{size:16})]}):null,' +
+    '__jsScoutBusy?"Starting your scout…":"Find my first matches"]}):null,' +
     'Y.jsxs(Ut.button,{type:"button",className:"first-scout-review",onClick:s,' +
     'whileTap:a?void 0:{scale:.97},transition:La,children:[Y.jsx(c3,{size:17})," Review preferences"]})]})]})]})})()',
 );
@@ -773,18 +792,40 @@ patch(
   "css",
 );
 
+// One button hierarchy across the flow. The first-scout CTA used to be the only
+// green solid button while every other primary was ink, so the same "Find my
+// first matches" action looked like a different control on the dashboard than in
+// the ready screen. The CTA is now the same ink primary everywhere; "Review
+// preferences" is a real outline secondary instead of a bare inline row; and the
+// "I'll wait" skip is a legible underlined tertiary link instead of near-invisible
+// grey text.
 patch(
   "style the one-time first-scout surfaces",
-  ".ready-card{width:min(100%,760px);border:1px solid var(--line);",
+  [
+    // Supersede the earlier green/bare/grey styling of these surfaces.
+    ".first-scout-status{border-color:#bfd8c8;background:linear-gradient(145deg,#f7fbf8,#eef7f1);overflow:hidden}" +
+      ".first-scout-status>div:last-child{display:flex;flex-direction:column;align-items:flex-start;gap:10px}" +
+      ".first-scout-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}" +
+      ".first-scout-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--green-deep);" +
+      "border-radius:9px;background:var(--green-deep);color:#fff;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer}" +
+      ".first-scout-cta:disabled{cursor:wait;opacity:.68}" +
+      ".first-scout-review{display:inline-flex;align-items:center;gap:6px}" +
+      ".ready-skip{align-self:center;border:0;background:transparent;color:var(--ink-soft);padding:7px 10px;font:inherit;font-size:13px;cursor:pointer}" +
+      ".ready-skip:hover{text-decoration:underline}" +
+      "@media(prefers-reduced-motion:reduce){.first-scout-status,.first-scout-cta{animation:none!important;transition:none!important;transform:none!important}}" +
+      ".ready-card{width:min(100%,760px);border:1px solid var(--line);",
+    // Original stylesheet, before any first-scout styling was inserted.
+    ".ready-card{width:min(100%,760px);border:1px solid var(--line);",
+  ],
   ".first-scout-status{border-color:#bfd8c8;background:linear-gradient(145deg,#f7fbf8,#eef7f1);overflow:hidden}" +
     ".first-scout-status>div:last-child{display:flex;flex-direction:column;align-items:flex-start;gap:10px}" +
     ".first-scout-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}" +
-    ".first-scout-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--green-deep);" +
-    "border-radius:9px;background:var(--green-deep);color:#fff;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer}" +
+    ".first-scout-cta{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--ink);" +
+    "border-radius:9px;background:var(--ink);color:#fff;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer}" +
     ".first-scout-cta:disabled{cursor:wait;opacity:.68}" +
-    ".first-scout-review{display:inline-flex;align-items:center;gap:6px}" +
-    ".ready-skip{align-self:center;border:0;background:transparent;color:var(--ink-soft);padding:7px 10px;font:inherit;font-size:13px;cursor:pointer}" +
-    ".ready-skip:hover{text-decoration:underline}" +
+    ".first-scout-review{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink-soft);padding:10px 14px;font:inherit;font-weight:600;cursor:pointer}" +
+    ".ready-skip{align-self:center;border:0;background:transparent;color:var(--ink-soft);padding:7px 10px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}" +
+    ".ready-skip:hover{color:var(--ink)}" +
     "@media(prefers-reduced-motion:reduce){.first-scout-status,.first-scout-cta{animation:none!important;transition:none!important;transform:none!important}}" +
     ".ready-card{width:min(100%,760px);border:1px solid var(--line);",
   "css",
