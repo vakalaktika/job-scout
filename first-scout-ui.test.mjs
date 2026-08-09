@@ -10,6 +10,10 @@ test("the onboarding review offers the authenticated one-time first-scout CTA", 
   assert.match(bundle, /action:"run_scout_once",session_token:/);
   assert.match(bundle, /className:"first-scout-cta"/);
   assert.doesNotMatch(bundle, /run_scout_once[^}]+candidate_(?:id|email)/);
+  assert.match(
+    bundle,
+    /\(P3\|\|P4\)&&\(window\.location\.hostname==="localhost"\|\|window\.location\.hostname==="127\.0\.0\.1"\)\?"preview-session":""/,
+  );
 });
 
 test("the dashboard polls session state while a first scout is queued", () => {

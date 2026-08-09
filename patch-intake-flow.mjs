@@ -13,14 +13,17 @@ const standardAppStart = 'function xP(){const l=uL(),[e,t]=W.useState("invite"),
 const previousPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview")==="intake",P0=P?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P?"intake":"invite"),[n,a]=W.useState(P),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(null),[b,v]=W.useState(!P),';
 const previewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P1=P==="intake"||P==="edit",P2=P==="edit",P0=P1?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P1?"intake":"invite"),[n,a]=W.useState(P1),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(null),[b,v]=W.useState(!P1),';
 const firstScoutPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),';
+const localFirstScoutPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState((P3||P4)&&(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1")?"preview-session":""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),';
 
 if (bundle.includes(standardAppStart)) {
-  bundle = bundle.replace(standardAppStart, firstScoutPreviewAppStart);
+  bundle = bundle.replace(standardAppStart, localFirstScoutPreviewAppStart);
 } else if (bundle.includes(previousPreviewAppStart)) {
-  bundle = bundle.replace(previousPreviewAppStart, firstScoutPreviewAppStart);
+  bundle = bundle.replace(previousPreviewAppStart, localFirstScoutPreviewAppStart);
 } else if (bundle.includes(previewAppStart)) {
-  bundle = bundle.replace(previewAppStart, firstScoutPreviewAppStart);
-} else if (!bundle.includes(firstScoutPreviewAppStart)) {
+  bundle = bundle.replace(previewAppStart, localFirstScoutPreviewAppStart);
+} else if (bundle.includes(firstScoutPreviewAppStart)) {
+  bundle = bundle.replace(firstScoutPreviewAppStart, localFirstScoutPreviewAppStart);
+} else if (!bundle.includes(localFirstScoutPreviewAppStart)) {
   throw new Error("Could not add the local intake preview entry point to the current bundle.");
 }
 
