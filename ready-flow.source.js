@@ -13,6 +13,11 @@ function AP({
   const [s, o] = W.useState("idle");
   const [c, h] = W.useState("");
   const d = i?.first_scout?.status === "available";
+  const __jsReadyLocations = normalizePreferredLocations(l);
+  const __jsReadyWorkModes = normalizeWorkModes(l);
+  const __jsReadyWorkModeLabel = __jsReadyWorkModes
+    .map((mode) => ({ onsite: "On-site", hybrid: "Hybrid", remote: "Remote only" })[mode])
+    .join(", ");
 
   // Forward arrow (→) for navigation CTAs. The bundled icon set only ships an
   // up-right arrow (↗), which reads as "opens in a new tab"; this plain
@@ -84,7 +89,13 @@ function AP({
                 Y.jsxs("div", {
                   children: [
                     Y.jsx("span", { children: "Where" }),
-                    Y.jsxs("strong", { children: [l.city, ", ", l.state, ", ", l.country, " · ", l.remote ? "Remote first" : "On-site is okay"] }),
+                    Y.jsxs("strong", {
+                      children: [
+                        __jsReadyLocations.map((location) => location.city).join(", "),
+                        " · ",
+                        __jsReadyWorkModeLabel,
+                      ],
+                    }),
                   ],
                 }),
                 Y.jsxs("div", {

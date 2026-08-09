@@ -124,7 +124,7 @@ Job Scout does **not** run a crawler in this repository. Sourcing is performed b
 **dispatcher routine** — a scheduled AI agent that runs on a cron cadence. On each run it:
 
 1. **Reads member profiles** from the Candidates database (target roles, keywords,
-   regions, remote preference, salary band, seniority, posting-age window, "off my list"
+   preferred cities, acceptable work arrangements, salary band, seniority, posting-age window, "off my list"
    terms, and delivery frequency), plus the résumé stored on each candidate page.
 2. **Searches job sources** for fresh postings matching each active member's profile.
    Postings carry a **Source** label (e.g. LinkedIn, Lever, Greenhouse, etc.) and a
@@ -359,7 +359,7 @@ Three databases, referenced by id in `worker.mjs`:
 | Property | Type | Notes |
 |---|---|---|
 | `Name`, `Email`, `Status` | title / email / select | `Active` / `Paused` / `Revoked` — `Revoked` ends live sessions on the next request |
-| `Target roles`, `Regions`, `Min salary` | rich text | core preferences |
+| `Target roles`, `Regions`, `Min salary` | rich text | core preferences; `Regions` stores semicolon-separated `City, State, Country` entries |
 | `Seniority`, `Remote OK`, `Frequency` | select | `3x daily` / `Daily` / `Weekly` (+ `Paused`) |
 | `Steer away`, `Steer mode` | rich text / select | `Rank lower` / `Hide`; never applied to a posting the member has reviewed or is tracking |
 | `Resume suggestions` | rich text | keyword chips surfaced in the UI |
@@ -368,7 +368,7 @@ Three databases, referenced by id in `worker.mjs`:
 | `First scout status` | select | `Available` / `Queued` / `Running` / `Completed` / `Failed` / `Needs review`. Only newly created candidates receive `Available`. |
 | `First scout requested at`, `First scout completed at` | date | lifecycle timestamps, including a completion with zero matches |
 | `First scout request`, `First scout session`, `First scout error` | rich text | opaque correlation and an operator-safe failure summary; never exposed to the browser |
-| `Notes` | rich text | keywords, max salary, posted-within window, résumé filename |
+| `Notes` | rich text | keywords, max salary, posted-within window, résumé filename, and selected `Work modes` (`onsite`, `hybrid`, `remote`) |
 | _(page body)_ | blocks | the parsed **résumé text**, chunked into paragraphs |
 
 ### Sent postings (`SENT_POSTINGS_DB`)
