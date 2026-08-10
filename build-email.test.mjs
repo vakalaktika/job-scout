@@ -206,18 +206,65 @@ for (const value of ["Flexible", "", null, undefined]) {
 // Reference call site: renderMatchEmail wires mapping + template + buildEmail
 // ---------------------------------------------------------------------------
 
-test("renderMatchEmail maps records and returns filled HTML", () => {
-  const html = renderMatchEmail(EMAIL, [
+// Non-LinkedIn records never reach the network, so any fetch here is a bug.
+const neverFetches = async () => {
+  throw new Error("unexpected fetch");
+};
+
+test("renderMatchEmail maps records and returns filled HTML", async () => {
+  const html = await renderMatchEmail(EMAIL, [
     { title: "Product Designer", company: "AdventureWorks", location: "Seattle, WA",
       source: "Company site", url: "https://ex.com/4", workplace_type: "Remote",
       salary: "$160k", match_reason: "Strong overlap with your fintech background.",
       date_posted: "2026-07-12" },
-  ], { now: new Date("2026-07-12T09:00:00Z") });
+  ], { now: new Date("2026-07-12T09:00:00Z"), fetcher: neverFetches });
   assert.ok(html.includes("Strong overlap with your fintech background."));
   assert.ok(html.includes("https://ex.com/4"));
   assert.doesNotMatch(html, /\{\{\s*[\w.-]+\s*\}\}/);
 });
 
-test("renderMatchEmail returns null when there are no records", () => {
-  assert.equal(renderMatchEmail(EMAIL, []), null);
+test("renderMatchEmail returns null when there are no records", async () => {
+  assert.equal(await renderMatchEmail(EMAIL, [], { fetcher: neverFetches }), null);
+});
+
+// The card has to carry the link the member actually applies on. Landing them on
+// LinkedIn to press a second Apply button is the click this resolution removes.
+test("renderMatchEmail points a LinkedIn card at the employer's board", async () => {
+  const guest = "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4123456789";
+  const fetcher = async (url) => ({
+    ok: true,
+    status: 200,
+    url: url === guest ? url : "https://job-boards.greenhouse.io/acme/jobs/771",
+    text: async () =>
+      url === guest
+        ? '<a href="https://job-boards.greenhouse.io/acme/jobs/771" data-tracking-control-name="public_jobs_apply-link-offsite">Apply</a>'
+        : "<html></html>",
+  });
+  const html = await renderMatchEmail(EMAIL, [
+    { title: "Staff Product Designer", company: "Acme", location: "Remote (US)",
+      source: "LinkedIn", url: "https://www.linkedin.com/jobs/view/4123456789",
+      workplace_type: "Remote", match_reason: "Matches your design systems work.",
+      date_posted: "2026-07-12" },
+  ], { now: new Date("2026-07-12T09:00:00Z"), fetcher });
+
+  assert.ok(html.includes("https://job-boards.greenhouse.io/acme/jobs/771"));
+  assert.ok(!html.includes("linkedin.com/jobs/view/4123456789"));
+});
+
+test("renderMatchEmail keeps the LinkedIn post for an Easy Apply role", async () => {
+  const fetcher = async (url) => ({
+    ok: true,
+    status: 200,
+    url,
+    text: async () =>
+      '<a href="https://www.linkedin.com/job-apply/4123456789" data-tracking-control-name="public_jobs_apply-link-onsite">Easy Apply</a>',
+  });
+  const html = await renderMatchEmail(EMAIL, [
+    { title: "Staff Product Designer", company: "Acme", location: "Remote (US)",
+      source: "LinkedIn", url: "https://www.linkedin.com/jobs/view/4123456789",
+      workplace_type: "Remote", match_reason: "Matches your design systems work.",
+      date_posted: "2026-07-12" },
+  ], { now: new Date("2026-07-12T09:00:00Z"), fetcher });
+
+  assert.ok(html.includes("https://www.linkedin.com/jobs/view/4123456789"));
 });

@@ -7,6 +7,7 @@
   "vars": {
     "OPENAI_BRIEF_MODEL": "gpt-5.4-nano",
     "BRIEF_ENRICH_LIMIT": "4",
+    "APPLY_LINK_LIMIT": "2",
     "FIRST_SCOUT_ROUTINE_ID": "trig_01LZtNUf7LVFzw3C2Fyy9QEw"
   },
   "durable_objects": {

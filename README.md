@@ -135,6 +135,53 @@ Job Scout does **not** run a crawler in this repository. Sourcing is performed b
    member's email, capturing title, company, URL, location, source, posted date, and —
    where available — the raw job description used later for brief enrichment.
 
+### Where a LinkedIn match actually sends you
+
+A LinkedIn job post is a landing page, not an application. Most of them hand the member
+straight to the employer's own board — Greenhouse, Lever, Workday, Ashby — the moment
+they press **Apply**, so mailing the LinkedIn link costs a sign-in wall and a second
+click to reach the page they were always going to end up on.
+
+Reading the button is not enough on its own. LinkedIn's public guest fragment still
+says plainly **whether** a posting applies offsite — "Apply on company website" renders
+an offsite icon inside the button, Easy Apply renders an onsite one — but as of August
+2026 the destination itself sits behind a signed redirect that cannot be constructed
+without a session. Verified across 24 live postings: none exposed the URL.
+
+So `linkedin-apply-url.mjs` establishes the route, and where LinkedIn will not name the
+destination `ats-boards.mjs` finds the same role on the employer's own board. It returns
+one of three answers:
+
+| Answer | What the member gets |
+|---|---|
+| `external` | The employer's own apply link — read straight from the posting when it still states one (older markup, aggregator redirects followed to the board itself), otherwise looked up on the employer's Ashby, Greenhouse, or Lever board by company and exact title. |
+| `linkedin` | The LinkedIn post — an Easy Apply role **is** applied for on LinkedIn. |
+| `unknown` | The LinkedIn post. Covers a bot wall, a timeout, and an offsite role we could not pin down. Guessing a link we could not establish is worse than one extra click. |
+
+The board lookup is deliberately strict: a role resolves only when exactly one posting
+on one board carries exactly that title. The same title in two cities is ambiguous and
+resolves to nothing, because sending someone to the wrong location's posting is worse
+than the click this removes. Measured against 12 live LinkedIn postings, 7 resolved to a
+working employer apply page and 5 fell back to the LinkedIn post.
+
+Resolution happens twice, on purpose. The email path resolves at send time
+(`dispatch/render-match-email.mjs`), so the card links straight to the apply page. The
+Worker resolves once per posting during a dashboard load and stores the result on the
+Sent posting as **Apply URL**, **Apply method**, and **Apply checked at**; settled
+answers are never re-resolved and only an unresolved posting is retried, once a day.
+Resolving one posting costs a guest read plus up to nine board lookups, so the Worker
+does two per session by default (`APPLY_LINK_LIMIT`, range 0–8) and a backlog clears
+across a few visits rather than exhausting one request's subrequest budget.
+
+The original `URL` column is never overwritten — it is the dispatcher's de-duplication
+key, and rewriting it would send the same role again. The dashboard returns the apply
+link as `url` and the untouched post as `posting_url`. Every resolved link is validated
+against the same public-URL guard the posting fetcher uses, so a redirect into private
+address space or a non-`http(s)` scheme can never reach a member.
+
+Because the employer's page is readable where LinkedIn is not, brief enrichment and the
+liveness check both prefer the resolved link once it exists.
+
 Because matches live in Notion, the Worker can serve them to the dashboard and the
 dispatcher can compose the email from the same records. The member-facing filtering
 (posting-age window and the "off my list" steer-away terms) is applied by the Worker at
@@ -560,7 +607,18 @@ fills a field the member has left blank, that a state-only location writes nothi
 that editing a saved profile takes the steer-away chips and nothing else.
 
 ```sh
-node --test worker.test.mjs dashboard-helpers.test.mjs resume-parser.test.mjs intake-prefill.test.mjs build-email.test.mjs first-scout-ui.test.mjs
+`linkedin-apply-url.test.mjs` covers apply-link resolution: reading a posting id out of
+every LinkedIn URL shape, telling an offsite posting from an Easy Apply one on today's
+button markup, refusing to read an offsite posting's sign-in modal as Easy Apply,
+unwrapping LinkedIn's `externalApply` tracker when a destination is stated, following an
+aggregator redirect, and falling back to the LinkedIn post whenever the route cannot be
+established. `ats-boards.test.mjs` covers the employer-board lookup: title
+normalisation, slug candidates, the single-exact-match rule, the three board payload
+shapes, and the refusal to guess when a title appears twice. Both pin the SSRF guard
+every resolved link passes through.
+
+```sh
+node --test worker.test.mjs dashboard-helpers.test.mjs resume-parser.test.mjs intake-prefill.test.mjs build-email.test.mjs first-scout-ui.test.mjs linkedin-apply-url.test.mjs ats-boards.test.mjs
 ```
 
 ---

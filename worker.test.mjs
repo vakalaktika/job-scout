@@ -12,6 +12,7 @@ import {
   buildBriefRequest,
   candidateProps,
   checkPostingLiveness,
+  clientJob,
   demoteClosedPostings,
   detectPostingGone,
   enrichJobBrief,
@@ -28,9 +29,11 @@ import {
   parseNotes,
   parseRegions,
   postingAgeDays,
+  postingPageUrl,
   postingTextForJob,
   renderMagicEmail,
   shouldCheckLink,
+  shouldResolveApplyLink,
   shouldEnrichBrief,
   splitTerms,
   verifyToken,
@@ -598,6 +601,77 @@ test("links are re-checked once a day and skipped for rejected jobs", () => {
   );
   assert.equal(shouldCheckLink({ decision: "Not interested", link_checked_at: "" }, now), false);
   assert.equal(shouldCheckLink({ decision: "Interested", link_checked_at: "" }, now), true);
+});
+
+test("apply links are resolved once, retried only when unreadable, and skipped off LinkedIn", () => {
+  const now = Date.parse("2026-08-05T12:00:00.000Z");
+  const day = 24 * 60 * 60 * 1000;
+  const post = "https://www.linkedin.com/jobs/view/staff-designer-at-acme-4123456789";
+
+  assert.equal(shouldResolveApplyLink({ url: post }, now), true);
+  assert.equal(shouldResolveApplyLink({ url: "https://jobs.lever.co/acme/1" }, now), false);
+  assert.equal(
+    shouldResolveApplyLink({ url: post, apply_method: "external", apply_checked_at: "" }, now),
+    false,
+    "a settled offsite answer is never re-resolved",
+  );
+  assert.equal(
+    shouldResolveApplyLink({ url: post, apply_method: "linkedin", apply_checked_at: "" }, now),
+    false,
+    "Easy Apply is an answer, not a gap",
+  );
+  assert.equal(
+    shouldResolveApplyLink(
+      { url: post, apply_method: "unknown", apply_checked_at: new Date(now - 1000).toISOString() },
+      now,
+    ),
+    false,
+    "an unreadable posting waits out the retry window",
+  );
+  assert.equal(
+    shouldResolveApplyLink(
+      {
+        url: post,
+        apply_method: "unknown",
+        apply_checked_at: new Date(now - day - 1000).toISOString(),
+      },
+      now,
+    ),
+    true,
+  );
+  assert.equal(shouldResolveApplyLink({ url: post, decision: "Not interested" }, now), false);
+});
+
+test("a resolved posting is read and link-checked on the employer's page, not LinkedIn", () => {
+  const post = "https://www.linkedin.com/jobs/view/4123456789";
+  assert.equal(
+    postingPageUrl({ url: post, apply_url: "https://job-boards.greenhouse.io/acme/jobs/771" }),
+    "https://job-boards.greenhouse.io/acme/jobs/771",
+  );
+  assert.equal(postingPageUrl({ url: post, apply_url: "" }), post);
+  assert.equal(postingPageUrl({ url: post }), post);
+});
+
+test("the dashboard link points at the apply page while the original post stays reachable", () => {
+  const post = "https://www.linkedin.com/jobs/view/4123456789";
+  const offsite = clientJob({
+    id: "a",
+    url: post,
+    apply_url: "https://job-boards.greenhouse.io/acme/jobs/771",
+    apply_method: "external",
+    _posting_text: "secret",
+    brief_error: "boom",
+  });
+  assert.equal(offsite.url, "https://job-boards.greenhouse.io/acme/jobs/771");
+  assert.equal(offsite.posting_url, post);
+  assert.equal(offsite.apply_method, "external");
+  assert.equal(offsite.apply_url, undefined, "the resolved link is exposed only as url");
+  assert.equal(offsite._posting_text, undefined);
+  assert.equal(offsite.brief_error, undefined);
+
+  const easyApply = clientJob({ id: "b", url: post, apply_url: "", apply_method: "linkedin" });
+  assert.equal(easyApply.url, post, "Easy Apply keeps sending the member to LinkedIn");
+  assert.equal(easyApply.posting_url, post);
 });
 
 test("closed postings sort last without being removed", () => {

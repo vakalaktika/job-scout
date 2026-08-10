@@ -1,3 +1,6 @@
+import { linkedInJobId, resolveApplyTarget } from "./linkedin-apply-url.mjs";
+import { isPublicHttpUrl } from "./public-url.mjs";
+
 // ORIGIN is the browser origin for CORS and nothing else. An origin has no path
 // by definition and an Access-Control-Allow-Origin carrying one is invalid, so
 // this constant has to stay bare.
@@ -272,6 +275,12 @@ function jobState(page) {
       plain(properties["Pay range"]),
     link_status: plain(properties["Link status"]).toLowerCase(),
     link_checked_at: plain(properties["Link checked at"]),
+    // Where the posting's Apply button actually leads, once resolved. Empty for
+    // Easy Apply roles and for postings we could not read — both of which keep
+    // sending the member to the original post.
+    apply_url: plain(properties["Apply URL"]),
+    apply_method: plain(properties["Apply method"]).toLowerCase(),
+    apply_checked_at: plain(properties["Apply checked at"]),
     primary_domain:
       plain(properties["Primary domain"]) ||
       plain(properties.Domain) ||
@@ -286,9 +295,12 @@ function jobState(page) {
   };
 }
 
-const clientJob = (job) => {
-  const { _posting_text, brief_error, ...result } = job;
-  return result;
+export const clientJob = (job) => {
+  const { _posting_text, brief_error, apply_url, ...result } = job;
+  // The member's click should land where they actually apply. The Notion URL column
+  // keeps carrying the original post, so the dispatcher's de-duplication history is
+  // untouched, and posting_url keeps it reachable from the dashboard.
+  return { ...result, url: apply_url || job.url, posting_url: job.url };
 };
 
 export const hasCompleteBrief = (job) =>
@@ -432,22 +444,6 @@ export function extractJobPostingText(html) {
   return body.slice(0, MAX_POSTING_CHARACTERS);
 }
 
-const isPublicPostingUrl = (value) => {
-  try {
-    const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return false;
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-    if (!host || host === "localhost" || host.endsWith(".local") || host === "::1") return false;
-    if (/^(0|10|127)\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return false;
-    const private172 = host.match(/^172\.(\d+)\./);
-    if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return false;
-    if (/^(fc|fd|fe80):/i.test(host)) return false;
-    return true;
-  } catch {
-    return false;
-  }
-};
-
 async function limitedResponseText(response) {
   if (!response.body?.getReader) return (await response.text()).slice(0, MAX_POSTING_BYTES);
   const reader = response.body.getReader();
@@ -471,7 +467,7 @@ async function limitedResponseText(response) {
 // a page we simply could not read — collapsing those into "gone" would hide live
 // roles, which is worse than showing a closed one with a warning.
 async function fetchPostingPage(url, fetcher) {
-  if (!isPublicPostingUrl(url)) return { html: "", liveness: "unknown" };
+  if (!isPublicHttpUrl(url)) return { html: "", liveness: "unknown" };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
@@ -501,6 +497,11 @@ async function fetchPostingPage(url, fetcher) {
   }
 }
 
+// Once the apply link is resolved it is the better page to read: LinkedIn answers a
+// datacentre fetch with a sign-in wall, while the employer's board serves the whole
+// posting and says plainly when the role has closed.
+export const postingPageUrl = (job) => job?.apply_url || job?.url;
+
 export async function postingTextForJob(job, fetcher = fetch) {
   const stored = normalizeText(job?._posting_text);
   if (stored.length >= MIN_POSTING_CHARACTERS) {
@@ -508,7 +509,7 @@ export async function postingTextForJob(job, fetcher = fetch) {
     // liveness sweep checks that separately.
     return { text: stored.slice(0, MAX_POSTING_CHARACTERS), liveness: "unknown" };
   }
-  const page = await fetchPostingPage(job?.url, fetcher);
+  const page = await fetchPostingPage(postingPageUrl(job), fetcher);
   if (page.liveness === "gone") return { text: "", liveness: "gone" };
   const text = extractJobPostingText(page.html);
   return { text, liveness: text ? "live" : "unknown" };
@@ -517,7 +518,7 @@ export async function postingTextForJob(job, fetcher = fetch) {
 // Always fetches, unlike postingTextForJob, because a posting whose text is already
 // stored is exactly the case that never got checked before.
 export async function checkPostingLiveness(job, fetcher = fetch) {
-  const page = await fetchPostingPage(job?.url, fetcher);
+  const page = await fetchPostingPage(postingPageUrl(job), fetcher);
   if (page.liveness === "gone") return "gone";
   return extractJobPostingText(page.html) ? "live" : "unknown";
 }
@@ -684,9 +685,22 @@ const LINK_PROPERTIES = {
     },
   },
   "Link checked at": { date: {} },
+  "Apply URL": { url: {} },
+  "Apply method": {
+    select: {
+      options: [
+        { name: "External", color: "green" },
+        { name: "LinkedIn", color: "blue" },
+        { name: "Unknown", color: "gray" },
+      ],
+    },
+  },
+  "Apply checked at": { date: {} },
 };
 
 const LINK_STATUS_NAMES = { live: "Live", gone: "Gone", unknown: "Unknown" };
+
+const APPLY_METHOD_NAMES = { external: "External", linkedin: "LinkedIn", unknown: "Unknown" };
 
 async function persistBriefState(env, jobId, state) {
   const properties = {
@@ -711,6 +725,17 @@ async function persistBriefState(env, jobId, state) {
       date: { start: state.link_checked_at || new Date().toISOString() },
     };
   }
+  await notion(env, `pages/${jobId}`, "PATCH", { properties });
+}
+
+async function persistApplyLink(env, jobId, method, applyUrl, checkedAt) {
+  const properties = {
+    "Apply method": { select: { name: APPLY_METHOD_NAMES[method] || "Unknown" } },
+    "Apply checked at": { date: { start: checkedAt } },
+  };
+  // Only an offsite posting has a link worth storing. Writing an empty URL for an
+  // Easy Apply role would blank a resolution an earlier run got right.
+  if (applyUrl) properties["Apply URL"] = { url: applyUrl };
   await notion(env, `pages/${jobId}`, "PATCH", { properties });
 }
 
@@ -972,6 +997,56 @@ async function enrichMissingBriefs(env, candidate, member, jobs) {
     }),
   );
   const byId = new Map(enriched.map((job) => [job.id, job]));
+  return jobs.map((job) => byId.get(job.id) || job);
+}
+
+// A LinkedIn post is a landing page, not an application: pressing Apply usually
+// hands the member to the employer's own board. Resolving that once, and storing it,
+// is what lets both the dashboard and the alert email skip the LinkedIn round trip.
+// Settled answers are never re-resolved; only an unreadable posting is retried.
+export const shouldResolveApplyLink = (job, now = Date.now()) => {
+  if (job?.decision === "Not interested") return false;
+  if (!linkedInJobId(job?.url)) return false;
+  if (job?.apply_method === "external" || job?.apply_method === "linkedin") return false;
+  const checked = Date.parse(job?.apply_checked_at || "");
+  return !Number.isFinite(checked) || now - checked >= BRIEF_RETRY_MS;
+};
+
+// Deliberately smaller than the other sweeps: resolving one posting costs a guest
+// read plus up to nine board lookups, and Workers cap subrequests per request. The
+// answer is stored, so a member's backlog resolves across a few visits rather than
+// spending one visit's entire budget.
+async function sweepApplyLinks(env, jobs, fetcher = fetch) {
+  const limit = Math.max(0, Math.min(8, Number(env.APPLY_LINK_LIMIT) || 2));
+  const targets = limit ? jobs.filter((job) => shouldResolveApplyLink(job)).slice(0, limit) : [];
+  if (!targets.length) return jobs;
+  try {
+    await ensureBriefProperties(env);
+  } catch (error) {
+    console.error("Unable to prepare apply link properties", safeBriefError(error));
+    return jobs;
+  }
+  const checkedAt = new Date().toISOString();
+  const resolved = await Promise.all(
+    targets.map(async (job) => {
+      try {
+        // The dispatcher's stored title and company are cleaner than anything
+        // scraped off the top card, and they are what the board lookup matches on.
+        const target = await resolveApplyTarget(job.url, {
+          fetcher,
+          title: job.title,
+          company: job.company,
+        });
+        const applyUrl = target.method === "external" ? target.url : "";
+        await persistApplyLink(env, job.id, target.method, applyUrl, checkedAt);
+        return { ...job, apply_url: applyUrl, apply_method: target.method, apply_checked_at: checkedAt };
+      } catch (error) {
+        console.error("Unable to resolve apply link", job.id, safeBriefError(error));
+        return job;
+      }
+    }),
+  );
+  const byId = new Map(resolved.map((job) => [job.id, job]));
   return jobs.map((job) => byId.get(job.id) || job);
 }
 
@@ -1666,7 +1741,10 @@ async function sessionResponse(env, candidate, extra = {}) {
   const maxPostingAge = Number.isFinite(storedAge) ? storedAge : DEFAULT_POSTING_AGE_DAYS;
   const memberJobs = await loadMemberJobs(env, member.email);
   const recentJobs = memberJobs.filter((job) => keepForSession(job, maxPostingAge));
-  const jobsWithBriefs = await enrichMissingBriefs(env, candidate, member, recentJobs);
+  // Resolve apply links first: the employer's page is a far better source for the
+  // brief and the liveness check than a LinkedIn sign-in wall.
+  const jobsWithApplyLinks = await sweepApplyLinks(env, recentJobs);
+  const jobsWithBriefs = await enrichMissingBriefs(env, candidate, member, jobsWithApplyLinks);
   const jobsWithLinks = await sweepLinkStatus(env, jobsWithBriefs);
   const steered = applySteerAway(jobsWithLinks, member);
   const lastRunAt = lastDispatchAt(memberJobs);
