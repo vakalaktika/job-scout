@@ -1,81 +1,41 @@
-# Font Files (Self-Hosted)
+# Vendored fonts
 
-This directory contains WOFF2 font files for direct loading (P1 optimize).
+Four WOFF2 files, ~172 KB total, serving both families the product uses. Declared in
+`../index-uR5-NbPW.css` (Work Sans only — the bundle sets no other family) and inline in
+`../../login.html` (Gelasio and Work Sans). See "Fonts are served from this origin" in
+the root `README.md` for why they are vendored rather than loaded from Google.
 
-## What Goes Here
+| File | Bytes | Faces it serves |
+|---|---|---|
+| `work-sans-latin.woff2` | 50,316 | Work Sans 400, 500, 600 — latin |
+| `work-sans-latin-ext.woff2` | 35,716 | Work Sans 400, 500, 600 — latin-ext |
+| `gelasio-latin.woff2` | 34,832 | Gelasio 500, 600 — latin |
+| `gelasio-latin-ext.woff2` | 40,592 | Gelasio 500, 600 — latin-ext |
 
-Download the following font files from Google Fonts and place them in this directory:
+Each file is a **variable** font: Google serves one file per subset and selects the weight
+off the `wght` axis, which is why three weights share a file. The `@font-face` blocks are
+still written one per weight, mirroring the CSS Google itself emits, so weight selection
+behaves exactly as it did when the CDN served it.
 
-### Gelasio (Serif, 2 weights)
-- `gelasio-500.woff2` — Gelasio Regular (weight 500)
-- `gelasio-600.woff2` — Gelasio SemiBold (weight 600)
+The `unicode-range` on every block is Google's, unmodified. It is what keeps the cost
+honest: a page of ASCII fetches only the latin subset, and latin-ext arrives only when
+something on screen actually needs it — an accented name in a job title, usually.
 
-### Work Sans (Sans-serif, 3 weights)
-- `work-sans-400.woff2` — Work Sans Regular (weight 400)
-- `work-sans-500.woff2` — Work Sans Medium (weight 500)
-- `work-sans-600.woff2` — Work Sans SemiBold (weight 600)
+## Refreshing them
 
-## How to Download
+Ask for **weights only**. An `opsz` axis request is what broke this before: neither family
+publishes one, and the API answers with HTTP 400 and no CSS rather than ignoring the axis.
 
-### Option 1: Google Fonts Download (Recommended)
-
-1. Visit [Google Fonts: Gelasio](https://fonts.google.com/specimen/Gelasio)
-2. Select weights 500 and 600
-3. Click the download button
-4. Extract the WOFF2 files and place them here
-
-Repeat for [Work Sans](https://fonts.google.com/specimen/Work+Sans) with weights 400, 500, 600.
-
-### Option 2: Using Google Fonts API
-
-Fetch the font files directly from the Google Fonts CDN:
-
-```bash
-# Gelasio
-curl -o gelasio-500.woff2 "https://fonts.gstatic.com/s/gelasio/v15/[hash]-500.woff2"
-curl -o gelasio-600.woff2 "https://fonts.gstatic.com/s/gelasio/v15/[hash]-600.woff2"
-
-# Work Sans
-curl -o work-sans-400.woff2 "https://fonts.gstatic.com/s/worksans/v8/[hash]-400.woff2"
-curl -o work-sans-500.woff2 "https://fonts.gstatic.com/s/worksans/v8/[hash]-500.woff2"
-curl -o work-sans-600.woff2 "https://fonts.gstatic.com/s/worksans/v8/[hash]-600.woff2"
+```sh
+curl -A 'Mozilla/5.0 (X11; Linux x86_64) Chrome/120' \
+  'https://fonts.googleapis.com/css2?family=Gelasio:wght@500;600&display=swap'
+curl -A 'Mozilla/5.0 (X11; Linux x86_64) Chrome/120' \
+  'https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap'
 ```
 
-(Note: Replace `[hash]` with the actual file hash from the Google Fonts CDN.)
+A browser User-Agent matters — Google varies the response format by client, and only a
+modern UA yields WOFF2. Take the `latin` and `latin-ext` blocks, save the files they point
+at, and copy the `unicode-range` values across unchanged.
 
-### Option 3: Font Download Tool
-
-```bash
-npm install -g google-font-downloader
-
-google-font-downloader \
-  --fonts "Gelasio:500,600" \
-  --fonts "Work Sans:400,500,600" \
-  --output .
-```
-
-## Testing
-
-After placing the fonts:
-
-1. Start a local dev server: `python3 -m http.server 8000`
-2. Open `http://localhost:8000/index.html`
-3. Open DevTools (F12 → Network tab)
-4. Verify that font files load from `assets/fonts/` (NOT from Google Fonts CDN)
-5. Check that no external requests go to `fonts.googleapis.com`
-
-## License
-
-Both Gelasio and Work Sans are available under the Open Font License (OFL), allowing free use and distribution. See individual font pages on Google Fonts for full license text.
-
-## P1 Optimize Status
-
-- CSS updated: `index-uR5-NbPW.css` now uses `@font-face` declarations
-- Fallback fonts configured: Gelasio → Georgia, Work Sans → Arial
-- Font display strategy: `font-display:swap` (show system fonts immediately, swap to web fonts when ready)
-
-Once fonts are populated, this change **eliminates the external Google Fonts CDN request**, saving 50–100 ms on first page load.
-
----
-
-**Action Required:** Download the 5 WOFF2 files listed above and place them in this directory to complete P1 optimize Phase 1.
+Then run `npx playwright test e2e/fonts.spec.mjs`. It fails on a file that 404s and on a
+face that is declared but never renders, which is the failure that hid here for so long.

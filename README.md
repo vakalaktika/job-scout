@@ -273,6 +273,7 @@ steer-away rules applied. In the dashboard the member can:
 │
 ├── index.html              # Static SPA entry (loads the prebuilt bundle)
 ├── assets/                 # Prebuilt Vite/React bundle (JS, CSS, pdf.js worker)
+│   └── fonts/              # Vendored WOFF2 for Work Sans + Gelasio (see its README)
 ├── intake-flow.source.js   # Readable source of the intake component (patched into the bundle)
 ├── ready-flow.source.js    # Readable source of the one-time first-scout review screen
 ├── resume-parser.source.js # Readable source of the resume parser (patched into the bundle)
@@ -380,6 +381,46 @@ is what ships.
   Notion candidate page). Accepted types: `.pdf`, `.doc`, `.docx`, `.txt`.
 - **API target:** all requests go to the Worker endpoint
   (`https://job-scout-intake.vakalaktika.workers.dev/`).
+
+### Fonts are served from this origin
+
+`assets/fonts/` holds the two families the product uses, vendored as WOFF2 and declared
+with `@font-face` in `assets/index-uR5-NbPW.css` (Work Sans, the only family the bundle
+sets) and inline in `login.html` (Gelasio and Work Sans, which that page uses).
+
+They are vendored because the Google Fonts URL that used to load them **never worked**.
+It asked for an `opsz` axis — `family=Gelasio:opsz,wght@12..144,500` — that neither
+Gelasio nor Work Sans publishes, and the API answers a request for an axis a family does
+not have with **HTTP 400 and no CSS at all**. Every screen had been rendering in the
+fallback stack. It looked deliberate, which is why it lasted: Work Sans falls back to
+Arial and Gelasio to Georgia, so the pages looked plain rather than broken.
+
+Two things follow, and `e2e/fonts.spec.mjs` holds both:
+
+- **A declared face must arrive.** The test fails a font request that 404s, and separately
+  fails a face that is declared but never applies — it measures rendered text width
+  against a deliberately wrong fallback, because a missing file, a family name that never
+  matches, and a weight the file does not cover are all invisible to a request-count check.
+- **No request may leave this origin.** A font CDN is a second origin on the critical path
+  and a third party watching every page load. The files are 4 WOFF2 (~172 KB total, latin
+  and latin-ext), carrying the `unicode-range` values Google emits, so a page of ASCII
+  fetches only the ~50 KB latin subset it needs.
+
+To refresh them, fetch `https://fonts.googleapis.com/css2?family=Gelasio:wght@500;600` and
+`…family=Work+Sans:wght@400;500;600` — **weights only, no `opsz`** — and save the
+subset files it points at. Google serves one variable file per subset and picks the weight
+off the `wght` axis, so several weights resolve to the same bytes; `assets/fonts/README.md`
+records which faces map to which file.
+
+### What loads on first paint
+
+Three requests, ~1.5 MB: `index-uR5-NbPW.css` (72 KB), `index-BdD4MZod.js` (1.45 MB), and
+the latin Work Sans subset (50 KB).
+
+The 1.2 MB `pdf.worker.min-*.mjs` is **not** among them. The bundle names it with
+`new URL("pdf.worker.min-….mjs", import.meta.url)` rather than importing it, so it is
+fetched when a résumé is first parsed and never on a load that does not parse one. It
+looks alarming in a directory listing and is already deferred; leave it alone.
 
 ### Editing the intake without a full rebuild
 
