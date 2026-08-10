@@ -14,6 +14,7 @@ first," and lets them review, save, and refine matches from a web dashboard.
 ## Table of contents
 
 - [What it does](#what-it-does)
+- [What changed in the latest round of work](#what-changed-in-the-latest-round-of-work)
 - [How it works (architecture)](#how-it-works-architecture)
 - [Where jobs come from (sourcing)](#where-jobs-come-from-sourcing)
 - [How matches are distributed (email + dashboard)](#how-matches-are-distributed-email--dashboard)
@@ -58,6 +59,75 @@ first," and lets them review, save, and refine matches from a web dashboard.
    repairs it on demand: it fetches the original public posting, extracts the job
    description, and generates an accurate three-part brief with an LLM — grounded only
    in the posting and the member's résumé.
+
+---
+
+## What changed in the latest round of work
+
+Plain summary of the most recent batch of changes. Each item links to the section that
+explains it in full. Nothing here changes what the product does — it changes how well it
+holds up when something goes wrong, on a small screen, or in a mail client.
+
+### Things that used to lose your work
+
+- **Editing preferences.** Every change used to save straight to the backend as you typed
+  it. Pressing Cancel did not undo anything, because it had already been saved. Now
+  changes are held on screen until you press Save. Cancel throws them away. If a save
+  fails, your changes stay on screen so you can try again instead of retyping them.
+- **Replacing a résumé.** If a first upload was slow and you replaced it, the slow one
+  could finish last and overwrite the newer file. Each upload now carries a ticket, and a
+  result is only used if its ticket is still the current one.
+- **Sign-in links.** A link works once. If our side failed halfway through using one, the
+  link was spent and the member was locked out with no way back in. The link is now put
+  back if we fail, so a fault on our end never costs someone their only way in.
+- **The first job search.** A search that failed to start could be retried forever. It now
+  gets three attempts total, and the dashboard offers a retry only when one is left.
+- **The Back button.** Back and Forward now land on the right screen, and move keyboard
+  focus to that screen's heading so it is clear where you have arrived.
+
+See [The frontend in detail](#the-frontend-in-detail) and
+[Actions](#actions).
+
+### Things that did not work on a phone or in email
+
+- **The dashboard on a narrow screen.** Controls were too small to tap reliably. Every
+  control is now at least 44×44 pixels, and every one has a name a screen reader can read
+  out, including the icon-only buttons that appear when the navigation collapses.
+- **The match email.** It was locked to a fixed width, so a phone scrolled sideways
+  through every card. It now fits the screen it is opened on, down to 320 pixels wide,
+  while still holding its shape in Outlook.
+- **Text that was hard to read.** Small text in the email sat as low as 2.3:1 against its
+  background — the least certain postings were the hardest to read. All text now clears
+  4.5:1, and focus outlines and control borders clear 3:1.
+
+See [Accessibility rules the patches enforce](#accessibility-rules-the-patches-enforce)
+and [How matches are distributed](#how-matches-are-distributed-email--dashboard).
+
+### One thing that had never worked at all
+
+**The fonts were never loading.** The address the site used to fetch Gelasio and Work Sans
+asked for a setting neither font offers. Google's reply to that is an error and no fonts,
+not the fonts without the setting. So the browser got nothing, and every screen has been
+rendering in Arial and Georgia since launch. It looked like a plain design rather than a
+broken one, which is why nobody caught it.
+
+The fonts are now stored in this repository and served from the same place as the rest of
+the site. There is no longer any request to Google. A test now fails if a font is missing,
+if it is fetched from anywhere but this site, or if it is listed but does not actually show
+up on screen — that last one being the failure that hid here for so long.
+
+See [Fonts are served from this origin](#fonts-are-served-from-this-origin).
+
+### What was checked, and what was not
+
+Every change above is covered by a test: 228 logic tests and 63 browser tests, all passing.
+The browser tests run in Chromium. **Safari and Firefox have not been checked**, and no one
+has yet opened the match email in a real mail client — both are worth doing before this is
+considered finished.
+
+One earlier claim in this work was wrong and has been removed: that the 1.2 MB PDF reader
+was slowing down page loads and should be deferred. It was already deferred. It is fetched
+only when a résumé is actually parsed, never on a normal load.
 
 ---
 
