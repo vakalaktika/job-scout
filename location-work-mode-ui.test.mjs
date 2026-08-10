@@ -41,7 +41,17 @@ test("new interaction motion stays transform and opacity based", () => {
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
 });
 
+// The bundle filename is fixed while its contents are patched in place, so the
+// query string is the only thing telling a browser it has an old copy. It has to
+// move with every release, and both assets have to move together.
 test("the page cache key changes with the new intake bundle", () => {
-  assert.match(index, /index-BdD4MZod\.js\?v=multi-location-work-modes/);
-  assert.match(index, /index-uR5-NbPW\.css\?v=multi-location-work-modes/);
+  assert.match(index, /index-BdD4MZod\.js\?v=p1-hardening/);
+  assert.match(index, /index-uR5-NbPW\.css\?v=p1-hardening/);
+});
+
+// The magic link is single-use, so two consumers race to spend it and the loser
+// reports a link that has already been used. The app owns the exchange.
+test("only the app consumes a sign-in link", () => {
+  assert.doesNotMatch(index, /magic_consume/);
+  assert.match(bundle, /action:"magic_consume"/);
 });

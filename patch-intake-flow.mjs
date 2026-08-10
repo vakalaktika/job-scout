@@ -17,23 +17,134 @@ const previewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window
 const firstScoutPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState(""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),';
 const localFirstScoutPreviewAppStart = 'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",resumeName:"alex-morgan-resume.pdf"}:V3,[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":"invite"),[n,a]=W.useState(PA),[s,o]=W.useState(P0),[c,h]=W.useState(""),[d,p]=W.useState((P3||P4)&&(window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1")?"preview-session":""),[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),';
 
-if (bundle.includes(standardAppStart)) {
-  bundle = bundle.replace(standardAppStart, localFirstScoutPreviewAppStart);
-} else if (bundle.includes(previousPreviewAppStart)) {
-  bundle = bundle.replace(previousPreviewAppStart, localFirstScoutPreviewAppStart);
-} else if (bundle.includes(previewAppStart)) {
-  bundle = bundle.replace(previewAppStart, localFirstScoutPreviewAppStart);
-} else if (bundle.includes(firstScoutPreviewAppStart)) {
-  bundle = bundle.replace(firstScoutPreviewAppStart, localFirstScoutPreviewAppStart);
-} else if (!bundle.includes(localFirstScoutPreviewAppStart)) {
+// The address bar is now a real route rather than a decoration. `?step=` is
+// parsed once, here, so initialisation, Back/Forward, and in-app navigation all
+// read the same list of supported routes instead of three different ideas of
+// what the URL means — which is how the app came to render intake while the URL
+// said dashboard.
+//
+// Two more pieces of app-level state arrive with it: `__jsDraft` holds preference
+// edits away from the profile the dashboard renders, so Cancel has something to
+// discard; `__jsLinkError` carries a failed magic link to the invite screen
+// instead of dropping the member on a gate that never explains why.
+const routedAppStart =
+  'function xP(){const l=uL(),P=new URLSearchParams(window.location.search).get("preview"),' +
+  'P2=P==="edit",P3=P==="ready",P4=P==="scout",P1=P==="intake"||P2,PA=P1||P3||P4,' +
+  '__jsSteps=["invite","intake","ready","dashboard"],' +
+  '__jsReadStep=()=>{const _=new URLSearchParams(window.location.search).get("step");' +
+  'return __jsSteps.includes(_)?_:""},' +
+  'P0=PA?{...V3,name:"Alex Morgan",email:"alex@example.com",roles:"Senior Product Designer, Design Lead",' +
+  'roleKeywords:"Product strategy, design systems",country:"United States",state:"California",city:"Oakland",' +
+  'resumeName:"alex-morgan-resume.pdf"}:V3,' +
+  '[e,t]=W.useState(P3?"ready":P4?"dashboard":P1?"intake":__jsReadStep()||"invite"),' +
+  '[n,a]=W.useState(PA),[s,o]=W.useState(P0),' +
+  '[__jsDraft,__jsSetDraft]=W.useState(null),[__jsLinkError,__jsSetLinkError]=W.useState(""),' +
+  '[c,h]=W.useState(""),[d,p]=W.useState((P3||P4)&&(window.location.hostname==="localhost"||' +
+  'window.location.hostname==="127.0.0.1")?"preview-session":""),' +
+  '[m,g]=W.useState(P3?{first_scout:{status:"available"}}:P4?{ok:!0,member:{status:"Active",match_context:""},' +
+  'jobs:[],hidden_count:0,last_run_at:"",first_scout:{status:"queued"}}:null),[b,v]=W.useState(!PA),';
+
+const appStartAnchors = [
+  standardAppStart,
+  previousPreviewAppStart,
+  previewAppStart,
+  firstScoutPreviewAppStart,
+  localFirstScoutPreviewAppStart,
+];
+const appStartAnchor = appStartAnchors.find((anchor) => bundle.includes(anchor));
+if (appStartAnchor) {
+  bundle = bundle.replace(appStartAnchor, routedAppStart);
+} else if (!bundle.includes(routedAppStart)) {
   throw new Error("Could not add the local intake preview entry point to the current bundle.");
 }
 
+// ---------------------------------------------------------------------------
+// One navigator for every route change.
+//
+// Clicking through the app pushed `?step=`, but nothing read it back: start-up
+// looked only at `?preview=` and no `popstate` handler existed, so pressing Back
+// rewrote the URL and left the previous screen on display. Every route change now
+// goes through `__jsShow`, which is also where the draft is dropped when the
+// member leaves the editor and where focus moves to the heading of the view they
+// just landed on.
+// ---------------------------------------------------------------------------
+const originalNavigate =
+  'D=_=>{if(!n&&_!=="invite")return;const E=new URL(window.location.href);' +
+  'E.searchParams.delete("preview"),E.searchParams.set("step",_),window.history.pushState({},"",E),' +
+  't(_),window.scrollTo({top:0,behavior:l?"auto":"smooth"})}';
+const routedNavigate =
+  '__jsFocusStep=()=>{requestAnimationFrame(()=>{' +
+  'const _=document.querySelector(".journey-screen h1,.member-screen h1");' +
+  '_&&(_.setAttribute("tabindex","-1"),_.focus({preventScroll:!0}))})},' +
+  '__jsShow=_=>{_!=="intake"&&__jsSetDraft(null),t(_),' +
+  'window.scrollTo({top:0,behavior:l?"auto":"smooth"}),__jsFocusStep()},' +
+  '__jsGuardStep=()=>{const _=new URL(window.location.href);' +
+  '_.searchParams.get("step")&&(_.searchParams.delete("step"),window.history.replaceState({},"",_)),' +
+  't("invite")},' +
+  'D=_=>{if(!n&&_!=="invite")return;const E=new URL(window.location.href);' +
+  'E.searchParams.delete("preview"),E.searchParams.set("step",_),window.history.pushState({},"",E),__jsShow(_)}';
+if (bundle.includes(originalNavigate)) {
+  bundle = bundle.replace(originalNavigate, routedNavigate);
+} else if (!bundle.includes(routedNavigate)) {
+  throw new Error("Could not centralise route navigation in the current bundle.");
+}
+
+// A route nobody is signed in for is not a route. Boot resolves the stored
+// session first; if there is none, the URL is put back to the invite gate rather
+// than leaving `?step=dashboard` pointing at a screen the member cannot see.
+const unguardedBoot =
+  'const S=A==null?void 0:A.token;if(!S){_||v(!1);return}try{const U=await fetch(l6,' +
+  '{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"session",session_token:S})}),k=await U.json();' +
+  'if(!U.ok||!k.ok)throw new Error(k.error||"session_failed");_||w("",k)}' +
+  'catch(U){console.error(U),localStorage.removeItem(Gf)}finally{_||v(!1)}';
+const guardedBoot =
+  'const S=A==null?void 0:A.token;if(!S){_||PA||__jsGuardStep(),_||v(!1);return}try{const U=await fetch(l6,' +
+  '{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"session",session_token:S})}),k=await U.json();' +
+  'if(!U.ok||!k.ok)throw new Error(k.error||"session_failed");_||w("",k)}' +
+  'catch(U){console.error(U),localStorage.removeItem(Gf),_||PA||__jsGuardStep()}finally{_||v(!1)}';
+if (bundle.includes(unguardedBoot)) {
+  bundle = bundle.replace(unguardedBoot, guardedBoot);
+} else if (!bundle.includes(guardedBoot)) {
+  throw new Error("Could not guard the initial route against an unauthenticated session.");
+}
+
+// Back and Forward move the app, not just the address bar.
+const bootEffectTail = 'finally{_||v(!1)}})(),()=>{_=!0}},[]),b?Y.jsxs("div",{className:"session-loading"';
+const popstateEffect =
+  'finally{_||v(!1)}})(),()=>{_=!0}},[]),' +
+  'W.useEffect(()=>{const _=()=>{const E=__jsReadStep();' +
+  'if(!n){E&&E!=="invite"?__jsGuardStep():t("invite"),__jsFocusStep();return}' +
+  '__jsShow(E||"dashboard")};window.addEventListener("popstate",_);' +
+  'return()=>window.removeEventListener("popstate",_)},[n]),' +
+  'b?Y.jsxs("div",{className:"session-loading"';
+if (bundle.includes(bootEffectTail)) {
+  bundle = bundle.replace(bootEffectTail, popstateEffect);
+} else if (!bundle.includes(popstateEffect)) {
+  throw new Error("Could not synchronise the app with browser history.");
+}
+
+// The editor works on a draft, not on the profile the dashboard is rendering.
+// Editing wrote straight into the shared profile, so Cancel navigated away from
+// changes that were already live: setting a role to something and pressing Cancel
+// showed that role on the dashboard a moment later. The draft is committed only
+// when the save comes back ok, and dropped on any other way out — which is what
+// makes Cancel mean cancel and a failed save keep the member's work on screen
+// without leaking it.
 const standardIntakeCall = 'e==="intake"?Y.jsx(TP,{profile:s,onChange:o,inviteCode:c,sessionToken:d,onSubmitted:_=>{g(_),x(_),D("ready")},shouldReduceMotion:l}):null';
 const editingIntakeCall = 'e==="intake"?Y.jsx(TP,{profile:s,onChange:o,inviteCode:c,sessionToken:d,onSubmitted:_=>{g(_),x(_),D(P2||!!(m!=null&&m.member)?"dashboard":"ready")},shouldReduceMotion:l,isEditing:P2||!!(m!=null&&m.member),onCancel:()=>D("dashboard")}):null';
-if (bundle.includes(standardIntakeCall)) {
-  bundle = bundle.replace(standardIntakeCall, editingIntakeCall);
-} else if (!bundle.includes(editingIntakeCall)) {
+const draftedIntakeCall =
+  'e==="intake"?Y.jsx(TP,{profile:__jsDraft||s,' +
+  'onChange:__jsU=>__jsSetDraft(__jsP=>typeof __jsU=="function"?__jsU(__jsP||s):__jsU),' +
+  'inviteCode:c,sessionToken:d,' +
+  'onSubmitted:_=>{g(_),x(_),__jsDraft&&o(__jsDraft),' +
+  'D(P2||!!(m!=null&&m.member)?"dashboard":"ready")},' +
+  'shouldReduceMotion:l,isEditing:P2||!!(m!=null&&m.member),onCancel:()=>D("dashboard")}):null';
+const intakeCallAnchor = [standardIntakeCall, editingIntakeCall].find((anchor) => bundle.includes(anchor));
+if (intakeCallAnchor) {
+  bundle = bundle.replace(intakeCallAnchor, draftedIntakeCall);
+} else if (!bundle.includes(draftedIntakeCall)) {
   throw new Error("Could not connect dashboard editing state to the intake component.");
 }
 
@@ -116,14 +227,23 @@ const legacyHydration = 'postedWithin:U.postedWithin||k.postedWithin,remote:E.me
 const previousMultiLocationHydration = 'postedWithin:U.postedWithin||k.postedWithin,preferredLocations:parsePreferredLocations(E.member.regions),workMode:workModeFromProfile({workMode:(String(E.member.notes||"").match(/^Work mode:\\s*(.+)$/im)||[])[1],remote:E.member.remote?E.member.remote==="Yes":k.remote}),remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:';
 const singleWorkModeHydration = 'postedWithin:U.postedWithin||k.postedWithin,preferredLocations:parsePreferredLocations(E.member.regions),workMode:workModeFromProfile({workMode:E.member.work_mode,remote:E.member.remote?E.member.remote==="Yes":k.remote}),remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:';
 const multiLocationHydration = 'postedWithin:U.postedWithin||k.postedWithin,preferredLocations:parsePreferredLocations(E.member.regions),workModes:normalizeWorkModes({workModes:E.member.work_modes,workMode:E.member.work_mode,remote:E.member.remote?E.member.remote==="Yes":k.remote}),remote:E.member.remote?E.member.remote==="Yes":k.remote,...__jsRegion(E.member,k),resumeName:';
-if (bundle.includes(legacyHydration)) {
-  bundle = bundle.replace(legacyHydration, multiLocationHydration);
-} else if (bundle.includes(previousMultiLocationHydration)) {
-  bundle = bundle.replace(previousMultiLocationHydration, multiLocationHydration);
-} else if (bundle.includes(singleWorkModeHydration)) {
-  bundle = bundle.replace(singleWorkModeHydration, multiLocationHydration);
-} else if (!bundle.includes(multiLocationHydration)) {
-  throw new Error("Could not hydrate saved preferred locations and work arrangement.");
+// Paused is carried as its own field rather than being guessed from a frequency
+// that stays set while delivery is off. Without it the editor showed a cadence a
+// paused member was not actually on, and saving anything sent that cadence back.
+const pausedHydration = `paused:E.member.status==="Paused",${multiLocationHydration}`;
+// The final form contains its own last anchor, so it has to be tested first or
+// each run prepends another copy of the paused field.
+if (!bundle.includes(pausedHydration)) {
+  const hydrationAnchor = [
+    legacyHydration,
+    previousMultiLocationHydration,
+    singleWorkModeHydration,
+    multiLocationHydration,
+  ].find((anchor) => bundle.includes(anchor));
+  if (!hydrationAnchor) {
+    throw new Error("Could not hydrate saved preferred locations and work arrangement.");
+  }
+  bundle = bundle.replace(hydrationAnchor, pausedHydration);
 }
 
 // The old parser's steer-away helper. The rewritten parser derives those terms

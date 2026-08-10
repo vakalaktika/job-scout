@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import worker, {
   buildFirstScoutRunText,
+  FIRST_SCOUT_MAX_ATTEMPTS,
   FirstScoutGate,
   firstScoutPublicState,
 } from "./worker.mjs";
@@ -51,6 +52,7 @@ test("first-scout state is available only to an entitled active member with no j
     status: "available",
     requested_at: "",
     completed_at: "",
+    can_retry: false,
   });
   assert.equal(firstScoutPublicState({ status: "Active" }, [], null).status, "unavailable");
   assert.equal(firstScoutPublicState({ status: "Paused" }, [], null).status, "unavailable");
@@ -74,6 +76,7 @@ test("candidate completion wins over a stale queued gate even when no jobs match
     status: "complete",
     requested_at: "2026-08-08T10:00:00.000Z",
     completed_at: "2026-08-08T10:04:00.000Z",
+    can_retry: false,
   });
 });
 
@@ -88,8 +91,29 @@ test("a queued Notion state remains visible while the routine is in progress", (
       status: "queued",
       requested_at: "2026-08-08T10:00:00.000Z",
       completed_at: "",
+      can_retry: false,
     },
   );
+});
+
+// The dashboard used to say a failed first scout "needs another try" while
+// rendering no control that could make one. Whether a retry exists is now a
+// fact the state carries rather than something the copy asserts.
+test("a first scout that never dispatched can be retried until the attempts run out", () => {
+  const failed = (gate) => firstScoutPublicState({ status: "Active", first_scout_status: "Failed" }, [], gate);
+
+  assert.equal(failed(null).can_retry, true);
+  assert.equal(failed({ status: "failed", attempts: 1 }).can_retry, true);
+  assert.equal(failed({ status: "failed", attempts: 2 }).can_retry, true);
+  assert.equal(failed({ status: "failed", attempts: 3 }).can_retry, false);
+  assert.equal(failed({ status: "failed", attempts: 9 }).can_retry, false);
+});
+
+test("a scout that is running, complete, or unavailable never offers a retry", () => {
+  const gate = { status: "queued", attempts: 1 };
+  assert.equal(firstScoutPublicState({ status: "Active", first_scout_status: "Queued" }, [], gate).can_retry, false);
+  assert.equal(firstScoutPublicState({ status: "Active", first_scout_status: "Complete" }, [], null).can_retry, false);
+  assert.equal(firstScoutPublicState({ status: "Paused" }, [], null).can_retry, false);
 });
 
 test("a terminal candidate failure wins over a stale queued gate", () => {
@@ -179,6 +203,92 @@ test("the durable gate fires the external routine once and reuses the queued res
     assert.equal(second.already_requested, true);
     assert.equal(second.request_id, first.request_id);
     assert.equal(routineCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// A dispatch that never happened has consumed nothing, so refusing to try again
+// strands the member on our failure. A dispatch that did happen stays single-use.
+test("the durable gate reopens a failed claim on retry but never a queued one", async () => {
+  const originalFetch = globalThis.fetch;
+  let fireCalls = 0;
+  globalThis.fetch = async () => {
+    fireCalls += 1;
+    // A 400 is an explicit rejection, which the gate records as a terminal failure.
+    if (fireCalls < 3) return new Response("no", { status: 400 });
+    return new Response(JSON.stringify({ claude_code_session_id: "session-9" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    const gate = new FirstScoutGate(createGateState(), {
+      FIRST_SCOUT_ROUTINE_ID: "trig_test",
+      FIRST_SCOUT_ROUTINE_TOKEN: "routine-secret",
+    });
+    const start = (retry = false) =>
+      gate.fetch(
+        new Request("https://first-scout.internal/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidate_id: "candidate-123", retry }),
+        }),
+      );
+
+    const first = await (await start()).json();
+    assert.equal(first.status, "failed");
+    assert.equal(first.attempts, 1);
+
+    // Without the retry flag the claim is still single-use.
+    const replay = await (await start()).json();
+    assert.equal(replay.already_requested, true);
+    assert.equal(fireCalls, 1);
+
+    const second = await (await start(true)).json();
+    assert.equal(second.status, "failed");
+    assert.equal(second.attempts, 2);
+
+    const third = await (await start(true)).json();
+    assert.equal(third.status, "queued");
+    assert.equal(third.attempts, 3);
+    assert.equal(third.session_id, "session-9");
+
+    // A queued claim is a search that is actually running; retry must not restart it.
+    const afterQueued = await (await start(true)).json();
+    assert.equal(afterQueued.already_requested, true);
+    assert.equal(fireCalls, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("the durable gate stops offering retries once the attempts are spent", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("no", { status: 400 });
+
+  try {
+    const gate = new FirstScoutGate(createGateState(), {
+      FIRST_SCOUT_ROUTINE_ID: "trig_test",
+      FIRST_SCOUT_ROUTINE_TOKEN: "routine-secret",
+    });
+    const start = (retry = false) =>
+      gate.fetch(
+        new Request("https://first-scout.internal/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidate_id: "candidate-123", retry }),
+        }),
+      );
+
+    await start();
+    await start(true);
+    await start(true);
+    const exhausted = await (await start(true)).json();
+
+    assert.equal(exhausted.retry_exhausted, true);
+    assert.equal(exhausted.attempts, FIRST_SCOUT_MAX_ATTEMPTS);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -834,17 +944,19 @@ test("a freshly issued token verifies and returns its payload", async () => {
 
 test("a token minted for one purpose is rejected when used for another", async () => {
   const magic = await issueToken(tokenEnv, { purpose: "magic", member_id: "cand-1", nonce: "n1" }, 3600);
-  await assert.rejects(() => verifyToken(tokenEnv, magic, "session"), /expired_token/);
+  await assert.rejects(() => verifyToken(tokenEnv, magic, "session"), /invalid_token/);
 });
 
-test("an expired token is rejected", async () => {
+// Expiry is the one failure a member can fix themselves, so it has to be
+// distinguishable from a token that was never valid.
+test("an expired token is rejected as expired rather than as malformed", async () => {
   const token = await issueToken(tokenEnv, { purpose: "session", member_id: "cand-1" }, -10);
   await assert.rejects(() => verifyToken(tokenEnv, token, "session"), /expired_token/);
 });
 
 test("a token without a member id is rejected even if the signature is valid", async () => {
   const token = await issueToken(tokenEnv, { purpose: "session" }, 3600);
-  await assert.rejects(() => verifyToken(tokenEnv, token, "session"), /expired_token/);
+  await assert.rejects(() => verifyToken(tokenEnv, token, "session"), /invalid_token/);
 });
 
 test("a tampered token body fails signature verification", async () => {

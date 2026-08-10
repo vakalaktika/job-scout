@@ -283,9 +283,9 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 | Action | Auth | Purpose |
 |---|---|---|
 | `validate` / `state` | access code (+ optional session) | Look up a code, return whether setup is needed, and — if linked — the full member session (profile + jobs). |
-| _(create/update)_ | valid access code | With no dedicated action, a POST carrying profile fields **creates** a candidate on first use of an `Unused` code, or **updates** the linked candidate on subsequent submits. `frequency: "Paused"` pauses the member. |
+| _(create/update)_ | valid access code | With no dedicated action, a POST carrying profile fields **creates** a candidate on first use of an `Unused` code, or **updates** the linked candidate on subsequent submits. `frequency: "Paused"` pauses the member; only an explicit `frequency` of `Daily`, `Weekly`, or `3x daily` takes them off `Paused` again, so editing a role or replacing a résumé cannot restart delivery somebody turned off. |
 | `session` | session token | Return the member profile + enriched, steer-filtered job list for a signed-in member. |
-| `run_scout_once` | session token | Consume an entitled new member's one-time scout and fire the external dispatcher in `single_candidate` mode. The candidate is derived from the signed session; client-supplied candidate identifiers are ignored. |
+| `run_scout_once` | session token | Consume an entitled new member's one-time scout and fire the external dispatcher in `single_candidate` mode. The candidate is derived from the signed session; client-supplied candidate identifiers are ignored. A run that **failed to dispatch** consumed nothing, so it can be retried up to three attempts in total; the returned `first_scout.can_retry` says whether one is left, and the dashboard offers a retry only when it is. |
 | `scout_status` | session token | Return only the public first-scout state for lightweight polling. The dashboard refreshes the full session once after completion. |
 | `job_decision` | session token | Record **Interested / Not interested** + a `feedback` reason and free-text `note` on one posting (ownership-checked by email). An empty `decision` clears the review, which is how the dashboard's toggles undo a mis-tap. A pass reason is also appended to the candidate's `Match context` and returned as `match_context`. |
 | `job_application` | session token | Set the posting's application status to one of `Applied`, `Interviewing`, `Offer`, `Rejected`, `No response` (ownership-checked by email). An empty status clears the tracking. `Applied at` is stamped on the first move into a status and preserved through later ones. |
@@ -314,10 +314,17 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 - **Magic-link login** lets a member who lost their access code sign back in by email.
   `magic_request` mints a short-lived (`15 min`) `magic`-purpose token, stores a
   single-use nonce on the candidate (`Magic nonce`), and emails a link
-  (`/?login=<token>`) via **Resend** from `login@mail.uxed.me`. Opening the link runs the
-  inline consumer in `index.html`, which calls `magic_consume`; a successful exchange
-  clears the nonce (so the link works exactly once) and returns a normal 30-day session.
-  `login.html` is the standalone "email me a sign-in link" request page.
+  (`/?login=<token>`) via **Resend** from `login@mail.uxed.me`. Opening the link lets the
+  app consume it: it strips the token from the address bar first (a bearer credential in
+  a URL reaches history, referrers, and anything pasted), calls `magic_consume`, and on
+  success stores a normal 30-day session. The exchange clears the nonce so the link works
+  exactly once — and puts it back if building the session fails, so an error of ours
+  never spends somebody's only way in. Each failure is a named state (`expired_link`,
+  `used_link`, `invalid_link`, `revoked`, or a transient one) that the invite screen
+  explains, alongside "Send another link" and the invite code as the two routes onward.
+  `login.html` is the standalone "email me a sign-in link" request page. **There must be
+  exactly one consumer**: the link is single-use, so a second one races the first and the
+  loser reports a link that has already been used.
 
 ### Read-time filtering
 
@@ -617,9 +624,38 @@ normalisation, slug candidates, the single-exact-match rule, the three board pay
 shapes, and the refusal to guess when a title appears twice. Both pin the SSRF guard
 every resolved link passes through.
 
+`worker-requests.test.mjs` drives `worker.fetch` end to end against a stubbed Notion, so
+what it asserts is the *ordering* between helpers that are each correct alone. It covers
+the magic-link states a member can actually hit — valid, expired, already used, revoked,
+and a transient failure that must leave the link usable — plus the method/JSON guards,
+the refusal of every member route to an unsigned session, the first-scout retry budget,
+and the rule that only an explicit cadence choice takes a paused member off `Paused`.
+
 ```sh
-node --test worker.test.mjs dashboard-helpers.test.mjs resume-parser.test.mjs intake-prefill.test.mjs build-email.test.mjs first-scout-ui.test.mjs linkedin-apply-url.test.mjs ats-boards.test.mjs
+npm test   # or: node --test *.test.mjs
 ```
+
+### Browser tests
+
+`e2e/` drives the shipped bundle in Chromium with Playwright. The app already routes its
+API calls to a same-origin `/api/job-scout` when served from localhost, and
+`e2e/fake-worker.mjs` answers there with the same response shapes the Worker returns —
+scriptable per test for latency, failures, and first-scout state. Nothing touches
+production or a real member's data.
+
+These cover the failures that only exist between screens: Cancel discarding a preference
+draft, Back/Forward staying in step with what is rendered, a slow résumé parse losing to
+the file that replaced it, two job cards mutating at once without being reported against
+each other, a paused member surviving an unrelated edit, every first-scout terminal
+state, and each way a sign-in link can fail.
+
+```sh
+npm run test:e2e
+```
+
+The browser is expected to be already installed. `playwright.config.mjs` prefers a
+matching local Chromium (`PLAYWRIGHT_CHROMIUM_EXECUTABLE`, or the standard
+`/opt/pw-browsers` build) and falls back to Playwright's own download otherwise.
 
 ---
 

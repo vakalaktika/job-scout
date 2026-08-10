@@ -1352,9 +1352,12 @@ export async function verifyToken(env, token, purpose) {
   );
   if (!valid) throw new Error("invalid_token");
   const payload = JSON.parse(new TextDecoder().decode(urlToBytes(body)));
-  if (payload.exp <= Math.floor(Date.now() / 1000) || payload.purpose !== purpose || !payload.member_id) {
-    throw new Error("expired_token");
-  }
+  // Expiry and malformation are the same refusal to a caller but not to a member:
+  // an expired link can be replaced by asking for another, while a token minted
+  // for a different purpose was never a sign-in link at all. Keep them apart so
+  // the front end can say which happened.
+  if (payload.purpose !== purpose || !payload.member_id) throw new Error("invalid_token");
+  if (payload.exp <= Math.floor(Date.now() / 1000)) throw new Error("expired_token");
   return payload;
 }
 
@@ -1522,66 +1525,51 @@ export function buildFirstScoutRunText(candidateId, requestId) {
   });
 }
 
+// A one-time search that never dispatched is not a one-time search that ran. The
+// gate keeps an attempt count so a member whose first scout failed can ask again
+// a bounded number of times, and so the dashboard can tell the difference between
+// "try again" and "this needs a person" instead of promising a retry it cannot
+// perform.
+export const FIRST_SCOUT_MAX_ATTEMPTS = 3;
+
+const firstScoutRetryable = (status, gate) =>
+  ["failed", "needs_review"].includes(status) &&
+  Number(gate?.attempts || (gate?.status ? 1 : 0)) < FIRST_SCOUT_MAX_ATTEMPTS;
+
 export function firstScoutPublicState(member, jobs = [], gate = null) {
   const candidateStatus = normalizeFirstScoutStatus(member?.first_scout_status);
   const requestedAt = String(member?.first_scout_requested_at || gate?.requested_at || "");
   const completedAt = String(member?.first_scout_completed_at || lastDispatchAt(jobs) || "");
-  if (candidateStatus === "complete" || candidateStatus === "completed") {
-    return {
-      status: "complete",
-      requested_at: requestedAt,
-      completed_at: completedAt,
-    };
-  }
-  if ((jobs || []).length) {
-    return {
-      status: "complete",
-      requested_at: requestedAt,
-      completed_at: completedAt,
-    };
-  }
-  if (["failed", "needs_review"].includes(candidateStatus)) {
-    return {
-      status: candidateStatus,
-      requested_at: requestedAt,
-      completed_at: completedAt,
-    };
-  }
+  const settled = (status, extra = {}) => ({
+    status,
+    requested_at: requestedAt,
+    completed_at: completedAt,
+    can_retry: firstScoutRetryable(status, gate),
+    ...extra,
+  });
+  if (candidateStatus === "complete" || candidateStatus === "completed") return settled("complete");
+  if ((jobs || []).length) return settled("complete");
+  if (["failed", "needs_review"].includes(candidateStatus)) return settled(candidateStatus);
   const gateStatus = normalizeFirstScoutStatus(gate?.status) ||
     (gate?.status === "needs_review" ? "needs_review" : gate?.status === "dispatching" ? "queued" : "");
   if (["failed", "needs_review"].includes(gateStatus)) {
-    return {
-      status: gateStatus,
+    return settled(gateStatus, {
       requested_at: gate.requested_at || requestedAt,
       completed_at: gate.completed_at || completedAt,
-    };
+    });
   }
-  if (["queued", "running"].includes(candidateStatus)) {
-    return {
-      status: candidateStatus,
-      requested_at: requestedAt,
-      completed_at: completedAt,
-    };
-  }
+  if (["queued", "running"].includes(candidateStatus)) return settled(candidateStatus);
   if (gate?.status) {
+    const status = gateStatus || "needs_review";
     return {
-      status: gateStatus || "needs_review",
+      status,
       requested_at: gate.requested_at || requestedAt,
       completed_at: gate.completed_at || completedAt,
+      can_retry: firstScoutRetryable(status, gate),
     };
   }
-  if (member?.status !== "Active" || candidateStatus !== "available") {
-    return {
-      status: "unavailable",
-      requested_at: requestedAt,
-      completed_at: completedAt,
-    };
-  }
-  return {
-    status: "available",
-    requested_at: "",
-    completed_at: "",
-  };
+  if (member?.status !== "Active" || candidateStatus !== "available") return settled("unavailable");
+  return { status: "available", requested_at: "", completed_at: "", can_retry: false };
 }
 
 const routineSessionFields = (body) => ({
@@ -1651,8 +1639,17 @@ export class FirstScoutGate {
     return this.state.blockConcurrencyWhile(async () => {
       const key = "run";
       const existing = await this.state.storage.get(key);
-      if (existing?.status) {
+      // A claim that never dispatched has consumed nothing. Let the member ask
+      // again a bounded number of times rather than stranding them on a failure
+      // that was ours; anything that did dispatch stays single-use.
+      const terminal = ["failed", "needs_review"].includes(String(existing?.status || ""));
+      const attempts = Number(existing?.attempts || (existing?.status ? 1 : 0));
+      const retrying = payload.retry === true && terminal;
+      if (existing?.status && !retrying) {
         return json({ ...existing, already_requested: true });
+      }
+      if (retrying && attempts >= FIRST_SCOUT_MAX_ATTEMPTS) {
+        return json({ ...existing, already_requested: true, retry_exhausted: true });
       }
       try {
         routineConfig(this.env);
@@ -1665,6 +1662,7 @@ export class FirstScoutGate {
         requested_at: new Date().toISOString(),
         completed_at: "",
         request_id: requestId,
+        attempts: attempts + 1,
       };
       await this.state.storage.put(key, claim);
       try {
@@ -1720,7 +1718,12 @@ const firstScoutGateStub = (env, candidateId) => {
 async function firstScoutSnapshot(env, candidate, jobs = []) {
   const member = memberState(candidate);
   const stored = firstScoutPublicState(member, jobs, null);
-  if (!["available", "queued", "running"].includes(stored.status)) return stored;
+  // A terminal failure is read from the gate too, because only the gate knows how
+  // many attempts are left — and offering a retry the gate would refuse is the
+  // promise this whole path exists to stop making.
+  if (!["available", "queued", "running", "failed", "needs_review"].includes(stored.status)) {
+    return stored;
+  }
   const stub = firstScoutGateStub(env, candidate.id);
   if (!stub) return stored;
   try {
@@ -1821,25 +1824,42 @@ export default {
         return json({ ok: true });
       }
       if (payload.action === "magic_consume") {
+        // Every refusal below names what the member can do about it. None of them
+        // reveal whether an account exists: the link had to be signed by us to get
+        // this far, so its holder already knows.
         let auth;
         try {
           auth = await verifyToken(env, payload.magic_token, "magic");
-        } catch {
-          return json({ ok: false, error: "invalid_link" }, 401);
+        } catch (error) {
+          const expired = String(error?.message || "") === "expired_token";
+          return json({ ok: false, error: expired ? "expired_link" : "invalid_link" }, 401);
         }
         const candidate = await notion(env, `pages/${auth.member_id}`, "GET").catch(() => null);
         if (!candidate) return json({ ok: false, error: "invalid_link" }, 401);
         if (memberState(candidate).status === "Revoked") return json({ ok: false, error: "revoked" }, 403);
         // Single use: the nonce baked into the link must still match the one stored
-        // on the candidate, and consuming it clears the nonce so the link dies here.
+        // on the candidate. A cleared or rotated nonce means the link already did
+        // its job, which is a different problem from a link that was never ours.
+        if (!auth.nonce) return json({ ok: false, error: "invalid_link" }, 401);
         const storedNonce = plain(candidate.properties?.["Magic nonce"]);
-        if (!auth.nonce || storedNonce !== auth.nonce) {
-          return json({ ok: false, error: "invalid_link" }, 401);
-        }
+        if (storedNonce !== auth.nonce) return json({ ok: false, error: "used_link" }, 401);
+        // Clear the nonce first so two clicks on the same link cannot both mint a
+        // session, then put it back if building that session fails. Consuming the
+        // link before the session exists is what turned one bad Notion response
+        // into a member locked out of an account they still own.
         await notion(env, `pages/${candidate.id}`, "PATCH", {
           properties: { "Magic nonce": { rich_text: [] } },
         });
-        return json(await sessionResponse(env, candidate, { mode: "magic" }));
+        let session;
+        try {
+          session = await sessionResponse(env, candidate, { mode: "magic" });
+        } catch (error) {
+          await notion(env, `pages/${candidate.id}`, "PATCH", {
+            properties: { "Magic nonce": richText(auth.nonce) },
+          }).catch(() => null);
+          throw error;
+        }
+        return json(session);
       }
       if (payload.action === "session") {
         const candidate = await authenticatedCandidate(env, payload.session_token);
@@ -1859,7 +1879,10 @@ export default {
           return json({ ok: false, error: "member_inactive" }, 409);
         }
         const current = await firstScoutSnapshot(env, candidate);
-        if (current.status !== "available") {
+        // A first scout that failed to dispatch is the one non-available state a
+        // member can act on, so it is the one the CTA is allowed to reopen.
+        const retrying = ["failed", "needs_review"].includes(current.status) && current.can_retry;
+        if (current.status !== "available" && !retrying) {
           return json({ ok: true, first_scout: current, already_requested: true });
         }
         const gate = firstScoutGateStub(env, candidate.id);
@@ -1867,10 +1890,16 @@ export default {
         const response = await gate.fetch("https://first-scout.internal/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ candidate_id: candidate.id }),
+          body: JSON.stringify({ candidate_id: candidate.id, retry: retrying }),
         });
         const gateState = await response.json();
-        const firstScout = firstScoutPublicState(member, [], gateState);
+        // On a retry the candidate row still carries the failure we are replacing —
+        // it was read before the gate ran — so the gate's fresh claim is the only
+        // truthful answer. Reporting the stale status would tell a member their
+        // just-started search had already failed.
+        const gateAuthority = retrying ? { ...member, first_scout_status: "" } : member;
+        const firstScout = firstScoutPublicState(gateAuthority, [], gateState);
+        if (gateState.retry_exhausted) firstScout.can_retry = false;
         if (!response.ok) {
           const status = response.status === 503 ? 503 : 502;
           const publicError = status === 503
@@ -2021,9 +2050,17 @@ export default {
       // Read the stored record first so candidateProps can merge rather than
       // overwrite, and so an edit that omits a field leaves it intact.
       const stored = await notion(env, `pages/${linked}`, "GET");
+      const storedMember = memberState(stored);
+      // Editing a preference is not a request to start the emails again. Only an
+      // explicit cadence choice takes a member off Paused, so changing roles or
+      // replacing a resume can no longer restart delivery they deliberately
+      // stopped — which it did, because Status was rewritten to Active on every
+      // save regardless of what the save was about.
+      const resumesDelivery = ["3x daily", "Daily", "Weekly"].includes(String(payload.frequency || ""));
+      const nextStatus = storedMember.status === "Paused" && !resumesDelivery ? "Paused" : "Active";
       const updates = {
-        Status: { select: { name: "Active" } },
-        ...candidateProps(payload, memberState(stored)),
+        Status: { select: { name: nextStatus } },
+        ...candidateProps(payload, storedMember),
       };
       if (hasField(payload, "name")) {
         updates.Name = {

@@ -1,0 +1,17 @@
+{
+  "name": "job-scout",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Invite-only job scout: a Cloudflare Worker API, a static front end, and the email it sends.",
+  "scripts": {
+    "test": "node --test *.test.mjs",
+    "test:coverage": "node --experimental-test-coverage --test *.test.mjs",
+    "test:e2e": "playwright test",
+    "patch": "node patch-intake-flow.mjs && node patch-dashboard.mjs",
+    "check": "node --check worker.mjs && npm test && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}
