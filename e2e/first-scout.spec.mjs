@@ -9,6 +9,13 @@ const scout = (status, extra = {}) => ({
   jobs: [],
 });
 
+// Every test here sets its own scenario, but reset first regardless: the fake
+// Worker is one shared, mutable process, and a test that inherits another's
+// state fails in a way that looks like a product bug.
+test.beforeEach(async ({ request }) => {
+  await resetWorker(request);
+});
+
 test("an entitled member is offered the one-time run and starting it says so", async ({ page, request }) => {
   await resetWorker(request, scout("available"));
   await openDashboard(page);

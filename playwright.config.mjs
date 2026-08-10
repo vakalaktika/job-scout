@@ -28,6 +28,7 @@ export default defineConfig({
   projects: [
     {
       name: "desktop",
+      testIgnore: /mobile\.spec\.mjs/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
@@ -47,7 +48,11 @@ export default defineConfig({
   webServer: {
     command: `node e2e/fake-worker.mjs`,
     url: `http://127.0.0.1:${PORT}/index.html`,
-    reuseExistingServer: !process.env.CI,
+    // Never reuse. The fake Worker holds mutable scenario state, so a server left
+    // over from an earlier run starts the next one mid-scenario — which reads as
+    // half the suite failing on the app rather than on the harness. A fresh
+    // process per run costs well under a second and removes the whole class.
+    reuseExistingServer: false,
     stdout: "ignore",
     stderr: "pipe",
   },

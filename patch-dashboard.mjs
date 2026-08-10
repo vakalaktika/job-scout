@@ -1019,6 +1019,152 @@ patch(
   "css",
 );
 
+// ---------------------------------------------------------------------------
+// Names that survive the narrow layout.
+//
+// Both navigations collapse to icons on a phone by hiding their only label with
+// `display:none`, which takes the text out of the accessibility tree along with
+// the pixels. A screen-reader user got three unnamed buttons in the dashboard
+// header and setup steps announced as "1", "2", "3" — the labels exist, they were
+// just deleted for everyone rather than hidden for the eye. Clipping keeps the
+// same picture and gives the text back.
+//
+// WCAG 2.5.3 (Label in Name) and 4.1.2 (Name, Role, Value).
+// ---------------------------------------------------------------------------
+const visuallyHidden =
+  "position:absolute!important;width:1px!important;height:1px!important;" +
+  "overflow:hidden!important;clip:rect(0 0 0 0)!important;clip-path:inset(50%)!important;" +
+  "white-space:nowrap!important";
+
+patch(
+  "keep the primary navigation named when it collapses to icons",
+  ".nav-link{padding:9px 10px;font-size:11px}.nav-link span{display:none}",
+  ".nav-link{min-width:44px;min-height:44px;justify-content:center;padding:9px 10px;font-size:11px}" +
+    `.nav-link span{${visuallyHidden}}`,
+  "css",
+);
+
+patch(
+  "keep the setup steps named when they collapse to numbers",
+  ".journey-bar nav{grid-template-columns:repeat(3,35px);justify-content:center}" +
+    ".journey-bar nav button{min-height:34px;padding:7px}" +
+    ".journey-bar nav button>span:not(.journey-active){display:none}",
+  ".journey-bar nav{grid-template-columns:repeat(3,44px);justify-content:center}" +
+    ".journey-bar nav button{min-height:44px;padding:7px}" +
+    `.journey-bar nav button>span:not(.journey-active){${visuallyHidden}}`,
+  "css",
+);
+
+// Which view you are in is state, and state has to be exposed, not just painted.
+// The active tab was styled and nothing else, so it read the same as the other two.
+patch(
+  "expose the current view in the primary navigation",
+  'Y.jsxs(Ut.button,{type:"button",className:`nav-link ${c===ue?"active":""}`,onClick:()=>h(ue),',
+  'Y.jsxs(Ut.button,{type:"button",className:`nav-link ${c===ue?"active":""}`,' +
+    '"aria-current":c===ue?"page":void 0,onClick:()=>h(ue),',
+);
+
+// ---------------------------------------------------------------------------
+// Touch targets, focus, and control boundaries.
+//
+// Appended last so these minimums win the cascade over the narrow-layout rules
+// that shrank the same controls. Every value here is a floor, not a size: the
+// visual density is unchanged wherever a control already cleared it.
+// ---------------------------------------------------------------------------
+const accessibilityFloor =
+  "\n\n/* --- Accessible focus, control boundaries, and touch targets --- */\n" +
+  ":root{" +
+  // The shared ring was rgba(53,110,89,.28) — about 1.5:1 against every surface
+  // it lands on, which is a focus indicator you cannot see. Opaque pine clears
+  // 8.4:1 on white, and the light gap under it keeps that true on dark controls.
+  "--focus-ring:#245640;" +
+  // --line is #deded8: right for a divider at 1.35:1, not for the edge of a
+  // control, which WCAG 1.4.11 wants at 3:1. Controls get their own token rather
+  // than darkening every hairline in the product.
+  "--line-control:#84847a}" +
+  // Interactive edges only — and redefined as a variable on the control rather
+  // than as a border-color beside it. Control borders are written as
+  // `border:1px solid var(--line)` inside more specific rules (.settings-card
+  // select, .wizard-form input, and so on); a border-color declaration out here
+  // loses to every one of them. Rebinding --line on the element itself is
+  // resolved at use time, so each of those rules paints the control token
+  // without any of them having to be found and rewritten.
+  "input,select,textarea,.track-chip,.job-filter-seg button,.feedback-other input," +
+  ".decision-button,.feedback-options button,.add-location-button{--line:var(--line-control)}" +
+  "@media(max-width:780px){" +
+  ".preference-tabs-shell [role=tab]{min-height:44px}" +
+  ".secondary-flow-button{min-height:44px}" +
+  ".job-filter-seg button{min-height:44px}" +
+  ".job-card-actions .decision-button{min-height:44px}" +
+  ".track-chip{min-height:44px}" +
+  ".feedback-options button{min-height:44px}" +
+  ".job-brief-trigger{min-height:44px;padding:0}" +
+  ".job-card-footer .job-link,.job-link{min-height:44px;padding-top:0}" +
+  ".preferred-location-list button{min-height:44px}" +
+  ".suggestion-chips button,.selected-chips button{min-height:44px}" +
+  ".pause-button{min-height:44px}" +
+  ".section-heading button{min-height:44px;padding:0 8px}" +
+  // A one-word reason ("Pay") was 43px wide — a target that misses by a pixel
+  // still misses.
+  ".feedback-options button{min-width:44px}" +
+  // A range input draws its own track, so the extra height is hit area rather
+  // than a thicker control: the slider looks identical and can be grabbed.
+  '.range-field input[type="range"],.dual-range-input{min-height:44px}' +
+  // The recovery link under the invite form was a 14px-tall line of text — the
+  // one control a member reaches for precisely when nothing else is working.
+  ".invite-security-note a{display:inline-flex;align-items:center;min-height:44px}" +
+  "}" +
+  // The narrowest phones shrank the setup steps back to 31px wide. They may be
+  // tight, but they cannot be smaller than a fingertip.
+  "@media(max-width:420px){.journey-bar nav{grid-template-columns:repeat(3,44px)}" +
+  ".journey-bar nav button{padding:5px;min-width:44px}}";
+
+patch(
+  "raise control boundaries and mobile touch targets",
+  "  .wizard-privacy{margin-top:10px;padding-bottom:4px}\n}\n",
+  `  .wizard-privacy{margin-top:10px;padding-bottom:4px}\n}\n${accessibilityFloor}`,
+  "css",
+);
+
+// The focus rules are replaced where they live rather than overridden from the
+// end of the file, so there is one focus treatment in the stylesheet and not a
+// weak one shadowed by a strong one.
+patch(
+  "make the shared focus ring visible",
+  "button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{" +
+    "outline:3px solid rgba(53,110,89,.28);outline-offset:3px}",
+  "button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible," +
+    "[role=tab]:focus-visible,[role=radio]:focus-visible,[role=checkbox]:focus-visible{" +
+    "outline:3px solid var(--focus-ring);outline-offset:2px;" +
+    // A light ring between the control and the outline, so the indicator still
+    // contrasts when the control itself is dark.
+    "box-shadow:0 0 0 2px var(--surface)}",
+  "css",
+);
+
+patch(
+  "make the slider thumb's focus ring visible in both engines",
+  ".dual-range-input:focus-visible::-webkit-slider-thumb{outline:3px solid rgba(38,93,72,.2);outline-offset:3px}" +
+    ".dual-range-input:focus-visible::-moz-range-thumb{outline:3px solid rgba(38,93,72,.2);outline-offset:3px}",
+  ".dual-range-input:focus-visible::-webkit-slider-thumb{outline:3px solid var(--focus-ring);outline-offset:2px}" +
+    ".dual-range-input:focus-visible::-moz-range-thumb{outline:3px solid var(--focus-ring);outline-offset:2px}",
+  "css",
+);
+
+// A heading moved to programmatically is the one thing on screen that just
+// changed. This gave it focus and then told it not to show it, so a keyboard
+// user was moved somewhere with no sign of having arrived. The cue is deliberate
+// rather than the browser's default box: a short rule in the margin, which reads
+// as punctuation next to a heading instead of a control's outline.
+patch(
+  "keep a visible cue on a programmatically focused heading",
+  ".wizard-step-heading h2:focus{outline:none}",
+  ".wizard-step-heading h2{border-radius:4px}" +
+    ".wizard-step-heading h2:focus{outline:none;box-shadow:-14px 0 0 -11px var(--focus-ring)}" +
+    ".wizard-step-heading h2:focus-visible{outline:3px solid var(--focus-ring);outline-offset:4px;box-shadow:none}",
+  "css",
+);
+
 for (const { name, from, to, target } of patches) {
   if (sources[target].includes(to)) {
     skipped.push(name);

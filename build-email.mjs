@@ -172,6 +172,11 @@ function fillCard(exemplar, p) {
   // ------------------------------------------------------------------------
 
   const posted = freshness(p.postedDaysAgo, p.postedDate);
+  // Attribute variants first: "{{TITLE}}" is a prefix of nothing, but
+  // "{{TITLE_ATTR}}" contains "{{TITLE}}" nowhere — the tokens are distinct, and
+  // filling the attribute ones first keeps that true regardless.
+  card = replaceAll(card, "{{TITLE_ATTR}}", escapeAttr(p.title));
+  card = replaceAll(card, "{{COMPANY_ATTR}}", escapeAttr(p.company));
   card = replaceAll(card, "{{COMPANY}}", escapeHtml(p.company));
   card = replaceAll(card, "{{TITLE}}", escapeHtml(p.title));
   card = replaceAll(card, "{{URL}}", escapeAttr(p.url));
@@ -202,15 +207,24 @@ function canonicalWorkplace(v) {
 // Freshness pill
 // ---------------------------------------------------------------------------
 
+// Every pill is 11-12px text, so all four pairs have to clear the WCAG AA 4.5:1
+// floor for normal text on their own background. The two grey ones did not:
+// unknown was 2.34:1 and old was 4.34:1, which made the least certain postings
+// the hardest to read. Both grey states now share one value that clears the
+// floor; the label already tells them apart ("Posting date not listed" against a
+// dated one), so nothing is lost by dropping the tint difference nobody could
+// resolve anyway.
+const PILL_GREY = { bg: "#f1f5f9", fg: "#556174" }; // 5.34:1
+
 function freshness(daysAgo, postedDate) {
   if (daysAgo == null || Number.isNaN(Number(daysAgo))) {
-    return { label: "Posting date not listed", bg: "#f1f5f9", fg: "#94a3b8" };
+    return { label: "Posting date not listed", ...PILL_GREY };
   }
   const d = Math.max(0, Math.floor(Number(daysAgo)));
   const color =
-    d <= 2 ? { bg: "#dcfce7", fg: "#15803d" }
-    : d <= 7 ? { bg: "#fef3c7", fg: "#b45309" }
-    : { bg: "#f1f5f9", fg: "#64748b" };
+    d <= 2 ? { bg: "#dcfce7", fg: "#15803d" } // 4.57:1
+    : d <= 7 ? { bg: "#fef3c7", fg: "#b45309" } // 4.51:1
+    : PILL_GREY;
 
   let label;
   if (d === 0) label = "Posted today";
@@ -238,8 +252,14 @@ function rank(daysAgo) {
 // Template surgery
 // ---------------------------------------------------------------------------
 
+// Instructional comments go; conditional comments stay. The template's layout
+// depends on an Outlook-only ghost table, and Outlook can only be addressed
+// through a comment — stripping those alongside the exemplar notes would silently
+// take the fixed 600px width away from the one client that needs it.
 function stripHtmlComments(html) {
-  return html.replace(/<!--[\s\S]*?-->/g, "");
+  return html.replace(/<!--[\s\S]*?-->/g, (comment) =>
+    /^<!--\s*\[if\b/i.test(comment) || /^<!--\s*<!\[endif\]/i.test(comment) ? comment : "",
+  );
 }
 
 function extractExemplar(html) {

@@ -796,11 +796,25 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                   Y.jsxs("div", {
                     className: "range-heading",
                     children: [
-                      Y.jsx("span", { className: "field-label", children: "Posted within" }),
-                      Y.jsx("output", { "aria-live": "polite", children: l.postedWithin === 1 ? "24 hours" : `${l.postedWithin} days` }),
+                      // The visible label is tied to the slider rather than merely
+                      // sitting above it. Without the association the control was
+                      // announced as an unnamed slider reading "17" — a number with
+                      // nothing to say what it counted.
+                      Y.jsx("span", { className: "field-label", id: "posted-within-label", children: "Posted within" }),
+                      Y.jsx("output", { htmlFor: "posted-within", "aria-live": "polite", children: l.postedWithin === 1 ? "24 hours" : `${l.postedWithin} days` }),
                     ],
                   }),
-                  Y.jsx("input", { type: "range", min: "1", max: "30", step: "1", value: l.postedWithin, onChange: (re) => A("postedWithin", Number(re.target.value)) }),
+                  Y.jsx("input", {
+                    id: "posted-within",
+                    type: "range",
+                    min: "1",
+                    max: "30",
+                    step: "1",
+                    value: l.postedWithin,
+                    "aria-labelledby": "posted-within-label",
+                    "aria-valuetext": l.postedWithin === 1 ? "Within 24 hours" : `Within ${l.postedWithin} days`,
+                    onChange: (re) => A("postedWithin", Number(re.target.value)),
+                  }),
                 ],
               }),
             ],

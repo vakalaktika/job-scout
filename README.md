@@ -208,6 +208,27 @@ read time, so preference changes take effect immediately without re-running the 
   replacing the `{{JOB_CARDS}}` token. If there are zero new postings, **no email is
   sent.** No `{{…}}` token may survive into a sent email.
 
+Four rules keep it readable on a phone. They are enforced by `e2e/email.spec.mjs`, which
+renders the real builder's output in a real engine rather than trusting the markup:
+
+- **Fluid, not fixed.** The shell is `width:100%` with `max-width:600px`. It used to be
+  `width="600"` with `max-width:100%` behind it, which does not shrink — a table never
+  renders narrower than the width it is given, so the document measured 632px at every
+  viewport and a 375px phone scrolled sideways through every card. Word-engine Outlook
+  ignores `max-width`, so a conditional ghost table holds 600px there; `stripHtmlComments`
+  therefore removes instructional comments but **preserves conditional comments**.
+- **Nothing sets `white-space:nowrap` on a filled value.** The freshness pill did, which
+  is what still pushed the layout past 320px after the shell went fluid.
+- **Every piece of small text clears 4.5:1** against what is painted behind it. The
+  footer was 2.31:1 and the unknown-freshness pill 2.34:1 — the least certain postings
+  were the hardest to read.
+- **Structure and destinations are stated.** The headline is an `h1` and each posting
+  title an `h2`, so the message can be moved through by structure; each card's CTA carries
+  an `aria-label` naming its own posting, because five links all called "View posting"
+  tell a screen-reader user nothing. Values written into attributes use the
+  `{{TITLE_ATTR}}` / `{{COMPANY_ATTR}}` tokens, which are attribute-escaped —
+  `{{TITLE}}` only escapes `&`, `<`, and `>`.
+
 **Dashboard.** The member opens the SPA, which calls the Worker's `session`/`state`
 action. The Worker returns the member's recent postings (within their posting-age window,
 plus anything already marked Interested), each enriched with a written brief, with
@@ -392,6 +413,26 @@ Patches target `assets/index-BdD4MZod.js` by default; passing `"css"` as the fou
 argument to `patch()` targets the stylesheet `assets/index-uR5-NbPW.css` instead, which
 is how design-token fixes are applied — currently raising `--ink-faint` from `#999891`
 (2.89:1, below WCAG AA) to `#73726c`.
+
+### Accessibility rules the patches enforce
+
+Three of them exist because the narrow layout broke what the wide one got right:
+
+- **A label may be hidden from the eye, never from the reader.** Both navigations
+  collapse to icons below 780px, and both used to do it with `display:none` on the only
+  label — which deletes the text for everyone. They are clipped instead, so the picture
+  is unchanged and "For you", "Saved", "Settings", and each setup step keep their names.
+  Never reach for `display:none` on a label; use the clip in `visuallyHidden`.
+- **44×44 is a floor, not a size.** Mobile rules used to shrink several controls below
+  it. `patch-dashboard.mjs` appends the minimums last so they win over the narrow-layout
+  rules, and `e2e/mobile.spec.mjs` walks every screen at 375px asserting that no
+  interactive element is smaller or unnamed.
+- **Focus is opaque and control edges are 3:1.** `--focus-ring` (`#245640`, 8.5:1 on
+  white) replaced a translucent ring at roughly 1.5:1, with a light `box-shadow` gap so
+  it stays visible on dark controls. `--line-control` (`#84847a`, 3.5:1) is for the edge
+  of anything you can interact with; `--line` stays quiet for dividers, which do not need
+  the contrast. `e2e/contrast.spec.mjs` computes both against what is actually painted
+  behind them.
 
 `design-qa.md` records the design-QA process for the intake/edit redesign.
 

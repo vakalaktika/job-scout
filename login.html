@@ -12,14 +12,19 @@
     />
     <style>
       /* Tokens copied from the dashboard bundle's :root so this standalone page
-         reads as the same product as index.html. */
+         reads as the same product as index.html. Copied, which means they drift:
+         --ink-faint was still the pre-AA #999891 (2.89:1) here long after the app
+         darkened it. Keep this block in step with the app's :root — see the
+         theming contract in README.md. */
       :root {
         --canvas: #fbfbfa;
         --surface: #ffffff;
         --ink: #211f1c;
         --ink-soft: #6e6d67;
-        --ink-faint: #999891;
+        --ink-faint: #73726c;
         --line: #deded8;
+        --line-control: #84847a;
+        --focus-ring: #245640;
         --green: #356e59;
         --green-deep: #245640;
         --green-pale: #e8f0eb;
@@ -122,7 +127,9 @@
         font-size: 15px;
         color: var(--ink);
         background: var(--canvas);
-        border: 1px solid var(--line);
+        /* A control's edge, not a divider: 3:1 rather than the 1.3:1 --line gives.
+           WCAG 1.4.11. */
+        border: 1px solid var(--line-control);
         border-radius: 9px;
       }
       /* --ink-faint is only 2.9:1 on these surfaces, so placeholder and footer text
@@ -149,9 +156,16 @@
         opacity: 0.45;
         cursor: default;
       }
+      /*
+        The same opaque ring the app uses. The translucent pine this replaces was
+        about 1.5:1 against the page — a focus indicator you had to already know
+        was there. The light gap keeps it visible on the dark primary button too.
+        WCAG 1.4.11 and 2.4.11.
+      */
       :is(a, button, input):focus-visible {
-        outline: 3px solid rgba(53, 110, 89, 0.28);
-        outline-offset: 3px;
+        outline: 3px solid var(--focus-ring);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 2px var(--surface);
       }
       .status {
         margin: 14px 0 0;

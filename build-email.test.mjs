@@ -125,8 +125,11 @@ test("toPosting prefers date_posted over posted_at when both are present", () =>
 
 const GREEN = "#15803d";
 const AMBER = "#b45309";
-const GRAY_OLD = "#64748b";
-const NEUTRAL = "#94a3b8";
+// The two grey states share one foreground because the tints that told them
+// apart were 2.34:1 and 4.34:1 on their own background — both under the AA floor
+// for 12px text. The label is what distinguishes them now.
+const GRAY_OLD = "#556174";
+const NEUTRAL = "#556174";
 
 test("0 days -> green pill, 'Posted today'", () => {
   const html = oneCard({ postedDaysAgo: 0 });
