@@ -74,6 +74,54 @@ test("the sign-in page gets both families from this origin rather than a font CD
   expect(await rendersIn(page, "Gelasio")).toBe(true);
 });
 
+// The reverse of the check below, and the one that actually caught something: a
+// family a stylesheet *sets* but never *declares*. rendersIn cannot see it,
+// because a developer with the font installed locally gets a match on the family
+// name with nothing fetched — so the dashboard shipped every heading in the
+// Georgia fallback while the suite stayed green. Compare the two lists instead.
+test("every family the dashboard sets is also declared in its own stylesheets", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/index.html");
+
+  const { used, declared } = await page.evaluate(() => {
+    const generic = new Set([
+      "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui",
+      "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "inherit",
+      "initial", "unset", "revert", "emoji", "math", "fangsong",
+    ]);
+    const used = new Set();
+    const declared = new Set();
+
+    const walk = (rules) => {
+      for (const rule of rules) {
+        if (rule instanceof CSSFontFaceRule) {
+          declared.add(rule.style.getPropertyValue("font-family").replace(/['"]/g, "").trim());
+          continue;
+        }
+        if (rule.cssRules) walk([...rule.cssRules]); // @media, @supports
+        const stack = rule.style?.getPropertyValue("font-family");
+        if (!stack) continue;
+        // Only the first entry matters: the rest are the fallbacks, which are
+        // allowed to be families this origin does not serve.
+        const first = stack.split(",")[0].replace(/['"]/g, "").trim();
+        if (first && !generic.has(first.toLowerCase()) && !first.startsWith("var(")) used.add(first);
+      }
+    };
+
+    for (const sheet of document.styleSheets) {
+      try {
+        walk([...sheet.cssRules]);
+      } catch {
+        // cross-origin sheet; nothing local to check
+      }
+    }
+    return { used: [...used], declared: [...declared] };
+  });
+
+  expect(used.length).toBeGreaterThan(0);
+  expect(declared.sort()).toEqual([...new Set([...used, ...declared])].sort());
+});
+
 test("every declared font file is actually present", async ({ page, request }) => {
   await signIn(page);
   await page.goto("/index.html");

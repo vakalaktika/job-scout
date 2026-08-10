@@ -1,9 +1,10 @@
 # Vendored fonts
 
-Four WOFF2 files, ~172 KB total, serving both families the product uses. Declared in
-`../index-uR5-NbPW.css` (Work Sans only — the bundle sets no other family) and inline in
-`../../login.html` (Gelasio and Work Sans). See "Fonts are served from this origin" in
-the root `README.md` for why they are vendored rather than loaded from Google.
+Four WOFF2 files, ~172 KB total, serving both families the product uses. Both families are
+declared in both places — `../index-uR5-NbPW.css` and inline in `../../login.html` — because
+both pages set both: Work Sans for body text, Gelasio for headings. See "Fonts are served
+from this origin" in the root `README.md` for why they are vendored rather than loaded from
+Google.
 
 | File | Bytes | Faces it serves |
 |---|---|---|
@@ -37,5 +38,7 @@ A browser User-Agent matters — Google varies the response format by client, an
 modern UA yields WOFF2. Take the `latin` and `latin-ext` blocks, save the files they point
 at, and copy the `unicode-range` values across unchanged.
 
-Then run `npx playwright test e2e/fonts.spec.mjs`. It fails on a file that 404s and on a
-face that is declared but never renders, which is the failure that hid here for so long.
+Then run `npx playwright test e2e/fonts.spec.mjs`. It fails on a file that 404s, on a face
+that is declared but never renders, and on a family a stylesheet sets without declaring —
+that last one being invisible on a machine with the font installed locally, since the family
+name matches with nothing fetched.
