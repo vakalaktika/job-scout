@@ -117,8 +117,12 @@ test("a programmatically focused step heading shows that it was focused", async 
   await page.getByRole("button", { name: /Edit preferences|Review preferences/ }).first().click();
   await page.getByRole("tab", { name: "Delivery" }).click();
 
-  await page.locator("#intake-step-heading").evaluate((el) => el.focus());
+  // Focus and measure in one evaluate. Switching tabs queues a re-render that
+  // replaces this heading, and the tab strip then reclaims focus, so splitting
+  // these across two round-trips lets the re-render land in between and reads as
+  // a heading with no cue. One synchronous callback cannot be interleaved.
   const cue = await page.locator("#intake-step-heading").evaluate((el) => {
+    el.focus();
     const style = getComputedStyle(el);
     return { outline: style.outlineStyle, width: parseFloat(style.outlineWidth), shadow: style.boxShadow };
   });
