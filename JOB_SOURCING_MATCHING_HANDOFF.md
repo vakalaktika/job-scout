@@ -66,6 +66,29 @@ The external dispatcher owns the actual discovery loop. The documented contract 
 
 Each accepted posting can carry title, company, URL, location, source, date posted, date sent, raw posting text, a primary domain/job family, and the three brief fields.
 
+### Apply-link resolution for LinkedIn matches
+
+A LinkedIn posting's `URL` is a landing page, not an application. Most LinkedIn postings hand the candidate to the employer's own board the moment they press Apply, so a delivered LinkedIn link costs a sign-in wall and a second click.
+
+Reading the button is not enough on its own. As of August 2026 LinkedIn's public guest fragment still states *whether* a posting applies offsite — the Apply button carries an offsite icon, an Easy Apply one carries an onsite tracking name — but the destination sits behind a signed redirect that cannot be constructed without a session. This was verified against 24 live postings: none exposed the URL, and the `/jobs/view/externalApply/<id>` endpoint answers 400 without LinkedIn's `urlHash`.
+
+`linkedin-apply-url.mjs` therefore establishes the route, and `ats-boards.mjs` finds the destination when LinkedIn will not name it, by looking the role up on the employer's own Ashby, Greenhouse, or Lever board using company and exact title. The result is one of three answers — `external` (a destination established beyond doubt), `linkedin` (Easy Apply, so the post *is* the application), or `unknown` (bot wall, timeout, or an offsite role that could not be pinned down). Only `external` changes the link the candidate receives; the other two deliberately keep the LinkedIn post.
+
+The board match is strict: exactly one posting on one board carrying exactly that title. The same title in two cities is ambiguous and resolves to nothing, because the wrong location's posting is worse than the click this removes. Measured over 12 live LinkedIn postings, 7 resolved to a working employer apply page and 5 fell back.
+
+Two independent call sites resolve, and they are not interchangeable:
+
+- **Email.** `dispatch/render-match-email.mjs` resolves at send time, before `toPosting()`/`buildEmail()`. This is the reference implementation. The **deployed** `job-scout-backup-dispatcher` Worker must adopt the same step for sent mail to carry apply links; until it does, only the dashboard benefits.
+- **Dashboard.** The Worker resolves once per posting during `sessionResponse()` and stores the result on the Sent posting as `Apply URL`, `Apply method`, and `Apply checked at`. A settled answer is never re-resolved; an `unknown` retries after 24 hours. Resolving one posting costs a guest read plus up to nine board lookups, so the sweep defaults to two postings per session (`APPLY_LINK_LIMIT`, range 0–8) and a backlog clears over a few visits instead of exhausting the Worker's subrequest budget.
+
+Three constraints hold on both paths:
+
+1. The `URL` column is never overwritten. It is the dispatcher's de-duplication key, and rewriting it would re-send the same role. The dashboard exposes the resolved link as `url` and the original post as `posting_url`.
+2. Every resolved link passes the same public-URL guard the posting fetcher uses, so a redirect into loopback, link-local, or RFC 1918 space — or a non-`http(s)` scheme — cannot reach a candidate.
+3. A redirect chain that lands on a site root is discarded in favour of the link already held, because a careers homepage is not a posting.
+
+The resolver identifies itself honestly in its `User-Agent` and reads only LinkedIn's public guest fragment. When LinkedIn refuses that read the outcome is `unknown`, and the candidate gets the LinkedIn post — the pre-existing behaviour.
+
 ### Candidate-scoped first run
 
 New candidates are created with `First scout status = Available`. After onboarding they
@@ -148,7 +171,7 @@ For a missing brief, the Worker searches for source text in this order:
 
 1. description properties already stored on the Sent posting;
 2. text blocks in the Sent posting's Notion page; and
-3. the original public posting URL.
+3. the public posting URL — the resolved `Apply URL` when one exists, otherwise the original. The employer's board serves the whole posting where LinkedIn answers a datacentre fetch with a sign-in wall, so resolution runs before enrichment. The liveness sweep reads the same page for the same reason.
 
 When it fetches a posting, it prefers Schema.org `JobPosting` JSON-LD over general page text. The fallback strips scripts, styles, navigation, and other noise, requires multiple job-like signals, and rejects common login, verification, and anti-bot pages.
 
