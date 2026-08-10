@@ -1,0 +1,147 @@
+{
+  "version": "p1-adapt",
+  "phase": "p1-optimize-scoped",
+  "timestamp": "2026-08-10T19:00:00Z",
+  "status": "baseline-captured",
+  "notes": "Baseline snapshot taken at end of P1 adapt. Vite config and build command location unknown; build source is minified bundle.",
+  "entry_html": {
+    "file": "index.html",
+    "size_bytes": 1441,
+    "cache_bust_param": "?v=p1-hardening"
+  },
+  "critical_assets": {
+    "stylesheet": {
+      "file": "assets/index-uR5-NbPW.css",
+      "size_bytes": 73728,
+      "hash": "uR5-NbPW",
+      "critical": true,
+      "contains": [
+        "CSS reset and layout styles",
+        "Component styling (buttons, inputs, cards, etc)",
+        "@import from Google Fonts (Gelasio, Work Sans)"
+      ]
+    },
+    "javascript_main": {
+      "file": "assets/index-BdD4MZod.js",
+      "size_bytes": 1560576,
+      "hash": "BdD4MZod",
+      "critical": true,
+      "minified": true,
+      "bundles": [
+        "React 18.x",
+        "React DOM",
+        "React Router",
+        "PDF.js (~200 KB of the total)",
+        "Resume parsers (DOCX, PDF, TXT extraction)",
+        "Date utilities",
+        "UI component library code"
+      ],
+      "optimization_target": "Lazy-load PDF worker, reduce bundle size"
+    },
+    "javascript_worker": {
+      "file": "assets/pdf.worker.min-DEtVeC4l.mjs",
+      "size_bytes": 1228800,
+      "hash": "DEtVeC4l",
+      "critical": false,
+      "lazy_loadable": true,
+      "trigger": "Only loaded when member uploads a resume",
+      "optimization_target": "Conditionally load only in resume intake flow"
+    }
+  },
+  "stale_artifacts": [
+    {
+      "file": "assets/index-CMLxz5HY.js",
+      "size_bytes": 1433600,
+      "reason": "Previous build, not in index.html"
+    },
+    {
+      "file": "assets/index-Dqljo_Jk.js",
+      "size_bytes": 1433600,
+      "reason": "Previous build, not in index.html"
+    },
+    {
+      "file": "assets/index-Dy1hcYIw.js",
+      "size_bytes": 1433600,
+      "reason": "Previous build, not in index.html"
+    },
+    {
+      "file": "assets/index-CX72wK7c.css",
+      "size_bytes": 45056,
+      "reason": "Previous build, not in index.html"
+    },
+    {
+      "file": "assets/index-Bjpj5Psm.css",
+      "size_bytes": 45056,
+      "reason": "Previous build, not in index.html"
+    },
+    {
+      "file": "assets/index-CBXy9MZI.css",
+      "size_bytes": 44544,
+      "reason": "Previous build, not in index.html"
+    }
+  ],
+  "external_dependencies": {
+    "google_fonts": {
+      "url": "https://fonts.googleapis.com/css2?family=Gelasio:opsz,wght@12..144,500;12..144,600&family=Work+Sans:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap",
+      "families": [
+        {
+          "name": "Gelasio",
+          "weights": [500, 600],
+          "optical_sizes": "12–144",
+          "use_case": "Display, headings (serif)"
+        },
+        {
+          "name": "Work Sans",
+          "weights": [400, 500, 600],
+          "optical_sizes": "6–72",
+          "use_case": "Body text, controls (sans-serif)"
+        }
+      ],
+      "optimization_target": "Replace with self-hosted WOFF2 files"
+    }
+  },
+  "payload_analysis": {
+    "critical_path_kb": 1648.75,
+    "breakdown": {
+      "html_kb": 1.4,
+      "css_kb": 72,
+      "javascript_kb": 1520,
+      "fonts_network_kb": 55.35
+    },
+    "notes": "Fonts loaded from Google Fonts via CSS @import; adds network latency. PDF worker (1.2 MB) bundled but only used during resume upload."
+  },
+  "optimizations_p1": {
+    "direct_font_loading": {
+      "current": "Google Fonts via @import (external domain, ~55 KB network)",
+      "target": "Self-hosted WOFF2 files (~150 KB on disk, zero network latency)",
+      "savings": "50–100 ms (eliminate external request), ~60 KB fewer bytes transferred",
+      "effort": "Low - download fonts, update CSS @font-face"
+    },
+    "lazy_load_pdf_worker": {
+      "current": "Bundled in main JS (1.2 MB always loaded)",
+      "target": "Load only when resume upload flow is triggered",
+      "savings": "1.2 MB from critical path; users without resume don't load it",
+      "effort": "Medium - requires conditional load logic in resume upload component"
+    },
+    "build_artifact_pinning": {
+      "current": "Hash-based naming; old builds retained",
+      "target": "Document exact build inputs/outputs in BUILD_MANIFEST.json",
+      "savings": "Enables future reproducible builds",
+      "effort": "Low - this document and file serve as the record"
+    }
+  },
+  "future_full_reconstruction_blockers": [
+    "Vite/Rollup config not in repository",
+    "Build source (index-BdD4MZod.js, etc) is minified; requires decompilation",
+    "Private dependencies may be bundled (unknown without config)",
+    "No package.json or lockfile; exact dependency versions unknown"
+  ],
+  "next_actions": [
+    "Download Gelasio WOFF2 (weights 500, 600) and Work Sans WOFF2 (weights 400, 500, 600)",
+    "Create assets/fonts/ directory and place downloaded fonts",
+    "Update assets/index-uR5-NbPW.css to replace @import with @font-face declarations",
+    "Implement conditional PDF worker loading in intake flow component",
+    "Create BEFORE/AFTER measurement report with bundle size and load time metrics",
+    "Commit optimizations and update cache-bust version tag"
+  ]
+}
