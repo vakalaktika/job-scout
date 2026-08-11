@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   JOB_SCHEMA,
   buildEmail,
+  default as backupWorker,
   fallbackEmail,
   saveJob,
   sanitizeJob,
@@ -95,6 +96,60 @@ async function captureNotionWrite(value) {
   }
 }
 
+async function deliverThroughWorker(value, { templateAvailable = true, initialSchema = {} } = {}) {
+  const originalFetch = globalThis.fetch;
+  const captured = { email: null, notion: null, schemaPatch: null };
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.endsWith("/email-template.html")) {
+      return templateAvailable
+        ? new Response(TEMPLATE, { status: 200 })
+        : new Response("template unavailable", { status: 503 });
+    }
+    if (target === "https://api.resend.com/emails") {
+      captured.email = JSON.parse(init.body);
+      return Response.json({ id: "email-1" });
+    }
+    if (target.endsWith("/databases/236b97b7-af8b-4c3d-8d67-f57fdc6386c6")) {
+      if (init.method === "PATCH") {
+        captured.schemaPatch = JSON.parse(init.body);
+        return Response.json({ properties: schema });
+      }
+      return Response.json({ properties: initialSchema });
+    }
+    if (target === "https://api.notion.com/v1/pages") {
+      captured.notion = JSON.parse(init.body);
+      return Response.json({ id: "saved-job" });
+    }
+    throw new Error(`unexpected fetch: ${init.method || "GET"} ${target}`);
+  };
+
+  try {
+    const response = await backupWorker.fetch(
+      new Request("https://backup.example/send-email", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer send-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          candidate_email: candidate.email,
+          candidate_name: candidate.name,
+          jobs: [value],
+        }),
+      }),
+      {
+        NOTION_TOKEN: "notion-token",
+        RESEND_API_KEY: "resend-token",
+        SEND_API_TOKEN: "send-token",
+      },
+    );
+    return { response, ...captured };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 test("salary stated in the posting survives search, email, fallback text, and Notion", async () => {
   const salary = "$175k–$205k";
   const { jobs, requestBody } = await captureSearchResult(salary);
@@ -140,4 +195,53 @@ test("salary missing from the posting stays empty and the email makes no univers
 
   const notionWrite = await captureNotionWrite(sanitized);
   assert.equal("Salary" in notionWrite.properties, false);
+});
+
+test("the backup Worker's send endpoint keeps salary through its real delivery boundary", async () => {
+  const salary = "$190k–$225k";
+  const delivery = await deliverThroughWorker(job(salary));
+
+  assert.equal(delivery.response.status, 200);
+  assert.equal((await delivery.response.json()).sent, true);
+  assert.deepEqual(delivery.schemaPatch.properties.Salary, { rich_text: {} });
+  assert.match(delivery.email.html, /Remote \(US\).*\$190k–\$225k.*Company site/s);
+  assert.equal(
+    delivery.notion.properties.Salary.rich_text[0].text.content,
+    salary,
+  );
+});
+
+test("the backup Worker's plain-text delivery omits salary when the posting does not list it", async () => {
+  const delivery = await deliverThroughWorker(job(undefined), {
+    templateAvailable: false,
+    initialSchema: schema,
+  });
+  const result = await delivery.response.json();
+
+  assert.equal(result.sent, true);
+  assert.equal(result.used_fallback_text, true);
+  assert.equal(delivery.email.html, undefined);
+  assert.match(delivery.email.text, /Remote \(US\) · Company site/);
+  assert.doesNotMatch(delivery.email.text, /\$undefined|\$null/);
+  assert.equal("Salary" in delivery.notion.properties, false);
+});
+
+test("the backup Worker keeps its authenticated status route intact", async () => {
+  const response = await backupWorker.fetch(
+    new Request("https://backup.example/status", {
+      headers: { Authorization: "Bearer admin-token" },
+    }),
+    {
+      ADMIN_TOKEN: "admin-token",
+      BACKUP_STATE: { get: async () => "1.25" },
+      BACKUP_ENABLED: "true",
+      RESEND_API_KEY: "resend-token",
+      MONTHLY_BUDGET_USD: "4.5",
+    },
+  );
+
+  const result = await response.json();
+  assert.equal(result.ok, true);
+  assert.equal(result.estimated_spend, 1.25);
+  assert.equal(result.resend_configured, true);
 });
