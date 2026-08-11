@@ -908,8 +908,33 @@
       .dc-badges {
         display: flex;
         flex-wrap: wrap;
+        /* Without this, flex items stretch to the row's cross size. The row was
+           as tall as the tallest badge plus the stray margin below, so every
+           badge grew to ~35px and sat with its text pinned near the top. */
+        align-items: center;
         gap: 8px;
         margin-top: 10px;
+      }
+      /* One box for every badge in this row, whatever its type. Three of them
+         meet here -- .workplace-badge, .pill and .status-badge -- and they were
+         written for different places, so they disagreed on height and vertical
+         position:
+           - .workplace-badge carries margin-top:8px for the email card, where it
+             sits alone under the title. Inside this row that margin shoved it 8px
+             below its neighbours and, under stretch, made it 8px shorter.
+           - the three differ in font-size (11-12px) and border (1px vs none), so
+             even once aligned their boxes would not have matched.
+         min-height with border-box settles the height for all three regardless of
+         which of them draws a border, and it is the border-box that matters --
+         .workplace-badge's 1px edge would otherwise stand it 2px taller. */
+      .dc-badges > * {
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        margin-top: 0;
+        line-height: 1;
+        white-space: nowrap;
       }
       .dc-meta {
         margin-top: 10px;
