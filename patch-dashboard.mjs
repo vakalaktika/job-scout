@@ -87,6 +87,20 @@ patch(
     'frequency:z?"Paused":ue==="Three times a day"?"3x daily":ue})',
 );
 
+// A first scout that failed to dispatch and one that has run out of attempts are
+// different situations for the member, and the old copy described neither: it
+// said another try was needed while the state it was describing rendered no
+// control that could make one. Whether a retry exists is a fact the Worker
+// reports, so the branch reads it rather than asserting it.
+const scoutFailureBranch =
+  'if(e==="failed"||e==="needs_review"){const t=!!(l&&l.can_retry);' +
+  'return t?{eyebrow:"Search update",title:"Your first scout didn’t start.",' +
+  'copy:"Nothing was searched, so your one-time run is still yours to use. Try it again — your regular scout schedule is running either way.",' +
+  'canStart:!0,cta:"Try again"}:' +
+  '{eyebrow:"Search update",title:"We couldn’t start your first scout.",' +
+  'copy:"We tried several times and it still didn’t start, so this one needs us. Your regular scout schedule is active and will keep looking — reply to your invitation email and we’ll pick it up from there.",' +
+  'canStart:!1}};';
+
 // Shared card helpers, injected beside the date helpers they build on so they
 // stay inside the same const list rather than leaking a global.
 const cardHelpers =
@@ -137,8 +151,7 @@ const cardHelpers =
   'copy:"We’re checking your preferences against fresh postings. You can leave this page; results will also arrive by email.",canStart:!1};' +
   'if(e==="complete")return{eyebrow:"Search complete",title:"Your first scout finished.",' +
   'copy:"There weren’t any strong matches this time. Your regular scout schedule is active and will keep looking.",canStart:!1};' +
-  'if(e==="failed"||e==="needs_review")return{eyebrow:"Search update",title:"Your first scout needs another try.",' +
-  'copy:"We couldn’t finish the one-time search. Your regular scout schedule is still active.",canStart:!1};' +
+  scoutFailureBranch +
   'return{eyebrow:"Your first run",title:"Your preferences are saved.",' +
   'copy:"Your scout will run on its regular schedule. Matching jobs will arrive by email and appear here.",canStart:!1}}';
 
@@ -171,9 +184,19 @@ const shippedCardHelpers =
 const postedHelper =
   'P3=l=>{const e=xA(l);return e===null?"":e===0?"Posted today":e===1?"Posted yesterday":`Posted ${e} days ago`}';
 
+// The helper list the bundle carries today, whose first-scout failure branch
+// promised a retry with no control behind it. Kept as its own anchor so this
+// patch supersedes that revision rather than declaring the helpers twice.
+const retrylessCardHelpers = cardHelpers.replace(
+  scoutFailureBranch,
+  'if(e==="failed"||e==="needs_review")return{eyebrow:"Search update",title:"Your first scout needs another try.",' +
+    'copy:"We couldn’t finish the one-time search. Your regular scout schedule is still active.",canStart:!1};',
+);
+
 patch(
   "inject the freshness, requirement, run-label, and tracking helpers",
   [
+    `${postedHelper},/*first-scout-helpers*/${retrylessCardHelpers}`,
     `${postedHelper},${cardHelpers},${previousCardHelpers}`,
     `${postedHelper},${previousCardHelpers}`,
     `${postedHelper},${shippedCardHelpers}`,
@@ -333,18 +356,77 @@ patch(
 // fails — expired, already used, or nonce-rotated — falls through to the normal
 // flow rather than dead-ending, because the invite code still works.
 // ---------------------------------------------------------------------------
+const magicConsume =
+  "return W.useEffect(()=>{let _=!1;return(async()=>{" +
+  'const __jsT=new URLSearchParams(window.location.search).get("login");' +
+  "if(__jsT){const __jsU=new URL(window.location.href);" +
+  '__jsU.searchParams.delete("login");window.history.replaceState({},"",__jsU);' +
+  'try{const __jsR=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"magic_consume",magic_token:__jsT})}),__jsD=await __jsR.json();' +
+  'if(!__jsR.ok||!__jsD.ok)throw new Error(__jsD.error||"invalid_link");' +
+  '_||(w("",__jsD),v(!1));return}catch(__jsE){console.error(__jsE)';
+
+// A link that fails still has to land somewhere that explains itself. The
+// previous revision swallowed the error and dropped the member on the invite
+// gate — the one screen the link exists to let them skip — with nothing on it to
+// say the link had expired, had already been used, or had simply hit a bad
+// minute. The Worker now names which of those happened; carry that name to the
+// screen that can act on it.
 patch(
   "exchange a magic-link token for a session on load",
-  "return W.useEffect(()=>{let _=!1;return(async()=>{let A=null;",
-  "return W.useEffect(()=>{let _=!1;return(async()=>{" +
-    'const __jsT=new URLSearchParams(window.location.search).get("login");' +
-    "if(__jsT){const __jsU=new URL(window.location.href);" +
-    '__jsU.searchParams.delete("login");window.history.replaceState({},"",__jsU);' +
-    'try{const __jsR=await fetch(l6,{method:"POST",headers:{"Content-Type":"application/json"},' +
-    'body:JSON.stringify({action:"magic_consume",magic_token:__jsT})}),__jsD=await __jsR.json();' +
-    'if(!__jsR.ok||!__jsD.ok)throw new Error(__jsD.error||"invalid_link");' +
-    '_||(w("",__jsD),v(!1));return}catch(__jsE){console.error(__jsE)}}' +
-    "let A=null;",
+  [`${magicConsume}}}let A=null;`, "return W.useEffect(()=>{let _=!1;return(async()=>{let A=null;"],
+  `${magicConsume},_||__jsSetLinkError(String(__jsE&&__jsE.message||"link_failed"))}}let A=null;`,
+);
+
+patch(
+  "carry a failed sign-in link to the screen that can explain it",
+  'e==="invite"?Y.jsx(wP,{shouldReduceMotion:l,onContinue:w}):null',
+  'e==="invite"?Y.jsx(wP,{shouldReduceMotion:l,onContinue:w,linkError:__jsLinkError}):null',
+);
+
+patch(
+  "accept the link error on the invite screen",
+  "function wP({shouldReduceMotion:l,onContinue:e}){",
+  "function wP({shouldReduceMotion:l,onContinue:e,linkError:__jsLE}){",
+);
+
+// Every state is named, every state offers the two ways back in, and none of
+// them reveal whether an address has an account: the member already holds a link
+// we signed, and "Send another link" goes to the same non-enumerating request
+// page the invite form links to.
+const linkCopy =
+  '{expired_link:["That sign-in link has expired.",' +
+  '"Links last 15 minutes for your security. Send yourself a new one and it will work straight away."],' +
+  'used_link:["That sign-in link has already been used.",' +
+  '"Each link opens your job list once. Send yourself a new one, or use your invite code below."],' +
+  'invalid_link:["We couldn’t read that sign-in link.",' +
+  '"Some email apps break long links. Send yourself a new one, or use your invite code below."],' +
+  'revoked:["That account is no longer active.",' +
+  '"Reply to your invitation email and we’ll take a look."]}';
+
+patch(
+  "explain a failed sign-in link and offer another one",
+  'Y.jsx("div",{className:"invite-icon",children:Y.jsx(IL,{size:24,weight:"fill"})}),',
+  'Y.jsx("div",{className:"invite-icon",children:Y.jsx(IL,{size:24,weight:"fill"})}),' +
+    "__jsLE?(()=>{const __jsC=" +
+    linkCopy +
+    '[__jsLE]||["We couldn’t sign you in just then.",' +
+    '"Nothing is wrong with your account. Try your link again, send yourself a new one, or use your invite code below."];' +
+    'return Y.jsxs("div",{className:"link-error",role:"alert",children:[' +
+    'Y.jsx("strong",{children:__jsC[0]}),Y.jsx("span",{children:__jsC[1]}),' +
+    'Y.jsx("a",{href:"./login.html",className:"link-error-action",children:"Send another link"})]})})():null,',
+);
+
+patch(
+  "style the sign-in link explanation",
+  ".invite-icon{display:grid;width:48px;height:48px;place-items:center;margin-bottom:23px;",
+  ".link-error{display:flex;flex-direction:column;gap:5px;width:100%;margin:0 0 18px;border:1px solid #e0cfc8;" +
+    "border-radius:10px;background:var(--clay-pale);color:var(--ink);padding:12px 14px;text-align:left}" +
+    ".link-error strong{font-size:14px}" +
+    ".link-error span{color:var(--ink-soft);font-size:13px;line-height:1.5}" +
+    ".link-error-action{align-self:flex-start;color:var(--green-deep);font-size:13px;font-weight:600}" +
+    ".invite-icon{display:grid;width:48px;height:48px;place-items:center;margin-bottom:23px;",
+  "css",
 );
 
 // The same one-week promise is repeated on the landing hero and on the signed-in
@@ -489,6 +571,56 @@ patch(
     "[d,p]=W.useState(null),",
 );
 
+// ---------------------------------------------------------------------------
+// One busy job at a time was one busy job in total.
+//
+// Every decision and every application-status change shared a single scalar
+// "which job is busy" value, and controls disabled only when that scalar matched
+// their own card. So saving job A and then job B re-enabled A's buttons the
+// moment B finished, and A's late response overwrote whatever the member had
+// asked for since. Pending work is now tracked per job, and every mutation takes
+// a per-job ticket so a response that arrives after a newer one is discarded
+// instead of winning.
+// ---------------------------------------------------------------------------
+patch(
+  "track pending job mutations per job rather than one at a time",
+  "[A,S]=W.useState(null),[U,k]=W.useState(null),",
+  "[A,S]=W.useState(null),[U,k]=W.useState({}),__jsSeq=W.useRef(new Map())," +
+    "__jsBusy=__jsI=>!!U[__jsI]," +
+    "__jsHold=__jsI=>k(__jsL=>({...__jsL,[__jsI]:(__jsL[__jsI]||0)+1}))," +
+    "__jsRelease=__jsI=>k(__jsL=>{const __jsC=(__jsL[__jsI]||0)-1,__jsM={...__jsL};" +
+    "return __jsC>0?(__jsM[__jsI]=__jsC,__jsM):(delete __jsM[__jsI],__jsM)})," +
+    "__jsClaim=__jsI=>{const __jsN=(__jsSeq.current.get(__jsI)||0)+1;" +
+    "return __jsSeq.current.set(__jsI,__jsN),__jsN}," +
+    "__jsLatest=(__jsI,__jsN)=>__jsSeq.current.get(__jsI)===__jsN,",
+);
+
+// Delivery settings live on the member record, and the dashboard used to change
+// them only in its own state. The canonical profile kept the cadence it was
+// hydrated with, so the next preference save posted that stale value back and
+// quietly undid the change — or restarted emails somebody had paused. The saved
+// response is the member record, so hand it back to the app that owns it.
+patch(
+  "hand a saved cadence back to the canonical member state",
+  'v(z),z||D(ue),K(z?"Job emails are paused."',
+  'v(z),z||D(ue),__jsSyncDelivery&&__jsSyncDelivery(de),K(z?"Job emails are paused."',
+);
+
+patch(
+  "accept the delivery sync callback on the dashboard",
+  "function lP({profile:l,memberState:e,inviteCode:t,sessionToken:n,shouldReduceMotion:a,onEdit:s,onLogout:o}){var B;",
+  "function lP({profile:l,memberState:e,inviteCode:t,sessionToken:n,shouldReduceMotion:a,onEdit:s,onLogout:o,onDelivery:__jsSyncDelivery}){var B;",
+);
+
+patch(
+  "pass the delivery sync callback from the app",
+  'e==="dashboard"?Y.jsx(lP,{profile:s,memberState:m,inviteCode:c,sessionToken:d,shouldReduceMotion:l,onEdit:()=>D("intake"),onLogout:T}):null',
+  'e==="dashboard"?Y.jsx(lP,{profile:s,memberState:m,inviteCode:c,sessionToken:d,shouldReduceMotion:l,' +
+    'onEdit:()=>D("intake"),onLogout:T,onDelivery:__jsE=>{__jsE&&__jsE.member&&(g(__jsE),x(__jsE),' +
+    'o(__jsP=>({...__jsP,frequency:__jsE.member.frequency==="3x daily"?"Three times a day":' +
+    '__jsE.member.frequency||__jsP.frequency,paused:__jsE.member.status==="Paused"})))}}):null',
+);
+
 // An applied posting leaves the unreviewed queue whether or not a decision was
 // recorded, and stays in the active list however old it gets — nobody stops
 // caring about an application because the posting turned eight days old.
@@ -523,10 +655,31 @@ const decisionCall =
 const decisionTail =
   '}catch(de){console.error(de),K("We couldn’t save that choice. Please try again.")}finally{k(null)}}';
 
+// What the previous revision of this patch produced, kept verbatim as the
+// migration anchor for the per-job ticketing below.
+const scalarBusyHandlers =
+  'J=async(ue,z,$="",__jsN="")=>{k(ue.id);try{const de=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"job_decision",session_token:n,job_id:ue.id,decision:z,feedback:$,note:__jsN})}),' +
+  'he=await de.json();if(!de.ok||!he.ok)throw new Error(he.error||"decision_failed");' +
+  "T(Te=>Te.map(re=>re.id===ue.id?{...re,...he.job}:re))," +
+  'typeof he.match_context=="string"&&__jsSetContext(he.match_context),' +
+  "z||__jsSetRestored(__jsL=>__jsL.includes(ue.id)?__jsL:[...__jsL,ue.id])," +
+  "E(null),__jsSetOther(!1)," +
+  'K(z==="Interested"?"Saved to your shortlist.":z?"Not interested. Find it under Not interested if you change your mind.":"Back in your job list.")}' +
+  'catch(de){console.error(de),K("We couldn’t save that choice. Please try again.")}finally{k(null)}},' +
+  "__jsTrack=async(__jsJ,__jsS)=>{k(__jsJ.id);try{" +
+  'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"job_application",session_token:n,job_id:__jsJ.id,application_status:__jsS})}),' +
+  '__jsB=await __jsR.json();if(!__jsR.ok||!__jsB.ok)throw new Error(__jsB.error||"tracking_failed");' +
+  "T(__jsL=>__jsL.map(__jsI=>__jsI.id===__jsJ.id?{...__jsI,...__jsB.job}:__jsI)),E(null)," +
+  'K(__jsS?`Tracked as ${__jsS.toLowerCase()}.`:"Tracking cleared.")}' +
+  'catch(__jsX){console.error(__jsX),K("We couldn’t update that just yet. Please try again.")}finally{k(null)}}';
+
 patch(
   "send the free-text note and add the application-status call",
   [
-    // What the previous revision produced: a toast that names an undone decision.
+    scalarBusyHandlers,
+    // What the revision before that produced: a toast that names an undone decision.
     decisionCall +
       'K(z==="Interested"?"Saved to your shortlist.":z?"Removed from your job list.":"Back in your job list.")' +
       decisionTail,
@@ -535,23 +688,57 @@ patch(
       'K(z==="Interested"?"Saved to your shortlist.":"Removed from your job list.")' +
       decisionTail,
   ],
-  'J=async(ue,z,$="",__jsN="")=>{k(ue.id);try{const de=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'J=async(ue,z,$="",__jsN="")=>{const __jsQ=__jsClaim(ue.id);__jsHold(ue.id);' +
+    'try{const de=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
     'body:JSON.stringify({action:"job_decision",session_token:n,job_id:ue.id,decision:z,feedback:$,note:__jsN})}),' +
     'he=await de.json();if(!de.ok||!he.ok)throw new Error(he.error||"decision_failed");' +
+    "if(!__jsLatest(ue.id,__jsQ))return;" +
     "T(Te=>Te.map(re=>re.id===ue.id?{...re,...he.job}:re))," +
     'typeof he.match_context=="string"&&__jsSetContext(he.match_context),' +
     "z||__jsSetRestored(__jsL=>__jsL.includes(ue.id)?__jsL:[...__jsL,ue.id])," +
     "E(null),__jsSetOther(!1)," +
     'K(z==="Interested"?"Saved to your shortlist.":z?"Not interested. Find it under Not interested if you change your mind.":"Back in your job list.")}' +
-    'catch(de){console.error(de),K("We couldn’t save that choice. Please try again.")}finally{k(null)}},' +
-    "__jsTrack=async(__jsJ,__jsS)=>{k(__jsJ.id);try{" +
+    'catch(de){console.error(de),__jsLatest(ue.id,__jsQ)&&K("We couldn’t save that choice. Please try again.")}' +
+    "finally{__jsRelease(ue.id)}}," +
+    "__jsTrack=async(__jsJ,__jsS)=>{const __jsQ=__jsClaim(__jsJ.id);__jsHold(__jsJ.id);try{" +
     'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
     'body:JSON.stringify({action:"job_application",session_token:n,job_id:__jsJ.id,application_status:__jsS})}),' +
     '__jsB=await __jsR.json();if(!__jsR.ok||!__jsB.ok)throw new Error(__jsB.error||"tracking_failed");' +
+    "if(!__jsLatest(__jsJ.id,__jsQ))return;" +
     "T(__jsL=>__jsL.map(__jsI=>__jsI.id===__jsJ.id?{...__jsI,...__jsB.job}:__jsI)),E(null)," +
     'K(__jsS?`Tracked as ${__jsS.toLowerCase()}.`:"Tracking cleared.")}' +
-    'catch(__jsX){console.error(__jsX),K("We couldn’t update that just yet. Please try again.")}finally{k(null)}}',
+    'catch(__jsX){console.error(__jsX),__jsLatest(__jsJ.id,__jsQ)&&K("We couldn’t update that just yet. Please try again.")}' +
+    "finally{__jsRelease(__jsJ.id)}}",
 );
+
+// Every control that greyed itself out against the old scalar now asks whether
+// its own job is busy. They have to move together — one left behind would grey
+// out a card because a different card was saving — so the two markup patches
+// below derive their disabled state from one place.
+const perJobBusy = (markup) => markup.replaceAll("disabled:U===$.id", "disabled:__jsBusy($.id)");
+
+const reversiblePassRow =
+  'Y.jsx("div",{className:"job-card-actions",children:Y.jsxs("div",{className:"job-decision-actions",children:[' +
+  'Y.jsxs(Ut.button,{type:"button","aria-pressed":$.decision==="Not interested",' +
+  '"aria-label":$.decision==="Not interested"?`Put ${$.role||$.title} back in your job list`:`Not interested in ${$.role||$.title}`,' +
+  'className:`decision-button pass ${$.decision==="Not interested"?"is-on":""}`,disabled:U===$.id,' +
+  'onClick:()=>$.decision==="Not interested"?J($,""):(__jsSetOther(!1),E(_===$.id?null:$.id)),' +
+  'whileTap:{scale:.97},transition:La,children:[Y.jsx(q5,{size:16})," ",' +
+  '$.decision==="Not interested"?"Put back":"Not interested"]}),' +
+  'Y.jsxs(Ut.button,{type:"button","aria-pressed":$.decision==="Interested",' +
+  '"aria-label":$.decision==="Interested"?`Remove ${$.role||$.title} from your saved jobs`:`Mark ${$.role||$.title} as interested`,' +
+  'className:`decision-button save ${$.decision==="Interested"?"is-on":""}`,disabled:U===$.id,' +
+  'onClick:()=>J($,$.decision==="Interested"?"":"Interested"),' +
+  'whileTap:{scale:.97},transition:La,children:[Y.jsx(o3,{size:16,weight:"fill"})," Interested"]})]})}),' +
+  '$.decision==="Interested"||$.application_status?Y.jsxs("div",{className:"job-track",children:[' +
+  'Y.jsx("span",{className:"job-track-label",id:`track-${$.id}`,children:"Where are you with this one?"}),' +
+  'Y.jsx("div",{className:"job-track-options",role:"group","aria-labelledby":`track-${$.id}`,' +
+  'children:__jsAppStatuses.map(__t=>Y.jsx(Ut.button,{type:"button","aria-pressed":$.application_status===__t,' +
+  'className:`track-chip ${$.application_status===__t?"is-on":""}`,disabled:U===$.id,' +
+  'onClick:()=>__jsTrack($,$.application_status===__t?"":__t),' +
+  "whileTap:{scale:.97},transition:La,children:__t},__t))})," +
+  '__jsAppNote($)?Y.jsx("p",{className:"job-track-note",children:__jsAppNote($)}):null]}):' +
+  '__jsPassNote($)?Y.jsx("p",{className:"job-track job-track-note",children:__jsPassNote($)}):null,';
 
 // "Not interested" becomes a toggle for the same reason "Interested" did: the
 // card is the only place a decision can be taken back. A dismissed card says
@@ -560,6 +747,7 @@ patch(
 patch(
   "make the pass reversible and add the application-status row",
   [
+    reversiblePassRow,
     // What the previous revision of the decision row produced.
     'Y.jsx("div",{className:"job-card-actions",children:Y.jsxs("div",{className:"job-decision-actions",children:[' +
       'Y.jsxs(Ut.button,{type:"button","aria-label":`Not interested in ${$.role||$.title}`,' +
@@ -575,57 +763,43 @@ patch(
     // for the pass and hangs the tracker off the same decision.
     'Y.jsx("div",{className:"job-card-actions",children:Y.jsx("div",{className:"job-decision-actions",children:!z&&$.decision!=="Interested"?Y.jsxs(Y.Fragment,{children:[Y.jsxs(Ut.button,{type:"button","aria-label":`Not interested in ${$.role||$.title}`,className:"decision-button pass",disabled:U===$.id,onClick:()=>E(_===$.id?null:$.id),whileTap:{scale:.97},transition:La,children:[Y.jsx(q5,{size:16})," Pass"]}),Y.jsxs(Ut.button,{type:"button","aria-label":`Save ${$.role||$.title}`,className:"decision-button save",disabled:U===$.id,onClick:()=>J($,"Interested"),whileTap:{scale:.97},transition:La,children:[Y.jsx(o3,{size:16,weight:"fill"})," Save"]})]}):null})}),',
   ],
-  'Y.jsx("div",{className:"job-card-actions",children:Y.jsxs("div",{className:"job-decision-actions",children:[' +
-    'Y.jsxs(Ut.button,{type:"button","aria-pressed":$.decision==="Not interested",' +
-    '"aria-label":$.decision==="Not interested"?`Put ${$.role||$.title} back in your job list`:`Not interested in ${$.role||$.title}`,' +
-    'className:`decision-button pass ${$.decision==="Not interested"?"is-on":""}`,disabled:U===$.id,' +
-    'onClick:()=>$.decision==="Not interested"?J($,""):(__jsSetOther(!1),E(_===$.id?null:$.id)),' +
-    'whileTap:{scale:.97},transition:La,children:[Y.jsx(q5,{size:16})," ",' +
-    '$.decision==="Not interested"?"Put back":"Not interested"]}),' +
-    'Y.jsxs(Ut.button,{type:"button","aria-pressed":$.decision==="Interested",' +
-    '"aria-label":$.decision==="Interested"?`Remove ${$.role||$.title} from your saved jobs`:`Mark ${$.role||$.title} as interested`,' +
-    'className:`decision-button save ${$.decision==="Interested"?"is-on":""}`,disabled:U===$.id,' +
-    'onClick:()=>J($,$.decision==="Interested"?"":"Interested"),' +
-    'whileTap:{scale:.97},transition:La,children:[Y.jsx(o3,{size:16,weight:"fill"})," Interested"]})]})}),' +
-    '$.decision==="Interested"||$.application_status?Y.jsxs("div",{className:"job-track",children:[' +
-    'Y.jsx("span",{className:"job-track-label",id:`track-${$.id}`,children:"Where are you with this one?"}),' +
-    'Y.jsx("div",{className:"job-track-options",role:"group","aria-labelledby":`track-${$.id}`,' +
-    'children:__jsAppStatuses.map(__t=>Y.jsx(Ut.button,{type:"button","aria-pressed":$.application_status===__t,' +
-    'className:`track-chip ${$.application_status===__t?"is-on":""}`,disabled:U===$.id,' +
-    'onClick:()=>__jsTrack($,$.application_status===__t?"":__t),' +
-    "whileTap:{scale:.97},transition:La,children:__t},__t))})," +
-    '__jsAppNote($)?Y.jsx("p",{className:"job-track-note",children:__jsAppNote($)}):null]}):' +
-    '__jsPassNote($)?Y.jsx("p",{className:"job-track job-track-note",children:__jsPassNote($)}):null,',
+  perJobBusy(reversiblePassRow),
 );
+
+const passReasonPanel =
+  'Y.jsxs("div",{className:"feedback-options",children:[["Role","Company","Location","Pay"].map(he=>' +
+  'Y.jsx(Ut.button,{type:"button",disabled:U===$.id,onClick:()=>J($,"Not interested",he),' +
+  "whileTap:{scale:.97},transition:La,children:he},he))," +
+  'Y.jsx(Ut.button,{type:"button",disabled:U===$.id,onClick:()=>__jsTrack($,"Applied"),' +
+  'whileTap:{scale:.97},transition:La,children:"Already applied"}),' +
+  'Y.jsx(Ut.button,{type:"button","aria-expanded":__jsOther,className:__jsOther?"is-on":"",' +
+  "disabled:U===$.id,onClick:()=>__jsSetOther(!__jsOther)," +
+  'whileTap:{scale:.97},transition:La,children:"Something else"}),' +
+  'Y.jsx(Ut.button,{type:"button",className:"skip-feedback",disabled:U===$.id,' +
+  'onClick:()=>J($,"Not interested"),whileTap:{scale:.97},transition:La,children:"Skip"})]}),' +
+  '__jsOther?Y.jsxs("form",{className:"feedback-other",onSubmit:__jsE=>{__jsE.preventDefault();' +
+  'const __jsV=__jsE.currentTarget.querySelector("input").value.trim();' +
+  '__jsV&&J($,"Not interested","",__jsV)},children:[' +
+  'Y.jsx("label",{className:"sr-only",htmlFor:`pass-note-${$.id}`,children:`Why ${$.role||$.title} is not a match`}),' +
+  'Y.jsx("input",{id:`pass-note-${$.id}`,type:"text",maxLength:300,required:!0,' +
+  'placeholder:"e.g. too much travel, wrong industry"}),' +
+  'Y.jsx(Ut.button,{type:"submit",className:"decision-button save",disabled:U===$.id,' +
+  'whileTap:{scale:.97},transition:La,children:"Save reason"})]}):null';
 
 // "Already applied" is not a complaint about the match, so it records where the
 // member actually is instead of filing the posting away as a bad result. Either
 // way it leaves the unreviewed queue.
 patch(
   "offer already-applied and a free-text pass reason",
-  'Y.jsxs("div",{className:"feedback-options",children:[["Role","Company","Location","Pay"].map(he=>' +
-    'Y.jsx(Ut.button,{type:"button",disabled:U===$.id,onClick:()=>J($,"Not interested",he),' +
-    "whileTap:{scale:.97},transition:La,children:he},he))," +
-    'Y.jsx(Ut.button,{type:"button",className:"skip-feedback",disabled:U===$.id,' +
-    'onClick:()=>J($,"Not interested"),whileTap:{scale:.97},transition:La,children:"Skip"})]})',
-  'Y.jsxs("div",{className:"feedback-options",children:[["Role","Company","Location","Pay"].map(he=>' +
-    'Y.jsx(Ut.button,{type:"button",disabled:U===$.id,onClick:()=>J($,"Not interested",he),' +
-    "whileTap:{scale:.97},transition:La,children:he},he))," +
-    'Y.jsx(Ut.button,{type:"button",disabled:U===$.id,onClick:()=>__jsTrack($,"Applied"),' +
-    'whileTap:{scale:.97},transition:La,children:"Already applied"}),' +
-    'Y.jsx(Ut.button,{type:"button","aria-expanded":__jsOther,className:__jsOther?"is-on":"",' +
-    "disabled:U===$.id,onClick:()=>__jsSetOther(!__jsOther)," +
-    'whileTap:{scale:.97},transition:La,children:"Something else"}),' +
-    'Y.jsx(Ut.button,{type:"button",className:"skip-feedback",disabled:U===$.id,' +
-    'onClick:()=>J($,"Not interested"),whileTap:{scale:.97},transition:La,children:"Skip"})]}),' +
-    '__jsOther?Y.jsxs("form",{className:"feedback-other",onSubmit:__jsE=>{__jsE.preventDefault();' +
-    'const __jsV=__jsE.currentTarget.querySelector("input").value.trim();' +
-    '__jsV&&J($,"Not interested","",__jsV)},children:[' +
-    'Y.jsx("label",{className:"sr-only",htmlFor:`pass-note-${$.id}`,children:`Why ${$.role||$.title} is not a match`}),' +
-    'Y.jsx("input",{id:`pass-note-${$.id}`,type:"text",maxLength:300,required:!0,' +
-    'placeholder:"e.g. too much travel, wrong industry"}),' +
-    'Y.jsx(Ut.button,{type:"submit",className:"decision-button save",disabled:U===$.id,' +
-    'whileTap:{scale:.97},transition:La,children:"Save reason"})]}):null',
+  [
+    passReasonPanel,
+    'Y.jsxs("div",{className:"feedback-options",children:[["Role","Company","Location","Pay"].map(he=>' +
+      'Y.jsx(Ut.button,{type:"button",disabled:U===$.id,onClick:()=>J($,"Not interested",he),' +
+      "whileTap:{scale:.97},transition:La,children:he},he))," +
+      'Y.jsx(Ut.button,{type:"button",className:"skip-feedback",disabled:U===$.id,' +
+      'onClick:()=>J($,"Not interested"),whileTap:{scale:.97},transition:La,children:"Skip"})]})',
+  ],
+  perJobBusy(passReasonPanel),
 );
 
 // The original copy promised the reason taught the scout, which nothing did. It
@@ -711,6 +885,20 @@ patch(
       '__jsScoutBusy?"Starting your scout…":"Find my first matches",Y.jsx(ax,{size:16})]}):null,' +
       'Y.jsxs(Ut.button,{type:"button",className:"first-scout-review",onClick:s,' +
       'whileTap:a?void 0:{scale:.97},transition:La,children:[Y.jsx(c3,{size:17})," Review preferences"]})]})]})]})})()',
+    // The revision this one supersedes: the same panel with a fixed CTA label,
+    // which read "Find my first matches" on a retry after a failed dispatch.
+    '(()=>{const __jsV=__jsScoutView(__jsScout);return Y.jsxs(Ut.section,{' +
+      'className:"empty-saved first-run-empty first-scout-status",role:"status","aria-live":"polite",layout:!0,' +
+      'initial:a?!1:{opacity:0,y:4},animate:{opacity:1,y:0},transition:oh,children:[' +
+      'Y.jsx("div",{className:"empty-icon",children:Y.jsx(m2,{size:28,weight:"fill"})}),' +
+      'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:__jsV.eyebrow}),' +
+      'Y.jsx("h2",{children:__jsV.title}),Y.jsx("p",{children:__jsV.copy}),' +
+      'Y.jsxs("div",{className:"first-scout-actions",children:[' +
+      '__jsV.canStart?Y.jsxs(Ut.button,{type:"button",className:"first-scout-cta",onClick:__jsStartScout,' +
+      'disabled:__jsScoutBusy,whileTap:a?void 0:{scale:.97},transition:La,children:[' +
+      '__jsScoutBusy?"Starting your scout…":"Find my first matches"]}):null,' +
+      'Y.jsxs(Ut.button,{type:"button",className:"first-scout-review",onClick:s,' +
+      'whileTap:a?void 0:{scale:.97},transition:La,children:[Y.jsx(c3,{size:17})," Review preferences"]})]})]})]})})()',
     // Original shipped markup.
     'Y.jsxs("section",{className:"empty-saved first-run-empty",children:[' +
       'Y.jsx("div",{className:"empty-icon",children:Y.jsx(m2,{size:28,weight:"fill"})}),' +
@@ -729,7 +917,7 @@ patch(
     'Y.jsxs("div",{className:"first-scout-actions",children:[' +
     '__jsV.canStart?Y.jsxs(Ut.button,{type:"button",className:"first-scout-cta",onClick:__jsStartScout,' +
     'disabled:__jsScoutBusy,whileTap:a?void 0:{scale:.97},transition:La,children:[' +
-    '__jsScoutBusy?"Starting your scout…":"Find my first matches"]}):null,' +
+    '__jsScoutBusy?"Starting your scout…":__jsV.cta||"Find my first matches"]}):null,' +
     'Y.jsxs(Ut.button,{type:"button",className:"first-scout-review",onClick:s,' +
     'whileTap:a?void 0:{scale:.97},transition:La,children:[Y.jsx(c3,{size:17})," Review preferences"]})]})]})]})})()',
 );
@@ -828,6 +1016,152 @@ patch(
     ".ready-skip:hover{color:var(--ink)}" +
     "@media(prefers-reduced-motion:reduce){.first-scout-status,.first-scout-cta{animation:none!important;transition:none!important;transform:none!important}}" +
     ".ready-card{width:min(100%,760px);border:1px solid var(--line);",
+  "css",
+);
+
+// ---------------------------------------------------------------------------
+// Names that survive the narrow layout.
+//
+// Both navigations collapse to icons on a phone by hiding their only label with
+// `display:none`, which takes the text out of the accessibility tree along with
+// the pixels. A screen-reader user got three unnamed buttons in the dashboard
+// header and setup steps announced as "1", "2", "3" — the labels exist, they were
+// just deleted for everyone rather than hidden for the eye. Clipping keeps the
+// same picture and gives the text back.
+//
+// WCAG 2.5.3 (Label in Name) and 4.1.2 (Name, Role, Value).
+// ---------------------------------------------------------------------------
+const visuallyHidden =
+  "position:absolute!important;width:1px!important;height:1px!important;" +
+  "overflow:hidden!important;clip:rect(0 0 0 0)!important;clip-path:inset(50%)!important;" +
+  "white-space:nowrap!important";
+
+patch(
+  "keep the primary navigation named when it collapses to icons",
+  ".nav-link{padding:9px 10px;font-size:11px}.nav-link span{display:none}",
+  ".nav-link{min-width:44px;min-height:44px;justify-content:center;padding:9px 10px;font-size:11px}" +
+    `.nav-link span{${visuallyHidden}}`,
+  "css",
+);
+
+patch(
+  "keep the setup steps named when they collapse to numbers",
+  ".journey-bar nav{grid-template-columns:repeat(3,35px);justify-content:center}" +
+    ".journey-bar nav button{min-height:34px;padding:7px}" +
+    ".journey-bar nav button>span:not(.journey-active){display:none}",
+  ".journey-bar nav{grid-template-columns:repeat(3,44px);justify-content:center}" +
+    ".journey-bar nav button{min-height:44px;padding:7px}" +
+    `.journey-bar nav button>span:not(.journey-active){${visuallyHidden}}`,
+  "css",
+);
+
+// Which view you are in is state, and state has to be exposed, not just painted.
+// The active tab was styled and nothing else, so it read the same as the other two.
+patch(
+  "expose the current view in the primary navigation",
+  'Y.jsxs(Ut.button,{type:"button",className:`nav-link ${c===ue?"active":""}`,onClick:()=>h(ue),',
+  'Y.jsxs(Ut.button,{type:"button",className:`nav-link ${c===ue?"active":""}`,' +
+    '"aria-current":c===ue?"page":void 0,onClick:()=>h(ue),',
+);
+
+// ---------------------------------------------------------------------------
+// Touch targets, focus, and control boundaries.
+//
+// Appended last so these minimums win the cascade over the narrow-layout rules
+// that shrank the same controls. Every value here is a floor, not a size: the
+// visual density is unchanged wherever a control already cleared it.
+// ---------------------------------------------------------------------------
+const accessibilityFloor =
+  "\n\n/* --- Accessible focus, control boundaries, and touch targets --- */\n" +
+  ":root{" +
+  // The shared ring was rgba(53,110,89,.28) — about 1.5:1 against every surface
+  // it lands on, which is a focus indicator you cannot see. Opaque pine clears
+  // 8.4:1 on white, and the light gap under it keeps that true on dark controls.
+  "--focus-ring:#245640;" +
+  // --line is #deded8: right for a divider at 1.35:1, not for the edge of a
+  // control, which WCAG 1.4.11 wants at 3:1. Controls get their own token rather
+  // than darkening every hairline in the product.
+  "--line-control:#84847a}" +
+  // Interactive edges only — and redefined as a variable on the control rather
+  // than as a border-color beside it. Control borders are written as
+  // `border:1px solid var(--line)` inside more specific rules (.settings-card
+  // select, .wizard-form input, and so on); a border-color declaration out here
+  // loses to every one of them. Rebinding --line on the element itself is
+  // resolved at use time, so each of those rules paints the control token
+  // without any of them having to be found and rewritten.
+  "input,select,textarea,.track-chip,.job-filter-seg button,.feedback-other input," +
+  ".decision-button,.feedback-options button,.add-location-button{--line:var(--line-control)}" +
+  "@media(max-width:780px){" +
+  ".preference-tabs-shell [role=tab]{min-height:44px}" +
+  ".secondary-flow-button{min-height:44px}" +
+  ".job-filter-seg button{min-height:44px}" +
+  ".job-card-actions .decision-button{min-height:44px}" +
+  ".track-chip{min-height:44px}" +
+  ".feedback-options button{min-height:44px}" +
+  ".job-brief-trigger{min-height:44px;padding:0}" +
+  ".job-card-footer .job-link,.job-link{min-height:44px;padding-top:0}" +
+  ".preferred-location-list button{min-height:44px}" +
+  ".suggestion-chips button,.selected-chips button{min-height:44px}" +
+  ".pause-button{min-height:44px}" +
+  ".section-heading button{min-height:44px;padding:0 8px}" +
+  // A one-word reason ("Pay") was 43px wide — a target that misses by a pixel
+  // still misses.
+  ".feedback-options button{min-width:44px}" +
+  // A range input draws its own track, so the extra height is hit area rather
+  // than a thicker control: the slider looks identical and can be grabbed.
+  '.range-field input[type="range"],.dual-range-input{min-height:44px}' +
+  // The recovery link under the invite form was a 14px-tall line of text — the
+  // one control a member reaches for precisely when nothing else is working.
+  ".invite-security-note a{display:inline-flex;align-items:center;min-height:44px}" +
+  "}" +
+  // The narrowest phones shrank the setup steps back to 31px wide. They may be
+  // tight, but they cannot be smaller than a fingertip.
+  "@media(max-width:420px){.journey-bar nav{grid-template-columns:repeat(3,44px)}" +
+  ".journey-bar nav button{padding:5px;min-width:44px}}";
+
+patch(
+  "raise control boundaries and mobile touch targets",
+  "  .wizard-privacy{margin-top:10px;padding-bottom:4px}\n}\n",
+  `  .wizard-privacy{margin-top:10px;padding-bottom:4px}\n}\n${accessibilityFloor}`,
+  "css",
+);
+
+// The focus rules are replaced where they live rather than overridden from the
+// end of the file, so there is one focus treatment in the stylesheet and not a
+// weak one shadowed by a strong one.
+patch(
+  "make the shared focus ring visible",
+  "button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{" +
+    "outline:3px solid rgba(53,110,89,.28);outline-offset:3px}",
+  "button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible," +
+    "[role=tab]:focus-visible,[role=radio]:focus-visible,[role=checkbox]:focus-visible{" +
+    "outline:3px solid var(--focus-ring);outline-offset:2px;" +
+    // A light ring between the control and the outline, so the indicator still
+    // contrasts when the control itself is dark.
+    "box-shadow:0 0 0 2px var(--surface)}",
+  "css",
+);
+
+patch(
+  "make the slider thumb's focus ring visible in both engines",
+  ".dual-range-input:focus-visible::-webkit-slider-thumb{outline:3px solid rgba(38,93,72,.2);outline-offset:3px}" +
+    ".dual-range-input:focus-visible::-moz-range-thumb{outline:3px solid rgba(38,93,72,.2);outline-offset:3px}",
+  ".dual-range-input:focus-visible::-webkit-slider-thumb{outline:3px solid var(--focus-ring);outline-offset:2px}" +
+    ".dual-range-input:focus-visible::-moz-range-thumb{outline:3px solid var(--focus-ring);outline-offset:2px}",
+  "css",
+);
+
+// A heading moved to programmatically is the one thing on screen that just
+// changed. This gave it focus and then told it not to show it, so a keyboard
+// user was moved somewhere with no sign of having arrived. The cue is deliberate
+// rather than the browser's default box: a short rule in the margin, which reads
+// as punctuation next to a heading instead of a control's outline.
+patch(
+  "keep a visible cue on a programmatically focused heading",
+  ".wizard-step-heading h2:focus{outline:none}",
+  ".wizard-step-heading h2{border-radius:4px}" +
+    ".wizard-step-heading h2:focus{outline:none;box-shadow:-14px 0 0 -11px var(--focus-ring)}" +
+    ".wizard-step-heading h2:focus-visible{outline:3px solid var(--focus-ring);outline-offset:4px;box-shadow:none}",
   "css",
 );
 

@@ -11,6 +11,12 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
   const [__jsDraftLocation, __jsSetDraftLocation] = W.useState({ country: "", state: "", city: "" });
   const [__jsLocations, __jsSetLocations] = W.useState(() => normalizePreferredLocations(l));
   const [__jsLocationStatus, __jsSetLocationStatus] = W.useState("");
+  // The file currently being read. It is shown so the upload does not look
+  // ignored, but it is deliberately not the stored filename until the parse has
+  // succeeded.
+  const [__jsReadingName, __jsSetReadingName] = W.useState("");
+  // Monotonic ticket for résumé uploads. See the upload handler below.
+  const __jsUpload = W.useRef(0);
   const I = ["intake", "edit"].includes(new URLSearchParams(window.location.search).get("preview"));
 
   const N = H
@@ -111,6 +117,14 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     __jsSetTouched((X) => (X[j] ? X : { ...X, [j]: true }));
     e((X) => ({ ...X, [j]: O }));
   };
+  // Paused is a state of the member's delivery, not an absence of cadence, so it
+  // is carried explicitly rather than inferred from whatever frequency happens to
+  // be stored. Choosing a rhythm is the act that resumes delivery.
+  const __jsPickFrequency = (j) => {
+    F("");
+    __jsSetTouched((X) => (X.frequency ? X : { ...X, frequency: true }));
+    e((X) => ({ ...X, frequency: j, paused: false }));
+  };
   const S = RP(l.steerAwayTerms);
   const U = (Array.isArray(l.resumeSuggestions) ? l.resumeSuggestions : [])
     .filter(
@@ -190,27 +204,49 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     };
   };
 
+  // Replacing a resume is two races at once: a slow parse of file A can finish
+  // after a fast parse of file B, and either can finish after the member has
+  // moved on. Every upload takes a ticket and only the newest ticket may write,
+  // so a stale parse can never pair file B's name with file A's text. The
+  // filename and the extracted text are also committed together, after the parse
+  // has succeeded, so the form never claims to hold a file it could not read.
   const q = async (Q) => {
     if (!Q) return;
+    const __jsTicket = (__jsUpload.current += 1);
+    const __jsKeptName = o;
+    const __jsKeptText = h;
     w("");
     F("");
-    c(Q.name);
-    A("resumeName", Q.name);
+    __jsSetReadingName(Q.name);
     m("reading");
     b([]);
     G([]);
     try {
       const Z = await bP(Q);
-      d(Z.text);
+      if (__jsTicket !== __jsUpload.current) return;
+      // A file we opened but read nothing out of is a failed upload, not a stored
+      // resume: accepting it left a filename with no experience behind it.
+      if (!String(Z.text || "").trim()) throw new Error("resume_unreadable");
       const ee = vP(Z.text, Z.warnings);
+      c(Q.name);
+      A("resumeName", Q.name);
+      d(Z.text);
       G(ee.warnings);
       const ie = __jsResumePrefill(ee.suggestions, H);
       const te = Object.keys(ie);
       if (te.length) e((ne) => ({ ...ne, ...ie }));
       b(te);
+      __jsSetReadingName("");
       m(te.length ? "complete" : "empty");
     } catch (Z) {
       console.error(Z);
+      if (__jsTicket !== __jsUpload.current) return;
+      // A failed replacement keeps the last resume that actually worked rather
+      // than leaving the member with neither.
+      c(__jsKeptName);
+      A("resumeName", __jsKeptName);
+      d(__jsKeptText);
+      __jsSetReadingName("");
       m("error");
     }
   };
@@ -221,6 +257,9 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     q(ee.dataTransfer.files?.[0]);
   };
   const ee = () => {
+    // Nothing may be committed on top of an upload that has not landed yet: the
+    // step behind this guard is where the resume text is read out of state.
+    if (p === "reading") return "One moment — we’re still reading your resume.";
     if (T === 0) {
       if (!l.name.trim()) return "Add your name to continue.";
       if (!l.email.trim() || !/^\S+@\S+\.\S+$/.test(l.email)) return "Enter a valid email address to continue.";
@@ -276,6 +315,12 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
   };
   const ae = async (le) => {
     le.preventDefault();
+    // Checked before the per-tab validation so an in-flight upload reports itself
+    // rather than sending the member to whichever tab looks incomplete without it.
+    if (p === "reading") {
+      F("One moment — we’re still reading your resume.");
+      return;
+    }
     if (!H && T < N.length - 1) {
       ne();
       return;
@@ -308,6 +353,11 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     w("");
     m("submitting");
     try {
+      // Cadence and pause live on the member record, not in this form's snapshot
+      // of it. Sending a frequency the member did not choose here is how editing a
+      // role reverted a cadence set from the dashboard, or restarted emails
+      // somebody had deliberately paused.
+      const __jsSendFrequency = !H || !!__jsTouched.frequency;
       const re = l.frequency === "Three times a day" ? "3x daily" : l.frequency;
       const oe = await fetch(l6, {
         method: "POST",
@@ -327,7 +377,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
           min_salary: `$${l.salaryMin}k`,
           max_salary: `$${l.salaryMax}k+`,
           seniority: l.seniority,
-          frequency: re,
+          ...(__jsSendFrequency ? { frequency: re } : {}),
           max_posting_age: l.postedWithin,
           steer_away_terms: l.steerAwayTerms,
           steer_away_mode: l.steerAwayMode,
@@ -428,7 +478,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
               Y.jsxs("span", {
                 className: "resume-copy",
                 children: [
-                  Y.jsx("strong", { children: v ? "Drop your resume here" : o || "Add your resume" }),
+                  Y.jsx("strong", { children: v ? "Drop your resume here" : __jsReadingName || o || "Add your resume" }),
                   Y.jsx("small", {
                     children:
                       p === "reading"
@@ -746,11 +796,25 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                   Y.jsxs("div", {
                     className: "range-heading",
                     children: [
-                      Y.jsx("span", { className: "field-label", children: "Posted within" }),
-                      Y.jsx("output", { "aria-live": "polite", children: l.postedWithin === 1 ? "24 hours" : `${l.postedWithin} days` }),
+                      // The visible label is tied to the slider rather than merely
+                      // sitting above it. Without the association the control was
+                      // announced as an unnamed slider reading "17" — a number with
+                      // nothing to say what it counted.
+                      Y.jsx("span", { className: "field-label", id: "posted-within-label", children: "Posted within" }),
+                      Y.jsx("output", { htmlFor: "posted-within", "aria-live": "polite", children: l.postedWithin === 1 ? "24 hours" : `${l.postedWithin} days` }),
                     ],
                   }),
-                  Y.jsx("input", { type: "range", min: "1", max: "30", step: "1", value: l.postedWithin, onChange: (re) => A("postedWithin", Number(re.target.value)) }),
+                  Y.jsx("input", {
+                    id: "posted-within",
+                    type: "range",
+                    min: "1",
+                    max: "30",
+                    step: "1",
+                    value: l.postedWithin,
+                    "aria-labelledby": "posted-within-label",
+                    "aria-valuetext": l.postedWithin === 1 ? "Within 24 hours" : `Within ${l.postedWithin} days`,
+                    onChange: (re) => A("postedWithin", Number(re.target.value)),
+                  }),
                 ],
               }),
             ],
@@ -834,6 +898,13 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     return Y.jsxs(Y.Fragment, {
       children: [
         le(false),
+        l.paused
+          ? Y.jsxs("p", {
+              className: "delivery-paused-note",
+              role: "status",
+              children: [Y.jsx("strong", { children: "Job emails are paused." }), " Choosing a rhythm below turns them back on."],
+            })
+          : null,
         Y.jsx("fieldset", {
           className: "frequency-fieldset",
           children: [
@@ -848,13 +919,13 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                 Y.jsxs(Ut.button, {
                   type: "button",
                   role: "radio",
-                  "aria-checked": l.frequency === re.value,
-                  className: l.frequency === re.value ? "selected" : "",
-                  onClick: () => A("frequency", re.value),
+                  "aria-checked": !l.paused && l.frequency === re.value,
+                  className: !l.paused && l.frequency === re.value ? "selected" : "",
+                  onClick: () => __jsPickFrequency(re.value),
                   whileTap: s ? undefined : { scale: 0.97 },
                   transition: Tr,
                   children: [
-                    l.frequency === re.value ? Y.jsx(Jd, { size: 18, weight: "fill" }) : Y.jsx("span", { className: "radio-dot" }),
+                    !l.paused && l.frequency === re.value ? Y.jsx(Jd, { size: 18, weight: "fill" }) : Y.jsx("span", { className: "radio-dot" }),
                     Y.jsxs("span", { children: [Y.jsx("strong", { children: re.label }), Y.jsx("small", { children: re.help })] }),
                   ],
                 }, re.value),
@@ -1003,12 +1074,14 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                   Y.jsx(Ut.button, {
                     type: "submit",
                     className: "primary-flow-button wizard-next",
-                    disabled: p === "submitting",
+                    disabled: p === "submitting" || p === "reading",
                     whileHover: s ? undefined : { y: -2 },
                     whileTap: s ? undefined : { scale: 0.97 },
                     transition: Tr,
                     children:
-                      p === "submitting"
+                      p === "reading"
+                        ? "Reading your resume…"
+                        : p === "submitting"
                         ? "Saving…"
                         : H
                           ? Y.jsxs(Y.Fragment, { children: ["Save changes ", Y.jsx(Jd, { size: 17, weight: "fill" })] })

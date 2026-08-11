@@ -75,7 +75,19 @@
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f4;">
     <tr>
       <td align="center" style="padding:32px 16px;">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:100%;">
+        <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+        <!--
+          Fluid, not fixed. This table used to carry width="600" and width:600px
+          with max-width:100% behind it, which does not shrink: a table never
+          renders narrower than the width it is told to be, so max-width had
+          nothing to cap. The document measured 632px at every viewport, and a
+          375px phone scrolled sideways through every card.
+
+          width:100% + max-width:600px is the pattern that actually shrinks. Word
+          -engine Outlook ignores max-width, so the conditional ghost table above
+          holds it at 600px there and is invisible everywhere else.
+        -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%; max-width:600px;">
 
           <!-- header -->
           <tr>
@@ -85,14 +97,20 @@
                   <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:700; letter-spacing:2px; color:#1b5343; text-transform:uppercase;">
                     Job&nbsp;Scout
                   </td>
-                  <td align="right" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; color:#78716c;">
+                  <td align="right" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; color:#6f6963;">
                     {{RUN_DATE}}
                   </td>
                 </tr>
               </table>
-              <div style="font-family:Georgia,'Times New Roman',serif; font-size:24px; font-weight:700; color:#1c1917; padding-top:12px;">
+              <!--
+                A real heading, not a big div. The email had no headings at all,
+                so a screen-reader user had no way to move through it by structure
+                and nothing announced what the message was. Margins are zeroed
+                inline because clients apply their own to h1/h2.
+              -->
+              <h1 style="margin:0; padding-top:12px; font-family:Georgia,'Times New Roman',serif; font-size:24px; font-weight:700; line-height:1.25; color:#1c1917;">
                 {{HEADLINE}}
-              </div>
+              </h1>
               <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.5; color:#57534e; padding-top:6px;">
                 Hi {{FIRST_NAME}} — here are your newest matches, sorted freshest first. Salary and posting date are on every card, so you can act right from your inbox.
               </div>
@@ -124,8 +142,16 @@
                         <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; font-weight:600; color:#1b5343; text-transform:uppercase; letter-spacing:0.5px;">
                           {{COMPANY}}
                         </td>
+                        <!--
+                          No white-space:nowrap here. "Posted Aug 3 (12 days ago)"
+                          held this row at roughly 160px, which — beside the
+                          company name and the card's own padding — was what still
+                          pushed the whole email past a 320px screen once the
+                          shell went fluid. The pill wraps to two lines on the
+                          narrowest phones instead, which costs nothing.
+                        -->
                         <td align="right">
-                          <span style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; font-weight:600; color:{{POSTED_FG}}; background-color:{{POSTED_BG}}; border-radius:999px; padding:3px 10px; white-space:nowrap;">
+                          <span style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; font-weight:600; color:{{POSTED_FG}}; background-color:{{POSTED_BG}}; border-radius:999px; padding:3px 10px;">
                             {{POSTED_LABEL}}
                           </span>
                         </td>
@@ -134,8 +160,10 @@
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; line-height:1.3;">
-                    <a href="{{URL}}" style="color:#1c1917; text-decoration:none;">{{TITLE}}</a>
+                  <td style="padding:6px 24px 0 24px;">
+                    <h2 style="margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:18px; font-weight:700; line-height:1.3;">
+                      <a href="{{URL}}" style="color:#1c1917; text-decoration:none;">{{TITLE}}</a>
+                    </h2>
                   </td>
                 </tr>
                 <tr>
@@ -146,7 +174,7 @@
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; color:#78716c;">
+                  <td style="padding:6px 24px 0 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; color:#6f6963;">
                     {{META_LINE}}
                   </td>
                 </tr>
@@ -164,7 +192,16 @@
                 </tr>
                 <tr>
                   <td style="padding:16px 24px 20px 24px;">
-                    <a href="{{URL}}" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; background-color:#226551; border-radius:8px; padding:10px 20px; text-decoration:none;">
+                    <!--
+                      Every card ended with a link named "View posting", so a
+                      screen-reader user listing the links heard the same name
+                      five times with nothing to tell them apart. The visible
+                      label stays short; the accessible name says which posting.
+                      {{TITLE_ATTR}} and {{COMPANY_ATTR}} are attribute-escaped
+                      variants of the same values — never put {{TITLE}} in an
+                      attribute, it only escapes &, < and >.
+                    -->
+                    <a href="{{URL}}" aria-label="View {{TITLE_ATTR}} at {{COMPANY_ATTR}}" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; background-color:#226551; border-radius:8px; padding:10px 20px; text-decoration:none;">
                       View posting&nbsp;&rarr;
                     </a>
                   </td>
@@ -180,7 +217,7 @@
               <a href="https://vakalaktika.github.io/job-scout/?step=%64ashboard" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; font-weight:700; color:#ffffff; background-color:#1b5343; border-radius:8px; padding:12px 26px; text-decoration:none;">
                 Open your dashboard&nbsp;&rarr;
               </a>
-              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.5; color:#78716c; padding-top:10px;">
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:13px; line-height:1.5; color:#6f6963; padding-top:10px;">
                 Save these, compare every match, and fine-tune what Scout looks for.
               </div>
             </td>
@@ -188,13 +225,14 @@
 
           <!-- footer -->
           <tr>
-            <td style="padding:18px 8px 0 8px; border-top:1px solid #e7e5e4; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#a8a29e;">
+            <td style="padding:18px 8px 0 8px; border-top:1px solid #e7e5e4; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:1.6; color:#6f6963;">
               You get Job Scout alerts because you signed up with an invite code, and you only ever see roles we haven't sent you before.<br>
-              <a href="https://vakalaktika.github.io/job-scout/?step=%64ashboard" style="color:#78716c; text-decoration:underline;">Manage or pause alerts</a> anytime from your dashboard.
+              <a href="https://vakalaktika.github.io/job-scout/?step=%64ashboard" style="color:#6f6963; text-decoration:underline;">Manage or pause alerts</a> anytime from your dashboard.
             </td>
           </tr>
 
         </table>
+        <!--[if mso]></td></tr></table><![endif]-->
       </td>
     </tr>
   </table>

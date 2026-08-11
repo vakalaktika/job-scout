@@ -14,6 +14,7 @@ first," and lets them review, save, and refine matches from a web dashboard.
 ## Table of contents
 
 - [What it does](#what-it-does)
+- [What changed in the latest round of work](#what-changed-in-the-latest-round-of-work)
 - [How it works (architecture)](#how-it-works-architecture)
 - [Where jobs come from (sourcing)](#where-jobs-come-from-sourcing)
 - [How matches are distributed (email + dashboard)](#how-matches-are-distributed-email--dashboard)
@@ -58,6 +59,75 @@ first," and lets them review, save, and refine matches from a web dashboard.
    repairs it on demand: it fetches the original public posting, extracts the job
    description, and generates an accurate three-part brief with an LLM — grounded only
    in the posting and the member's résumé.
+
+---
+
+## What changed in the latest round of work
+
+Plain summary of the most recent batch of changes. Each item links to the section that
+explains it in full. Nothing here changes what the product does — it changes how well it
+holds up when something goes wrong, on a small screen, or in a mail client.
+
+### Things that used to lose your work
+
+- **Editing preferences.** Every change used to save straight to the backend as you typed
+  it. Pressing Cancel did not undo anything, because it had already been saved. Now
+  changes are held on screen until you press Save. Cancel throws them away. If a save
+  fails, your changes stay on screen so you can try again instead of retyping them.
+- **Replacing a résumé.** If a first upload was slow and you replaced it, the slow one
+  could finish last and overwrite the newer file. Each upload now carries a ticket, and a
+  result is only used if its ticket is still the current one.
+- **Sign-in links.** A link works once. If our side failed halfway through using one, the
+  link was spent and the member was locked out with no way back in. The link is now put
+  back if we fail, so a fault on our end never costs someone their only way in.
+- **The first job search.** A search that failed to start could be retried forever. It now
+  gets three attempts total, and the dashboard offers a retry only when one is left.
+- **The Back button.** Back and Forward now land on the right screen, and move keyboard
+  focus to that screen's heading so it is clear where you have arrived.
+
+See [The frontend in detail](#the-frontend-in-detail) and
+[Actions](#actions).
+
+### Things that did not work on a phone or in email
+
+- **The dashboard on a narrow screen.** Controls were too small to tap reliably. Every
+  control is now at least 44×44 pixels, and every one has a name a screen reader can read
+  out, including the icon-only buttons that appear when the navigation collapses.
+- **The match email.** It was locked to a fixed width, so a phone scrolled sideways
+  through every card. It now fits the screen it is opened on, down to 320 pixels wide,
+  while still holding its shape in Outlook.
+- **Text that was hard to read.** Small text in the email sat as low as 2.3:1 against its
+  background — the least certain postings were the hardest to read. All text now clears
+  4.5:1, and focus outlines and control borders clear 3:1.
+
+See [Accessibility rules the patches enforce](#accessibility-rules-the-patches-enforce)
+and [How matches are distributed](#how-matches-are-distributed-email--dashboard).
+
+### One thing that had never worked at all
+
+**The fonts were never loading.** The address the site used to fetch Gelasio and Work Sans
+asked for a setting neither font offers. Google's reply to that is an error and no fonts,
+not the fonts without the setting. So the browser got nothing, and every screen has been
+rendering in Arial and Georgia since launch. It looked like a plain design rather than a
+broken one, which is why nobody caught it.
+
+The fonts are now stored in this repository and served from the same place as the rest of
+the site. There is no longer any request to Google. A test now fails if a font is missing,
+if it is fetched from anywhere but this site, or if it is listed but does not actually show
+up on screen — that last one being the failure that hid here for so long.
+
+See [Fonts are served from this origin](#fonts-are-served-from-this-origin).
+
+### What was checked, and what was not
+
+Every change above is covered by a test: 228 logic tests and 63 browser tests, all passing.
+The browser tests run in Chromium. **Safari and Firefox have not been checked**, and no one
+has yet opened the match email in a real mail client — both are worth doing before this is
+considered finished.
+
+One earlier claim in this work was wrong and has been removed: that the 1.2 MB PDF reader
+was slowing down page loads and should be deferred. It was already deferred. It is fetched
+only when a résumé is actually parsed, never on a normal load.
 
 ---
 
@@ -208,6 +278,27 @@ read time, so preference changes take effect immediately without re-running the 
   replacing the `{{JOB_CARDS}}` token. If there are zero new postings, **no email is
   sent.** No `{{…}}` token may survive into a sent email.
 
+Four rules keep it readable on a phone. They are enforced by `e2e/email.spec.mjs`, which
+renders the real builder's output in a real engine rather than trusting the markup:
+
+- **Fluid, not fixed.** The shell is `width:100%` with `max-width:600px`. It used to be
+  `width="600"` with `max-width:100%` behind it, which does not shrink — a table never
+  renders narrower than the width it is given, so the document measured 632px at every
+  viewport and a 375px phone scrolled sideways through every card. Word-engine Outlook
+  ignores `max-width`, so a conditional ghost table holds 600px there; `stripHtmlComments`
+  therefore removes instructional comments but **preserves conditional comments**.
+- **Nothing sets `white-space:nowrap` on a filled value.** The freshness pill did, which
+  is what still pushed the layout past 320px after the shell went fluid.
+- **Every piece of small text clears 4.5:1** against what is painted behind it. The
+  footer was 2.31:1 and the unknown-freshness pill 2.34:1 — the least certain postings
+  were the hardest to read.
+- **Structure and destinations are stated.** The headline is an `h1` and each posting
+  title an `h2`, so the message can be moved through by structure; each card's CTA carries
+  an `aria-label` naming its own posting, because five links all called "View posting"
+  tell a screen-reader user nothing. Values written into attributes use the
+  `{{TITLE_ATTR}}` / `{{COMPANY_ATTR}}` tokens, which are attribute-escaped —
+  `{{TITLE}}` only escapes `&`, `<`, and `>`.
+
 **Dashboard.** The member opens the SPA, which calls the Worker's `session`/`state`
 action. The Worker returns the member's recent postings (within their posting-age window,
 plus anything already marked Interested), each enriched with a written brief, with
@@ -252,6 +343,7 @@ steer-away rules applied. In the dashboard the member can:
 │
 ├── index.html              # Static SPA entry (loads the prebuilt bundle)
 ├── assets/                 # Prebuilt Vite/React bundle (JS, CSS, pdf.js worker)
+│   └── fonts/              # Vendored WOFF2 for Work Sans + Gelasio (see its README)
 ├── intake-flow.source.js   # Readable source of the intake component (patched into the bundle)
 ├── ready-flow.source.js    # Readable source of the one-time first-scout review screen
 ├── resume-parser.source.js # Readable source of the resume parser (patched into the bundle)
@@ -283,9 +375,9 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 | Action | Auth | Purpose |
 |---|---|---|
 | `validate` / `state` | access code (+ optional session) | Look up a code, return whether setup is needed, and — if linked — the full member session (profile + jobs). |
-| _(create/update)_ | valid access code | With no dedicated action, a POST carrying profile fields **creates** a candidate on first use of an `Unused` code, or **updates** the linked candidate on subsequent submits. `frequency: "Paused"` pauses the member. |
+| _(create/update)_ | valid access code | With no dedicated action, a POST carrying profile fields **creates** a candidate on first use of an `Unused` code, or **updates** the linked candidate on subsequent submits. `frequency: "Paused"` pauses the member; only an explicit `frequency` of `Daily`, `Weekly`, or `3x daily` takes them off `Paused` again, so editing a role or replacing a résumé cannot restart delivery somebody turned off. |
 | `session` | session token | Return the member profile + enriched, steer-filtered job list for a signed-in member. |
-| `run_scout_once` | session token | Consume an entitled new member's one-time scout and fire the external dispatcher in `single_candidate` mode. The candidate is derived from the signed session; client-supplied candidate identifiers are ignored. |
+| `run_scout_once` | session token | Consume an entitled new member's one-time scout and fire the external dispatcher in `single_candidate` mode. The candidate is derived from the signed session; client-supplied candidate identifiers are ignored. A run that **failed to dispatch** consumed nothing, so it can be retried up to three attempts in total; the returned `first_scout.can_retry` says whether one is left, and the dashboard offers a retry only when it is. |
 | `scout_status` | session token | Return only the public first-scout state for lightweight polling. The dashboard refreshes the full session once after completion. |
 | `job_decision` | session token | Record **Interested / Not interested** + a `feedback` reason and free-text `note` on one posting (ownership-checked by email). An empty `decision` clears the review, which is how the dashboard's toggles undo a mis-tap. A pass reason is also appended to the candidate's `Match context` and returned as `match_context`. |
 | `job_application` | session token | Set the posting's application status to one of `Applied`, `Interviewing`, `Offer`, `Rejected`, `No response` (ownership-checked by email). An empty status clears the tracking. `Applied at` is stamped on the first move into a status and preserved through later ones. |
@@ -314,10 +406,17 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 - **Magic-link login** lets a member who lost their access code sign back in by email.
   `magic_request` mints a short-lived (`15 min`) `magic`-purpose token, stores a
   single-use nonce on the candidate (`Magic nonce`), and emails a link
-  (`/?login=<token>`) via **Resend** from `login@mail.uxed.me`. Opening the link runs the
-  inline consumer in `index.html`, which calls `magic_consume`; a successful exchange
-  clears the nonce (so the link works exactly once) and returns a normal 30-day session.
-  `login.html` is the standalone "email me a sign-in link" request page.
+  (`/?login=<token>`) via **Resend** from `login@mail.uxed.me`. Opening the link lets the
+  app consume it: it strips the token from the address bar first (a bearer credential in
+  a URL reaches history, referrers, and anything pasted), calls `magic_consume`, and on
+  success stores a normal 30-day session. The exchange clears the nonce so the link works
+  exactly once — and puts it back if building the session fails, so an error of ours
+  never spends somebody's only way in. Each failure is a named state (`expired_link`,
+  `used_link`, `invalid_link`, `revoked`, or a transient one) that the invite screen
+  explains, alongside "Send another link" and the invite code as the two routes onward.
+  `login.html` is the standalone "email me a sign-in link" request page. **There must be
+  exactly one consumer**: the link is single-use, so a second one races the first and the
+  loser reports a link that has already been used.
 
 ### Read-time filtering
 
@@ -353,6 +452,46 @@ is what ships.
 - **API target:** all requests go to the Worker endpoint
   (`https://job-scout-intake.vakalaktika.workers.dev/`).
 
+### Fonts are served from this origin
+
+`assets/fonts/` holds the two families the product uses, vendored as WOFF2 and declared
+with `@font-face` in `assets/index-uR5-NbPW.css` (Work Sans, the only family the bundle
+sets) and inline in `login.html` (Gelasio and Work Sans, which that page uses).
+
+They are vendored because the Google Fonts URL that used to load them **never worked**.
+It asked for an `opsz` axis — `family=Gelasio:opsz,wght@12..144,500` — that neither
+Gelasio nor Work Sans publishes, and the API answers a request for an axis a family does
+not have with **HTTP 400 and no CSS at all**. Every screen had been rendering in the
+fallback stack. It looked deliberate, which is why it lasted: Work Sans falls back to
+Arial and Gelasio to Georgia, so the pages looked plain rather than broken.
+
+Two things follow, and `e2e/fonts.spec.mjs` holds both:
+
+- **A declared face must arrive.** The test fails a font request that 404s, and separately
+  fails a face that is declared but never applies — it measures rendered text width
+  against a deliberately wrong fallback, because a missing file, a family name that never
+  matches, and a weight the file does not cover are all invisible to a request-count check.
+- **No request may leave this origin.** A font CDN is a second origin on the critical path
+  and a third party watching every page load. The files are 4 WOFF2 (~172 KB total, latin
+  and latin-ext), carrying the `unicode-range` values Google emits, so a page of ASCII
+  fetches only the ~50 KB latin subset it needs.
+
+To refresh them, fetch `https://fonts.googleapis.com/css2?family=Gelasio:wght@500;600` and
+`…family=Work+Sans:wght@400;500;600` — **weights only, no `opsz`** — and save the
+subset files it points at. Google serves one variable file per subset and picks the weight
+off the `wght` axis, so several weights resolve to the same bytes; `assets/fonts/README.md`
+records which faces map to which file.
+
+### What loads on first paint
+
+Three requests, ~1.5 MB: `index-uR5-NbPW.css` (72 KB), `index-BdD4MZod.js` (1.45 MB), and
+the latin Work Sans subset (50 KB).
+
+The 1.2 MB `pdf.worker.min-*.mjs` is **not** among them. The bundle names it with
+`new URL("pdf.worker.min-….mjs", import.meta.url)` rather than importing it, so it is
+fetched when a résumé is first parsed and never on a load that does not parse one. It
+looks alarming in a directory listing and is already deferred; leave it alone.
+
 ### Editing the intake without a full rebuild
 
 The production bundle is minified, but the intake, post-onboarding review, and resume
@@ -385,6 +524,26 @@ Patches target `assets/index-BdD4MZod.js` by default; passing `"css"` as the fou
 argument to `patch()` targets the stylesheet `assets/index-uR5-NbPW.css` instead, which
 is how design-token fixes are applied — currently raising `--ink-faint` from `#999891`
 (2.89:1, below WCAG AA) to `#73726c`.
+
+### Accessibility rules the patches enforce
+
+Three of them exist because the narrow layout broke what the wide one got right:
+
+- **A label may be hidden from the eye, never from the reader.** Both navigations
+  collapse to icons below 780px, and both used to do it with `display:none` on the only
+  label — which deletes the text for everyone. They are clipped instead, so the picture
+  is unchanged and "For you", "Saved", "Settings", and each setup step keep their names.
+  Never reach for `display:none` on a label; use the clip in `visuallyHidden`.
+- **44×44 is a floor, not a size.** Mobile rules used to shrink several controls below
+  it. `patch-dashboard.mjs` appends the minimums last so they win over the narrow-layout
+  rules, and `e2e/mobile.spec.mjs` walks every screen at 375px asserting that no
+  interactive element is smaller or unnamed.
+- **Focus is opaque and control edges are 3:1.** `--focus-ring` (`#245640`, 8.5:1 on
+  white) replaced a translucent ring at roughly 1.5:1, with a light `box-shadow` gap so
+  it stays visible on dark controls. `--line-control` (`#84847a`, 3.5:1) is for the edge
+  of anything you can interact with; `--line` stays quiet for dividers, which do not need
+  the contrast. `e2e/contrast.spec.mjs` computes both against what is actually painted
+  behind them.
 
 `design-qa.md` records the design-QA process for the intake/edit redesign.
 
@@ -617,9 +776,38 @@ normalisation, slug candidates, the single-exact-match rule, the three board pay
 shapes, and the refusal to guess when a title appears twice. Both pin the SSRF guard
 every resolved link passes through.
 
+`worker-requests.test.mjs` drives `worker.fetch` end to end against a stubbed Notion, so
+what it asserts is the *ordering* between helpers that are each correct alone. It covers
+the magic-link states a member can actually hit — valid, expired, already used, revoked,
+and a transient failure that must leave the link usable — plus the method/JSON guards,
+the refusal of every member route to an unsigned session, the first-scout retry budget,
+and the rule that only an explicit cadence choice takes a paused member off `Paused`.
+
 ```sh
-node --test worker.test.mjs dashboard-helpers.test.mjs resume-parser.test.mjs intake-prefill.test.mjs build-email.test.mjs first-scout-ui.test.mjs linkedin-apply-url.test.mjs ats-boards.test.mjs
+npm test   # or: node --test *.test.mjs
 ```
+
+### Browser tests
+
+`e2e/` drives the shipped bundle in Chromium with Playwright. The app already routes its
+API calls to a same-origin `/api/job-scout` when served from localhost, and
+`e2e/fake-worker.mjs` answers there with the same response shapes the Worker returns —
+scriptable per test for latency, failures, and first-scout state. Nothing touches
+production or a real member's data.
+
+These cover the failures that only exist between screens: Cancel discarding a preference
+draft, Back/Forward staying in step with what is rendered, a slow résumé parse losing to
+the file that replaced it, two job cards mutating at once without being reported against
+each other, a paused member surviving an unrelated edit, every first-scout terminal
+state, and each way a sign-in link can fail.
+
+```sh
+npm run test:e2e
+```
+
+The browser is expected to be already installed. `playwright.config.mjs` prefers a
+matching local Chromium (`PLAYWRIGHT_CHROMIUM_EXECUTABLE`, or the standard
+`/opt/pw-browsers` build) and falls back to Playwright's own download otherwise.
 
 ---
 

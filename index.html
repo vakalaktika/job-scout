@@ -4,49 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Job Scout</title>
-    <script type="module" crossorigin src="./assets/index-BdD4MZod.js?v=multi-location-work-modes"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-uR5-NbPW.css?v=multi-location-work-modes">
+    <script type="module" crossorigin src="./assets/index-BdD4MZod.js?v=p1-fonts"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-uR5-NbPW.css?v=p1-fonts-2">
   </head>
   <body>
+    <!--
+      Magic-link sign-in used to be handled by an inline script here: it removed the
+      module bundle, exchanged ?login=<token> for a session, and reloaded. That worked
+      only when everything worked. A link that had expired, had already been used, or
+      simply hit a bad minute was stripped from the URL and reloaded into the invite
+      gate with nothing on screen to say why — the one screen the link exists to let
+      someone skip.
+
+      The app owns the exchange now (see patch-dashboard.mjs, "exchange a magic-link
+      token for a session on load"). It strips the token from the address bar before
+      calling the Worker, so the bearer credential never reaches history or a referrer,
+      and it carries a failure to the invite screen as a named state the member can act
+      on. Nothing may re-add a second consumer here: the link is single-use, so two
+      consumers race to spend it and the loser reports a link that has "already been
+      used".
+    -->
     <div id="root"></div>
-    <script>
-      // Magic-link login. When a sign-in email is opened the URL carries ?login=<token>.
-      // This classic inline script runs before the deferred module bundle executes, so
-      // it can exchange the token for a session, write it in the exact shape the
-      // dashboard reads (localStorage "job-scout-session-v1"), strip the token from the
-      // URL, and reload so the app boots already signed in.
-      (function () {
-        var params = new URLSearchParams(window.location.search);
-        var token = params.get("login");
-        if (!token) return;
-        var bundle = document.querySelector('script[type="module"]');
-        if (bundle) bundle.remove();
-        fetch("https://job-scout-intake.vakalaktika.workers.dev/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "magic_consume", magic_token: token }),
-        })
-          .then(function (response) {
-            return response.json().catch(function () {
-              return { ok: false };
-            });
-          })
-          .then(function (data) {
-            if (data && data.ok && data.session_token) {
-              localStorage.setItem(
-                "job-scout-session-v1",
-                JSON.stringify({ token: data.session_token, expiresAt: data.session_expires_at }),
-              );
-            }
-            params.delete("login");
-            var search = params.toString();
-            window.location.replace(window.location.pathname + (search ? "?" + search : ""));
-          })
-          .catch(function () {
-            params.delete("login");
-            window.location.replace(window.location.pathname);
-          });
-      })();
-    </script>
   </body>
 </html>
