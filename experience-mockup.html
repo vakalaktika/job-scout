@@ -4,12 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Job Scout — End-to-end experience</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Gelasio:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap"
-    />
+    <style>
+      /* Self-hosted, like the app -- this was the last page still reaching for a
+         font CDN. Schibsted Grotesk is variable, so 400-700 arrives in one file
+         per subset. IBM Plex Mono carries measured values: salary, dates, source,
+         link status. See assets/fonts/README.md. */
+      @font-face{font-family:'Schibsted Grotesk';font-style:normal;font-weight:400 700;font-display:swap;src:url('./assets/fonts/schibsted-grotesk-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+      @font-face{font-family:'Schibsted Grotesk';font-style:normal;font-weight:400 700;font-display:swap;src:url('./assets/fonts/schibsted-grotesk-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+      @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url('./assets/fonts/ibm-plex-mono-400-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+      @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url('./assets/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+      @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url('./assets/fonts/ibm-plex-mono-500-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+      @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url('./assets/fonts/ibm-plex-mono-500-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+    </style>
     <style>
       /* Tokens lifted verbatim from the shipped login.html / dashboard bundle so
          every mocked screen reads as the same product. */
@@ -36,6 +42,30 @@
         --recent-fg: #b45309;
         --old-bg: #f1f5f9;
         --old-fg: #64748b;
+
+        /* Type roles, named for their job. 12px floor, replacing a ramp that ran
+           10/10.5/11/12/12.5/13/13.5/14/15/16/17/18 -- twelve values inside 8px,
+           four of them on half-pixels, none of which told you which role you were
+           reading. Tracking is in em so it survives a resize.
+
+           Two families, and the split is the point: Schibsted Grotesk states
+           things, IBM Plex Mono measures them. Salary, posting date, source and
+           link status go mono because they are values a machine reported, and
+           tabular figures keep them from shifting column to column. Workplace
+           type stays in the UI face -- Remote is a category, not a measurement. */
+        --font-ui: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+        --font-data: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        /* The email preview must not promise a webfont the real email cannot load:
+           email-template.html sends the system stack, so the mock shows it. */
+        --font-email: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        --text-micro: 12px;
+        --text-label: 13px;
+        --text-caption: 14px;
+        --text-body: 16px;
+        --text-control: 16px;
+        --text-subtitle: 18px;
+        --text-title: 22px;
+        --text-display: clamp(28px, 4vw, 40px);
       }
       * {
         box-sizing: border-box;
@@ -48,13 +78,22 @@
         margin: 0;
         background: #f2f1ee;
         color: var(--ink);
-        font-family: "Work Sans", Arial, sans-serif;
-        font-size: 14px;
+        font-family: var(--font-ui);
+        font-size: var(--text-body);
         line-height: 1.55;
         -webkit-font-smoothing: antialiased;
       }
+      /* The email preview renders in what the real email actually sends. */
+      .email {
+        font-family: var(--font-email);
+      }
       a {
         color: var(--green-deep);
+      }
+      /* <small> otherwise takes the UA's "smaller", which lands at 10.8px here --
+         under the 12px floor. A step down from its context, still on the scale. */
+      small {
+        font-size: var(--text-caption);
       }
 
       /* ---------- review-page chrome ---------- */
@@ -88,10 +127,10 @@
         flex: none;
       }
       .brand-name {
-        font-family: Gelasio, Georgia, serif;
-        font-size: 18px;
-        font-weight: 600;
-        letter-spacing: -0.4px;
+        font-family: var(--font-ui);
+        font-size: var(--text-subtitle);
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
       .topnav {
         display: flex;
@@ -126,7 +165,7 @@
       }
       .intro .eyebrow {
         margin: 0 0 10px;
-        font-size: 11px;
+        font-size: var(--text-micro);
         font-weight: 700;
         letter-spacing: 1.4px;
         text-transform: uppercase;
@@ -134,17 +173,22 @@
       }
       .intro h1 {
         margin: 0 0 14px;
-        font-family: Gelasio, Georgia, serif;
-        font-size: clamp(28px, 4vw, 40px);
-        font-weight: 600;
-        letter-spacing: -0.8px;
-        line-height: 1.1;
+        font-family: var(--font-ui);
+        font-size: var(--text-display);
+        /* A grotesque needs one more step of weight and tighter tracking than the
+           serif it replaces to hold the same presence at display size. */
+        font-weight: 700;
+        letter-spacing: -0.035em;
+        line-height: 1.05;
+        text-wrap: balance;
       }
       .intro p {
         margin: 0 auto;
-        max-width: 620px;
+        /* ch rather than px, so the measure holds at whatever size the role is. */
+        max-width: 64ch;
         color: var(--ink-soft);
-        font-size: 15px;
+        font-size: var(--text-body);
+        line-height: 1.6;
       }
 
       /* section = one screen in the journey */
@@ -177,21 +221,21 @@
       }
       .screen-head h2 {
         margin: 0;
-        font-family: Gelasio, Georgia, serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.5px;
+        font-family: var(--font-ui);
+        font-size: var(--text-title);
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
       .screen-head .desc {
         flex: 1 1 320px;
         min-width: 240px;
         color: var(--ink-soft);
-        font-size: 13.5px;
+        font-size: var(--text-caption);
       }
       .surface-label {
         display: inline-block;
         margin-left: auto;
-        font-size: 10.5px;
+        font-size: var(--text-micro);
         font-weight: 700;
         letter-spacing: 0.8px;
         text-transform: uppercase;
@@ -235,7 +279,7 @@
       }
       .eyebrow {
         margin: 0 0 6px;
-        font-size: 10px;
+        font-size: var(--text-micro);
         font-weight: 700;
         letter-spacing: 1px;
         text-transform: uppercase;
@@ -253,10 +297,10 @@
       }
       h3.title {
         margin: 0 0 10px;
-        font-family: Gelasio, Georgia, serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.55px;
+        font-family: var(--font-ui);
+        font-size: var(--text-title);
+        font-weight: 700;
+        letter-spacing: -0.02em;
         line-height: 1.15;
       }
       p.lead {
@@ -280,7 +324,9 @@
         min-height: var(--control-height);
         padding: 13px 14px;
         font-family: inherit;
-        font-size: 15px;
+        /* 16px, not 15px: iOS Safari zooms the page when a control below 16px
+           takes focus, which moves the form out from under the person using it. */
+        font-size: var(--text-control);
         color: var(--ink);
         background: var(--canvas);
         border: 1px solid var(--line);
@@ -341,14 +387,14 @@
         margin-bottom: 12px;
       }
       .step-count-kicker {
-        font-size: 11px;
+        font-size: var(--text-micro);
         font-weight: 700;
         letter-spacing: 0.8px;
         text-transform: uppercase;
         color: var(--green);
       }
       .optional-badge {
-        font-size: 10px;
+        font-size: var(--text-micro);
         font-weight: 700;
         letter-spacing: 0.6px;
         text-transform: uppercase;
@@ -377,10 +423,12 @@
       }
       .wizard h3 {
         margin: 0 0 6px;
-        font-family: Gelasio, Georgia, serif;
-        font-size: 24px;
-        font-weight: 600;
-        letter-spacing: -0.6px;
+        font-family: var(--font-ui);
+        /* Was 24px against 22px everywhere else -- two steps close enough that
+           neither read as a different role. It is a screen heading like the rest. */
+        font-size: var(--text-title);
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
       .wizard > p.sub {
         margin: 0 0 22px;
@@ -600,7 +648,7 @@
       }
       .option .opt-help {
         color: var(--ink-soft);
-        font-size: 12.5px;
+        font-size: var(--text-caption);
       }
 
       /* success / confirmation */
@@ -625,7 +673,7 @@
         justify-content: space-between;
         gap: 16px;
         padding: 9px 0;
-        font-size: 13.5px;
+        font-size: var(--text-caption);
       }
       .summary-list li span:first-child {
         color: var(--ink-soft);
@@ -692,11 +740,20 @@
       }
       .pill {
         display: inline-block;
-        font-size: 12px;
+        font-size: var(--text-micro);
         font-weight: 600;
         border-radius: 999px;
         padding: 3px 10px;
         white-space: nowrap;
+      }
+      /* Freshness is a date we measured, so the app's pills join the mono. The
+         copies inside the email preview are left to inherit --font-email: the real
+         email cannot load a webfont, and the mock should not imply otherwise. */
+      .dash-card .pill,
+      .dc-badges .pill {
+        font-family: var(--font-data);
+        font-weight: 500;
+        letter-spacing: -0.01em;
       }
       .pill.fresh {
         background: var(--fresh-bg);
@@ -819,7 +876,7 @@
         gap: 10px;
         padding: 9px 11px;
         border-radius: 9px;
-        font-size: 13.5px;
+        font-size: var(--text-caption);
         font-weight: 500;
         color: var(--ink-soft);
         margin-bottom: 2px;
@@ -849,10 +906,10 @@
       }
       .dash-header h3 {
         margin: 0 0 4px;
-        font-family: Gelasio, Georgia, serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.5px;
+        font-family: var(--font-ui);
+        font-size: var(--text-title);
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
       .dash-header p {
         margin: 0;
@@ -868,7 +925,7 @@
       }
       .seg span {
         padding: 8px 14px;
-        font-size: 12.5px;
+        font-size: var(--text-label);
         font-weight: 600;
         color: var(--ink-soft);
       }
@@ -892,17 +949,23 @@
         align-items: center;
         gap: 10px;
       }
+      /* The company name is a proper noun, not a measurement, so it stays in the
+         UI face while the values beneath it go mono. */
       .dc-company {
-        font-size: 12.5px;
+        font-size: var(--text-micro);
         font-weight: 600;
-        letter-spacing: 0.4px;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
         color: var(--green);
       }
+      /* The job title is the most important line on the card and was set at 17px,
+         one stray pixel off the body text below it. It gets the subtitle step and
+         the weight to go with being the thing you actually scan for. */
       .dc-title {
         margin: 6px 0 0;
-        font-size: 17px;
-        font-weight: 600;
+        font-size: var(--text-subtitle);
+        font-weight: 700;
+        letter-spacing: -0.015em;
         color: var(--ink);
       }
       .dc-badges {
@@ -936,9 +999,15 @@
         line-height: 1;
         white-space: nowrap;
       }
+      /* Location, salary and source: three values a machine reported, so they are
+         set in the mono and get tabular figures, which keeps the salary digits
+         from shifting width between one card and the next. */
       .dc-meta {
         margin-top: 10px;
-        font-size: 13px;
+        font-family: var(--font-data);
+        font-size: var(--text-caption);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.01em;
         color: var(--ink-soft);
       }
       .dc-actions {
@@ -976,10 +1045,13 @@
         background: transparent;
         color: var(--green-deep);
       }
+      /* Link status is a check we ran and are reporting, so it sits with the other
+         machine-reported values in the mono. */
       .status-badge {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.4px;
+        font-family: var(--font-data);
+        font-size: var(--text-micro);
+        font-weight: 500;
+        letter-spacing: 0.02em;
         text-transform: uppercase;
         padding: 3px 9px;
         border-radius: 999px;
@@ -1005,17 +1077,17 @@
         border-bottom: 1px solid var(--line);
       }
       .brief-back {
-        font-size: 12.5px;
+        font-size: var(--text-caption);
         font-weight: 600;
         color: var(--ink-soft);
         margin-bottom: 14px;
       }
       .brief-head h3 {
         margin: 8px 0 0;
-        font-family: Gelasio, Georgia, serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.5px;
+        font-family: var(--font-ui);
+        font-size: var(--text-title);
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
       .brief-body {
         padding: 22px 28px 26px;
@@ -1025,7 +1097,7 @@
       }
       .brief-section h4 {
         margin: 0 0 6px;
-        font-size: 11px;
+        font-size: var(--text-micro);
         font-weight: 700;
         letter-spacing: 0.8px;
         text-transform: uppercase;
@@ -1033,7 +1105,10 @@
       }
       .brief-section p {
         margin: 0;
-        font-size: 14px;
+        /* 66ch, not 72ch: the CSS ch unit is the advance of "0", which is wider
+           than this face's average glyph, so 72ch let ~80 characters onto a line. */
+        max-width: 66ch;
+        font-size: var(--text-caption);
         line-height: 1.6;
         color: #3a3833;
       }
@@ -1075,7 +1150,7 @@
         margin-bottom: 22px;
       }
       .edittab {
-        font-size: 13.5px;
+        font-size: var(--text-caption);
         font-weight: 600;
         color: var(--ink-soft);
         padding: 10px 2px;
@@ -1095,7 +1170,7 @@
         border-top: 1px solid var(--line);
       }
       .save-dock .hint {
-        font-size: 12.5px;
+        font-size: var(--text-caption);
         color: var(--ink-soft);
       }
       .save-dock .btn-primary {
@@ -1103,9 +1178,12 @@
       }
 
       .caption {
-        max-width: 1180px;
+        /* Was inheriting the 1180px page width, so these ran to 120ch on one line
+           -- readable in the sense that the glyphs are there. Capped to a measure
+           the eye can return from. */
+        max-width: 62ch;
         margin: 14px auto 0;
-        font-size: 12.5px;
+        font-size: var(--text-caption);
         color: var(--ink-faint);
         text-align: center;
       }

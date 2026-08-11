@@ -62,7 +62,7 @@ test("the dashboard gets Work Sans from this origin rather than a font CDN", asy
   expect(await rendersIn(page, "Work Sans")).toBe(true);
 });
 
-test("the sign-in page gets both families from this origin rather than a font CDN", async ({ page }) => {
+test("the sign-in page gets Schibsted Grotesk from this origin rather than a font CDN", async ({ page }) => {
   const { responses, failures } = await loadWatchingFonts(page, "/login.html");
 
   expect(failures).toEqual([]);
@@ -70,57 +70,67 @@ test("the sign-in page gets both families from this origin rather than a font CD
   expect(responses.length).toBeGreaterThan(0);
   for (const { url, status } of responses) expect(status, url).toBe(200);
 
-  expect(await rendersIn(page, "Work Sans")).toBe(true);
-  expect(await rendersIn(page, "Gelasio")).toBe(true);
+  expect(await rendersIn(page, "Schibsted Grotesk")).toBe(true);
+  // This page has no data role, so it must not be paying for the mono either.
+  expect(responses.some(({ url }) => url.includes("ibm-plex-mono"))).toBe(false);
 });
 
 // The reverse of the check below, and the one that actually caught something: a
-// family a stylesheet *sets* but never *declares*. rendersIn cannot see it,
-// because a developer with the font installed locally gets a match on the family
-// name with nothing fetched — so the dashboard shipped every heading in the
-// Georgia fallback while the suite stayed green. Compare the two lists instead.
-test("every family the dashboard sets is also declared in its own stylesheets", async ({ page }) => {
-  await signIn(page);
-  await page.goto("/index.html");
+// family a page *asks for* but never *declares*. rendersIn cannot see it, because
+// a developer with the font installed locally gets a match on the family name with
+// nothing fetched — so the dashboard shipped every heading in the Georgia fallback
+// while the suite stayed green. Compare the two lists instead.
+//
+// Read from computed style on real elements rather than from rule text: the stacks
+// now come through a custom property (--font-ui), and a rule's own font-family
+// value is the literal "var(--font-ui)", which tells you nothing about the family.
+// Computed style resolves it, and it also reflects what the page actually renders
+// rather than what it merely declares somewhere.
+for (const path of ["/index.html", "/login.html"]) {
+  test(`every family ${path} asks for is also declared there`, async ({ page }) => {
+    await signIn(page);
+    await page.goto(path);
 
-  const { used, declared } = await page.evaluate(() => {
-    const generic = new Set([
-      "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui",
-      "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "inherit",
-      "initial", "unset", "revert", "emoji", "math", "fangsong",
-    ]);
-    const used = new Set();
-    const declared = new Set();
+    const { used, declared } = await page.evaluate(() => {
+      const generic = new Set([
+        "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui",
+        "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "emoji",
+        "math", "fangsong",
+      ]);
+      // Rendered content only. <html> and everything in <head> keep the UA's
+      // default family (Chromium reports "Times"), which is nobody's request and
+      // would otherwise be reported as an undeclared face on every page.
+      const skip = new Set(["SCRIPT", "STYLE", "TEMPLATE", "NOSCRIPT", "LINK", "META", "TITLE"]);
+      const used = new Set();
+      for (const el of [document.body, ...document.body.querySelectorAll("*")]) {
+        if (skip.has(el.tagName)) continue;
+        // The first entry is the request; the rest are fallbacks, which are
+        // allowed to name families this origin does not serve.
+        const first = getComputedStyle(el).fontFamily.split(",")[0].replace(/['"]/g, "").trim();
+        if (first && !generic.has(first.toLowerCase())) used.add(first);
+      }
 
-    const walk = (rules) => {
-      for (const rule of rules) {
-        if (rule instanceof CSSFontFaceRule) {
-          declared.add(rule.style.getPropertyValue("font-family").replace(/['"]/g, "").trim());
-          continue;
+      const declared = new Set();
+      for (const sheet of document.styleSheets) {
+        let rules;
+        try {
+          rules = [...sheet.cssRules];
+        } catch {
+          continue; // cross-origin sheet; nothing local to check
         }
-        if (rule.cssRules) walk([...rule.cssRules]); // @media, @supports
-        const stack = rule.style?.getPropertyValue("font-family");
-        if (!stack) continue;
-        // Only the first entry matters: the rest are the fallbacks, which are
-        // allowed to be families this origin does not serve.
-        const first = stack.split(",")[0].replace(/['"]/g, "").trim();
-        if (first && !generic.has(first.toLowerCase()) && !first.startsWith("var(")) used.add(first);
+        for (const rule of rules) {
+          if (rule instanceof CSSFontFaceRule) {
+            declared.add(rule.style.getPropertyValue("font-family").replace(/['"]/g, "").trim());
+          }
+        }
       }
-    };
+      return { used: [...used], declared: [...declared] };
+    });
 
-    for (const sheet of document.styleSheets) {
-      try {
-        walk([...sheet.cssRules]);
-      } catch {
-        // cross-origin sheet; nothing local to check
-      }
-    }
-    return { used: [...used], declared: [...declared] };
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.filter((family) => !declared.includes(family))).toEqual([]);
   });
-
-  expect(used.length).toBeGreaterThan(0);
-  expect(declared.sort()).toEqual([...new Set([...used, ...declared])].sort());
-});
+}
 
 test("every declared font file is actually present", async ({ page, request }) => {
   await signIn(page);

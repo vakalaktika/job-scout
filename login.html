@@ -5,19 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sign in · Job Scout</title>
     <style>
-      /* Fonts are served from this origin. The Google Fonts URL that used to sit
-         here asked for an opsz axis neither family publishes, so it answered 400
-         and this page had been rendering in fallbacks. See assets/fonts/README.md. */
-      @font-face{font-family:'Gelasio';font-style:normal;font-weight:500;font-display:swap;src:url('./assets/fonts/gelasio-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-      @font-face{font-family:'Gelasio';font-style:normal;font-weight:500;font-display:swap;src:url('./assets/fonts/gelasio-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-      @font-face{font-family:'Gelasio';font-style:normal;font-weight:600;font-display:swap;src:url('./assets/fonts/gelasio-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-      @font-face{font-family:'Gelasio';font-style:normal;font-weight:600;font-display:swap;src:url('./assets/fonts/gelasio-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-      @font-face{font-family:'Work Sans';font-style:normal;font-weight:400;font-display:swap;src:url('./assets/fonts/work-sans-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-      @font-face{font-family:'Work Sans';font-style:normal;font-weight:400;font-display:swap;src:url('./assets/fonts/work-sans-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-      @font-face{font-family:'Work Sans';font-style:normal;font-weight:500;font-display:swap;src:url('./assets/fonts/work-sans-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-      @font-face{font-family:'Work Sans';font-style:normal;font-weight:500;font-display:swap;src:url('./assets/fonts/work-sans-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
-      @font-face{font-family:'Work Sans';font-style:normal;font-weight:600;font-display:swap;src:url('./assets/fonts/work-sans-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
-      @font-face{font-family:'Work Sans';font-style:normal;font-weight:600;font-display:swap;src:url('./assets/fonts/work-sans-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+      /* Fonts are served from this origin -- see assets/fonts/README.md.
+         Schibsted Grotesk is variable, so weights 400-700 arrive in one file per
+         subset and eight @font-face blocks collapse to two. This page carries no
+         data role -- no salary, date, source or count -- so it does not declare
+         IBM Plex Mono, which is the dashboard's face for measured values. */
+      @font-face{font-family:'Schibsted Grotesk';font-style:normal;font-weight:400 700;font-display:swap;src:url('./assets/fonts/schibsted-grotesk-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+      @font-face{font-family:'Schibsted Grotesk';font-style:normal;font-weight:400 700;font-display:swap;src:url('./assets/fonts/schibsted-grotesk-latin.woff2') format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
     </style>
     <style>
       /* Tokens copied from the dashboard bundle's :root so this standalone page
@@ -41,6 +35,20 @@
         --shadow: 0 12px 28px rgba(33, 31, 28, 0.055);
         --card-radius: 14px;
         --control-height: 48px;
+
+        /* Type roles, named for their job rather than their size. Eight steps
+           with 12px as the floor, replacing a ramp that ran 10/12/13/14/15/20/22
+           -- seven values inside 12px, several of which no longer told you which
+           role you were reading. Tracking is in em so it survives a resize. */
+        --font-ui: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+        --text-micro: 12px;
+        --text-label: 14px;
+        --text-caption: 14px;
+        --text-body: 16px;
+        --text-control: 16px;
+        --text-subtitle: 18px;
+        --text-title: 22px;
+        --text-display: clamp(27px, 5vw, 33px);
       }
       * {
         box-sizing: border-box;
@@ -53,8 +61,9 @@
         padding: 32px 24px;
         background: var(--canvas);
         color: var(--ink);
-        font-family: "Work Sans", Arial, sans-serif;
-        font-size: 14px;
+        font-family: var(--font-ui);
+        font-size: var(--text-body);
+        line-height: 1.5;
       }
       .shell {
         width: 100%;
@@ -76,10 +85,9 @@
         color: #fff;
       }
       .brand-name {
-        font-family: Gelasio, Georgia, serif;
-        font-size: 20px;
-        font-weight: 600;
-        letter-spacing: -0.4px;
+        font-size: var(--text-title);
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
       .card {
         background: var(--surface);
@@ -99,32 +107,40 @@
         margin: 0 0 18px;
       }
       .eyebrow {
-        margin: 0 0 6px;
-        font-size: 10px;
+        margin: 0 0 8px;
+        font-size: var(--text-micro);
         font-weight: 600;
-        letter-spacing: 1px;
+        letter-spacing: 0.09em;
         text-transform: uppercase;
         color: var(--green);
       }
       h1 {
         margin: 0 0 10px;
-        font-family: Gelasio, Georgia, serif;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.55px;
-        line-height: 1.15;
+        font-size: var(--text-display);
+        font-weight: 700;
+        /* Schibsted Grotesk is a news grotesque: it takes tighter tracking at
+           display size than the serif it replaces, and needs it to stop looking
+           loose. Still well inside the -0.04em floor. */
+        letter-spacing: -0.03em;
+        line-height: 1.08;
+        /* Keeps "Email me a sign-in link" breaking at a sensible point rather
+           than dropping one orphaned word. */
+        text-wrap: balance;
       }
       p.lead {
-        margin: 0 0 22px;
-        line-height: 1.55;
+        margin: 0 0 24px;
+        /* 16px over a 440px card is ~52ch, inside the 45-75ch band; the extra
+           leading is for the wider measure this face sets at the same size. */
+        max-width: 62ch;
+        line-height: 1.6;
         color: var(--ink-soft);
       }
       label {
         display: block;
         margin: 0 0 8px;
-        font-size: 13px;
+        font-size: var(--text-label);
         font-weight: 600;
-        letter-spacing: 0.585px;
+        letter-spacing: 0.04em;
         text-transform: uppercase;
         color: var(--ink-soft);
       }
@@ -133,7 +149,9 @@
         height: var(--control-height);
         padding: 13px 14px;
         font-family: inherit;
-        font-size: 15px;
+        /* 16px, not 15px: iOS Safari zooms the page on focus for anything below
+           16px, which throws the layout mid-sign-in. */
+        font-size: var(--text-control);
         color: var(--ink);
         background: var(--canvas);
         /* A control's edge, not a divider: 3:1 rather than the 1.3:1 --line gives.
@@ -150,10 +168,12 @@
       button {
         width: 100%;
         margin-top: 16px;
-        min-height: 43px;
-        padding: 12px 15px;
+        min-height: 48px;
+        padding: 12px 16px;
         font-family: inherit;
-        font-size: 13px;
+        /* The primary action on the page was set at 13px, two steps under its own
+           body copy. It now matches the control role it belongs to. */
+        font-size: var(--text-control);
         font-weight: 600;
         color: #fff;
         background: var(--ink);
@@ -178,7 +198,7 @@
       }
       .status {
         margin: 14px 0 0;
-        font-size: 13px;
+        font-size: var(--text-caption);
         line-height: 1.55;
         min-height: 1.55em;
         color: var(--ink-soft);
@@ -193,7 +213,7 @@
         margin: 22px 0 0;
         padding-top: 18px;
         border-top: 1px solid var(--line);
-        font-size: 12px;
+        font-size: var(--text-caption);
         color: var(--ink-soft);
       }
       .foot a {
