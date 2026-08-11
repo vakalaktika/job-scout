@@ -1,323 +1,38 @@
-// Generated from dispatch/backup-dispatcher.source.mjs by npm run build:backup-worker. Do not edit.
+// backup-dispatcher.source.mjs
+//
+// Source for the bundled job-scout-backup-dispatcher Cloudflare Worker.
+//
+// This source was recovered from the esbuild bundle running as the
+// `job-scout-backup-dispatcher` Cloudflare Worker, the service that composes and sends
+// every match email. Keeping source and generated deployment artifact together makes
+// dashboard drift visible in review instead of waiting for an inbox to expose it.
+//
+// It fills exactly the tokens in KNOWN_TOKENS (build-email.mjs). Adding a token to
+// email-template.html that does not appear in this file will break production mail.
+//
+// The recovered snapshot was fetched and redeployed 2026-08-11 with two fixes:
+//   - conditional HTML comments are preserved, so Outlook keeps its 600px ghost table
+//   - the grey freshness pill is #556174 (5.34:1) instead of #94a3b8 / #64748b
+//
+// Build the single-file deployment artifact:
+//   npm run build:backup-worker
+//
+// Inspect the currently deployed module:
+//   curl -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+//     https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/job-scout-backup-dispatcher
+//
+// Redeploy (preserves bindings and secrets — do NOT use the plain /scripts PUT):
+//   curl -X PUT ".../workers/scripts/job-scout-backup-dispatcher/content" \
+//     -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+//     -F 'metadata={"main_module":"worker.js"};type=application/json' \
+//     -F 'worker.js=@dispatch/backup-dispatcher.deployed.js;filename=worker.js;type=application/javascript+module'
+//
+import { resolveApplyLinks } from "../linkedin-apply-url.mjs";
 
-// public-url.mjs
-function isPublicHttpUrl(value) {
-  try {
-    const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return false;
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-    if (!host || host === "localhost" || host.endsWith(".local") || host === "::1") return false;
-    if (/^(0|10|127)\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return false;
-    const private172 = host.match(/^172\.(\d+)\./);
-    if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return false;
-    if (host.startsWith("::") || /^f[cd]/i.test(host) || /^fe[89ab]/i.test(host) || /^ff/i.test(host)) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// ats-boards.mjs
-var FETCH_TIMEOUT_MS = 8e3;
-var MAX_BOARD_BYTES = 2 * 1024 * 1024;
-var USER_AGENT = "Job Scout apply-link resolver/1.0 (+https://vakalaktika.github.io/job-scout/)";
-var BOARDS = [
-  {
-    name: "ashby",
-    url: (slug) => `https://api.ashbyhq.com/posting-api/job-board/${slug}`,
-    postings: (body) => (body?.jobs || []).map((job) => ({ title: job?.title, url: job?.applyUrl || job?.jobUrl }))
-  },
-  {
-    name: "greenhouse",
-    url: (slug) => `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`,
-    postings: (body) => (body?.jobs || []).map((job) => ({ title: job?.title, url: job?.absolute_url }))
-  },
-  {
-    name: "lever",
-    url: (slug) => `https://api.lever.co/v0/postings/${slug}?mode=json`,
-    postings: (body) => (Array.isArray(body) ? body : []).map((job) => ({
-      title: job?.text,
-      url: job?.applyUrl || job?.hostedUrl
-    }))
-  }
-];
-var normalizeTitle = (value) => String(value ?? "").normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-function companySlugCandidates(company, linkedInSlug) {
-  const name = String(company ?? "").normalize("NFKD").toLowerCase();
-  const candidates = [
-    name.replace(/[^a-z0-9]/g, ""),
-    name.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-    String(linkedInSlug ?? "").toLowerCase()
-  ];
-  return [...new Set(candidates)].filter((slug) => /^[a-z0-9][a-z0-9-]{1,59}$/.test(slug));
-}
-function uniqueTitleMatch(postings, title) {
-  const wanted = normalizeTitle(title);
-  if (!wanted) return "";
-  const matches = (postings || []).filter(
-    (posting) => normalizeTitle(posting?.title) === wanted && isPublicHttpUrl(posting?.url)
-  );
-  return matches.length === 1 ? matches[0].url : "";
-}
-async function readBoard(board, slug, fetcher) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetcher(board.url(slug), {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT }
-    });
-    if (!response.ok) return [];
-    const body = (await response.text()).slice(0, MAX_BOARD_BYTES);
-    return board.postings(JSON.parse(body));
-  } catch {
-    return [];
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-async function findAtsApplyUrl(posting, { fetcher = fetch } = {}) {
-  if (!normalizeTitle(posting?.title)) return "";
-  for (const slug of companySlugCandidates(posting?.company, posting?.companySlug)) {
-    const boards = await Promise.all(BOARDS.map((board) => readBoard(board, slug, fetcher)));
-    for (const postings of boards) {
-      const match = uniqueTitleMatch(postings, posting.title);
-      if (match) return match;
-    }
-  }
-  return "";
-}
-
-// linkedin-apply-url.mjs
-var LINKEDIN_HOST = /(^|\.)linkedin\.com$/i;
-var FETCH_TIMEOUT_MS2 = 1e4;
-var MAX_HTML_BYTES = 512 * 1024;
-var MAX_REDIRECT_HOPS = 5;
-var USER_AGENT2 = "Job Scout apply-link resolver/1.0 (+https://vakalaktika.github.io/job-scout/)";
-var REDIRECT_STATUSES = /* @__PURE__ */ new Set([301, 302, 303, 307, 308]);
-var guestPostingUrl = (jobId) => `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${jobId}`;
-function linkedInJobId(value) {
-  let url;
-  try {
-    url = new URL(String(value ?? ""));
-  } catch {
-    return "";
-  }
-  if (!LINKEDIN_HOST.test(url.hostname)) return "";
-  const current = url.searchParams.get("currentJobId") || "";
-  if (/^\d{6,}$/.test(current)) return current;
-  const viewed = url.pathname.match(/\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})(?=$|[/?#])/);
-  return viewed ? viewed[1] : "";
-}
-var isLinkedInJobUrl = (value) => Boolean(linkedInJobId(value));
-function unwrapExternalApplyUrl(value) {
-  let current = String(value ?? "").trim();
-  for (let hop = 0; hop < 3; hop += 1) {
-    let url;
-    try {
-      url = new URL(current);
-    } catch {
-      return current;
-    }
-    if (!LINKEDIN_HOST.test(url.hostname)) return current;
-    const target = url.searchParams.get("url");
-    if (!target || target.trim() === current) return current;
-    current = target.trim();
-  }
-  return current;
-}
-var APPLY_URL_BLOCK = /<code[^>]*\bid=["']?applyUrl["']?[^>]*>([\s\S]*?)<\/code>/i;
-var ANCHOR_TAG = /<a\b[^>]*>/gi;
-var HREF_ATTRIBUTE = /\bhref=["']([^"']*)["']/i;
-var TRACKING_ATTRIBUTE = /\bdata-tracking-control-name=["']([^"']*)["']/i;
-var EXTERNAL_APPLY_WRAPPER = /https?:\/\/[^"'\s<>]*linkedin\.com\/jobs\/view\/externalApply\/[^"'\s<>]+/i;
-var OFFSITE_MARKER = /apply-button__offsite|offsite-apply-icon|apply-link-offsite/i;
-var ONSITE_MARKER = /apply-link[-_](?:simple_)?onsite|linkedin\.com\/job-apply\/\d/i;
-var TOPCARD_TITLE = /topcard__title[^>]*>([\s\S]*?)</i;
-var TOPCARD_ORG = /topcard__org-name-link[\s\S]{0,400}?>([\s\S]*?)<\/a>/i;
-var COMPANY_SLUG = /linkedin\.com\/company\/([a-z0-9-]+)/i;
-var decodeAttribute = (value) => String(value ?? "").replace(/&#(\d+);/g, (_, number) => String.fromCodePoint(Number(number))).replace(/&#x([0-9a-f]+);/gi, (_, number) => String.fromCodePoint(parseInt(number, 16))).replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&amp;/gi, "&");
-function applyUrlFromCodeBlock(html) {
-  const block = APPLY_URL_BLOCK.exec(html);
-  if (!block) return "";
-  const raw = decodeAttribute(block[1]).replace(/^\s*<!--/, "").replace(/-->\s*$/, "").trim();
-  try {
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "string" ? parsed : "";
-  } catch {
-    return raw.replace(/\\u002[fF]/g, "/").replace(/^"|"$/g, "");
-  }
-}
-function applyAnchors(html) {
-  const offsite = [];
-  let onsite = false;
-  for (const [tag] of String(html).matchAll(ANCHOR_TAG)) {
-    const tracking = TRACKING_ATTRIBUTE.exec(tag)?.[1] || "";
-    if (!/apply-link/i.test(tracking)) continue;
-    if (/offsite/i.test(tracking)) {
-      const href = decodeAttribute(HREF_ATTRIBUTE.exec(tag)?.[1] || "").trim();
-      if (href) offsite.push(href);
-    } else if (/onsite/i.test(tracking)) {
-      onsite = true;
-    }
-  }
-  return { offsite, onsite };
-}
-var isOffLinkedInUrl = (value) => {
-  if (!isPublicHttpUrl(value)) return false;
-  return !LINKEDIN_HOST.test(new URL(value).hostname);
-};
-function parseApplyMethod(html) {
-  const source = String(html || "");
-  if (!source) return "unknown";
-  if (OFFSITE_MARKER.test(source)) return "offsite";
-  if (ONSITE_MARKER.test(source)) return "linkedin";
-  return "unknown";
-}
-function parseDirectApplyUrl(html) {
-  const source = String(html || "");
-  const anchors = applyAnchors(source);
-  const wrapper = EXTERNAL_APPLY_WRAPPER.exec(source)?.[0] || "";
-  const candidates = [applyUrlFromCodeBlock(source), ...anchors.offsite, decodeAttribute(wrapper)];
-  for (const candidate of candidates) {
-    const target = unwrapExternalApplyUrl(candidate);
-    if (isOffLinkedInUrl(target)) return target;
-  }
-  return "";
-}
-function parsePostingIdentity(html) {
-  const source = String(html || "");
-  const text = (pattern) => decodeAttribute(pattern.exec(source)?.[1] || "").replace(/\s+/g, " ").trim();
-  return {
-    title: text(TOPCARD_TITLE),
-    company: text(TOPCARD_ORG),
-    companySlug: (COMPANY_SLUG.exec(source)?.[1] || "").toLowerCase()
-  };
-}
-async function readCapped(response) {
-  if (!response.body?.getReader) return (await response.text()).slice(0, MAX_HTML_BYTES);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let bytes = 0;
-  let result = "";
-  while (bytes < MAX_HTML_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytes += value.byteLength;
-    result += decoder.decode(value, { stream: true });
-  }
-  await reader.cancel().catch(() => {
-  });
-  return result + decoder.decode();
-}
-async function fetchGuestPosting(jobId, fetcher) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS2);
-  try {
-    const response = await fetcher(guestPostingUrl(jobId), {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": USER_AGENT2 }
-    });
-    if (!response.ok) return "";
-    return await readCapped(response);
-  } catch {
-    return "";
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-async function followToDestination(url, fetcher) {
-  if (!isPublicHttpUrl(url)) return url;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS2);
-  try {
-    let current = url;
-    for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop += 1) {
-      const response = await fetcher(current, {
-        method: "GET",
-        redirect: "manual",
-        signal: controller.signal,
-        headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": USER_AGENT2 }
-      });
-      await response.body?.cancel?.().catch(() => {
-      });
-      if (!REDIRECT_STATUSES.has(response.status)) {
-        const final = String(response?.url || current);
-        if (!isPublicHttpUrl(final)) return "";
-        if (new URL(final).pathname === "/" && new URL(url).pathname !== "/") return url;
-        return final;
-      }
-      const location = response.headers?.get?.("location") || "";
-      let next;
-      try {
-        next = new URL(location, current).href;
-      } catch {
-        return "";
-      }
-      if (!isPublicHttpUrl(next)) return "";
-      current = next;
-    }
-    return "";
-  } catch {
-    return url;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-async function resolveApplyTarget(postingUrl, { fetcher = fetch, title, company } = {}) {
-  const url = String(postingUrl ?? "");
-  const jobId = linkedInJobId(url);
-  if (!jobId) return { url, method: "direct" };
-  const html = await fetchGuestPosting(jobId, fetcher);
-  const method = parseApplyMethod(html);
-  if (method !== "offsite") return { url, method };
-  const direct = parseDirectApplyUrl(html);
-  if (direct) {
-    const destination = await followToDestination(direct, fetcher);
-    return destination ? { url: destination, method: "external" } : { url, method: "unknown" };
-  }
-  const identity = parsePostingIdentity(html);
-  const found = await findAtsApplyUrl(
-    {
-      title: title || identity.title,
-      company: company || identity.company,
-      companySlug: identity.companySlug
-    },
-    { fetcher }
-  );
-  return found ? { url: found, method: "external" } : { url, method: "unknown" };
-}
-async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
-  const inFlight = /* @__PURE__ */ new Map();
-  return Promise.all(
-    (records || []).map(async (record) => {
-      const url = record?.url;
-      if (!isLinkedInJobUrl(url)) return record;
-      if (!inFlight.has(url)) {
-        inFlight.set(
-          url,
-          resolveApplyTarget(url, {
-            fetcher,
-            title: record?.title,
-            company: record?.company
-          }).catch(() => ({ url, method: "unknown" }))
-        );
-      }
-      const resolved = await inFlight.get(url);
-      return resolved.method === "external" ? { ...record, url: resolved.url, apply_method: "external" } : { ...record, apply_method: resolved.method };
-    })
-  );
-}
-
-// dispatch/backup-dispatcher.source.mjs
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
+// worker.js
 var __defProp2 = Object.defineProperty;
 var __name2 = /* @__PURE__ */ __name((target, value) => __defProp2(target, "name", { value, configurable: true }), "__name");
 var CANDIDATES_DB = "87f58043-765a-4b49-ae7e-6903e48b6996";
@@ -639,7 +354,7 @@ function metaLine(job) {
   if (job.location) parts.push(escapeHtml(job.location));
   if (job.salary) parts.push(escapeHtml(job.salary));
   if (job.source) parts.push(escapeHtml(job.source));
-  return parts.join(" &nbsp;·&nbsp; ");
+  return parts.join(" &nbsp;\xB7&nbsp; ");
 }
 __name(metaLine, "metaLine");
 __name2(metaLine, "metaLine");
@@ -662,6 +377,8 @@ function freshness(postedAt, now) {
 __name(freshness, "freshness");
 __name2(freshness, "freshness");
 var WORKPLACE_LABELS = ["Remote", "Hybrid", "On-site"];
+// A <tr> that contains no nested <tr> and holds the workplace token, so the whole
+// badge row can be dropped when workplace type is Unclear/missing.
 var WORKPLACE_ROW_PATTERN = /<tr[^>]*>(?:(?!<\/?tr)[\s\S])*\{\{WORKPLACE_LABEL\}\}(?:(?!<\/?tr)[\s\S])*<\/tr>\s*/g;
 function fillCard(cardTemplate, job, now) {
   const fresh = freshness(job.posted_at, now);
@@ -680,6 +397,8 @@ async function loadEmailTemplate(env, fetcher = fetch) {
 __name(loadEmailTemplate, "loadEmailTemplate");
 __name2(loadEmailTemplate, "loadEmailTemplate");
 function buildEmail({ template, candidate, jobs, now }) {
+  // Accept markers whether bare (JOB_CARD_START) or comment-wrapped (<!-- JOB_CARD_START -->).
+  // Anchor on <tr>...</tr> so instructional prose that merely names the markers can't match.
   const match = template.match(
     /(?:<!--\s*)?JOB_CARD_START(?:\s*-->)?\s*(<tr[\s\S]*?<\/tr>)\s*(?:<!--\s*)?JOB_CARD_END(?:\s*-->)?/
   );
@@ -689,7 +408,13 @@ function buildEmail({ template, candidate, jobs, now }) {
   const headline = `${jobs.length} new match${jobs.length === 1 ? "" : "es"} for you`;
   const runDate = now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const firstName = String(candidate.name || "").trim().split(/\s+/)[0] || "there";
-  const html = template.replace(match[0], "").replace(/<!--[\s\S]*?-->/g, (comment) => /^<!--\s*\[if\b/i.test(comment) || /^<!--\s*<!\[endif\]/i.test(comment) ? comment : "").replace("{{JOB_CARDS}}", cardsHtml).replaceAll("{{HEADLINE}}", escapeHtml(headline)).replaceAll("{{RUN_DATE}}", escapeHtml(runDate)).replaceAll("{{FIRST_NAME}}", escapeHtml(firstName));
+  const html = template
+    .replace(match[0], "")
+    .replace(/<!--[\s\S]*?-->/g, (comment) => /^<!--\s*\[if\b/i.test(comment) || /^<!--\s*<!\[endif\]/i.test(comment) ? comment : "")
+    .replace("{{JOB_CARDS}}", cardsHtml)
+    .replaceAll("{{HEADLINE}}", escapeHtml(headline))
+    .replaceAll("{{RUN_DATE}}", escapeHtml(runDate))
+    .replaceAll("{{FIRST_NAME}}", escapeHtml(firstName));
   const leaked = html.match(/\{\{\s*[\w.-]+\s*\}\}/);
   if (leaked) throw new Error(`email_token_leak:${leaked[0].replace(/[^\w.-]/g, "")}`);
   return { html, subject: headline };
@@ -967,8 +692,9 @@ export {
   estimateCost,
   fallbackEmail,
   isStale,
-  sanitizeJob,
   saveJob,
+  sanitizeJob,
   scoutJobs,
   staleHours
 };
+//# sourceMappingURL=worker.js.map

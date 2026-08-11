@@ -288,6 +288,35 @@ test("keeps the stated link when the redirect chain lands on a site root", async
   assert.equal(resolved.url, "https://click.appcast.io/x/9f2");
 });
 
+test("refuses a redirect to private space before making the unsafe request", async () => {
+  const posting = "https://www.linkedin.com/jobs/view/4123456789";
+  const publicHop = "https://click.appcast.io/x/9f2";
+  const privateTarget = "http://127.0.0.1:8787/apply";
+  const seen = [];
+  const fetcher = async (url) => {
+    seen.push(url);
+    if (url === GUEST("4123456789")) {
+      return htmlResponse(legacyOffsiteFragment(publicHop));
+    }
+    if (url === publicHop) {
+      return {
+        ok: false,
+        status: 302,
+        url: publicHop,
+        headers: new Headers({ location: privateTarget }),
+        text: async () => "",
+      };
+    }
+    throw new Error(`unsafe request: ${url}`);
+  };
+
+  assert.deepEqual(await resolveApplyTarget(posting, { fetcher }), {
+    method: "unknown",
+    url: posting,
+  });
+  assert.ok(!seen.includes(privateTarget));
+});
+
 test("keeps the LinkedIn post when the posting is Easy Apply", async () => {
   const fetcher = async () => htmlResponse(easyApplyFragment);
   const posting = "https://www.linkedin.com/jobs/view/4123456789";
@@ -375,4 +404,7 @@ test("isPublicHttpUrl rejects private space, other schemes, and embedded credent
   assert.equal(isPublicHttpUrl("http://localhost/apply"), false);
   assert.equal(isPublicHttpUrl("file:///etc/passwd"), false);
   assert.equal(isPublicHttpUrl("https://user:pass@example.com/apply"), false);
+  assert.equal(isPublicHttpUrl("http://[::]/apply"), false);
+  assert.equal(isPublicHttpUrl("http://[::ffff:127.0.0.1]/apply"), false);
+  assert.equal(isPublicHttpUrl("http://[::ffff:10.0.0.1]/apply"), false);
 });

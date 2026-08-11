@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Invite-only job scout: a Cloudflare Worker API, a static front end, and the email it sends.",
   "scripts": {
+    "build:backup-worker": "esbuild dispatch/backup-dispatcher.source.mjs --bundle --format=esm --platform=browser --target=es2022 --charset=utf8 --banner:js=\"// Generated from dispatch/backup-dispatcher.source.mjs by npm run build:backup-worker. Do not edit.\" --outfile=dispatch/backup-dispatcher.deployed.js",
     "test": "node --test *.test.mjs",
     "test:coverage": "node --experimental-test-coverage --test *.test.mjs",
     "test:e2e": "playwright test",
@@ -12,6 +13,7 @@
     "check": "node --check worker.mjs && npm test && npm run test:e2e"
   },
   "devDependencies": {
-    "@playwright/test": "1.56.0"
+    "@playwright/test": "1.56.0",
+    "esbuild": "0.28.2"
   }
 }

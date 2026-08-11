@@ -159,6 +159,89 @@ async function deliverThroughWorker(
   }
 }
 
+async function deliverThroughScheduledWorker(value, resolveFetch) {
+  const originalFetch = globalThis.fetch;
+  const captured = { email: null, notion: null };
+  const scheduledCandidate = { ...candidate, email: "alex@member.test" };
+  const candidatePage = {
+    id: scheduledCandidate.id,
+    properties: {
+      Name: { type: "title", title: [{ plain_text: scheduledCandidate.name }] },
+      Email: { type: "email", email: scheduledCandidate.email },
+      Status: { type: "select", select: { name: "Active" } },
+      "Target roles": { type: "rich_text", rich_text: [{ plain_text: scheduledCandidate.targetRoles }] },
+      Regions: { type: "rich_text", rich_text: [{ plain_text: scheduledCandidate.regions }] },
+      "Min salary": { type: "rich_text", rich_text: [{ plain_text: scheduledCandidate.minSalary }] },
+      Seniority: { type: "select", select: { name: scheduledCandidate.seniority } },
+      "Remote OK": { type: "select", select: { name: scheduledCandidate.remote } },
+      Frequency: { type: "select", select: { name: "Daily" } },
+      Notes: { type: "rich_text", rich_text: [{ plain_text: scheduledCandidate.notes }] },
+    },
+  };
+
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.endsWith("/databases/87f58043-765a-4b49-ae7e-6903e48b6996/query")) {
+      return Response.json({ results: [candidatePage], has_more: false });
+    }
+    if (target.endsWith("/databases/236b97b7-af8b-4c3d-8d67-f57fdc6386c6/query")) {
+      return Response.json({ results: [], has_more: false });
+    }
+    if (target.endsWith("/databases/236b97b7-af8b-4c3d-8d67-f57fdc6386c6")) {
+      return Response.json({ properties: schema });
+    }
+    if (target.includes(`/blocks/${scheduledCandidate.id}/children`)) {
+      return Response.json({ results: [], has_more: false });
+    }
+    if (target === "https://api.openai.com/v1/responses") {
+      return Response.json({
+        output_text: JSON.stringify({ jobs: [value] }),
+        usage: { input_tokens: 10, output_tokens: 10 },
+      });
+    }
+    if (target.endsWith("/email-template.html")) return new Response(TEMPLATE, { status: 200 });
+    if (target === "https://api.resend.com/emails") {
+      captured.email = JSON.parse(init.body);
+      return Response.json({ id: "email-1" });
+    }
+    if (target === "https://api.notion.com/v1/pages") {
+      captured.notion = JSON.parse(init.body);
+      return Response.json({ id: "saved-job" });
+    }
+    const resolverResponse = await resolveFetch(target, init);
+    if (resolverResponse) return resolverResponse;
+    throw new Error(`unexpected fetch: ${init.method || "GET"} ${target}`);
+  };
+
+  const state = new Map();
+  try {
+    const response = await backupWorker.fetch(
+      new Request("https://backup.example/run", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer admin-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ dry_run: false, force: true }),
+      }),
+      {
+        ADMIN_TOKEN: "admin-token",
+        BACKUP_ENABLED: "true",
+        NOTION_TOKEN: "notion-token",
+        OPENAI_API_KEY: "openai-token",
+        RESEND_API_KEY: "resend-token",
+        BACKUP_STATE: {
+          get: async (key) => state.get(key) || null,
+          put: async (key, value) => state.set(key, value),
+        },
+      },
+    );
+    return { response, ...captured };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 const linkedInJob = () => ({
   ...job(undefined),
   url: LINKEDIN_JOB_URL,
@@ -275,8 +358,8 @@ test("the backup Worker emails a confirmed external employer link but saves the 
     },
   });
 
-  assert.match(delivery.email.html, new RegExp(employerUrl));
-  assert.doesNotMatch(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.ok(delivery.email.html.includes(employerUrl));
+  assert.ok(!delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
@@ -288,7 +371,7 @@ test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () =>
         : null,
   });
 
-  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
@@ -300,20 +383,36 @@ test("the backup Worker keeps LinkedIn when an external application cannot be re
         : notFoundResponse(),
   });
 
-  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
 test("the backup Worker refuses an unsafe external application link", async () => {
+  const employerUrl = "https://apply.northwind.example/redirect/771";
+  const privateTarget = "http://127.0.0.1:8787/apply";
+  const seen = [];
   const delivery = await deliverThroughWorker(linkedInJob(), {
-    resolveFetch: async (url) =>
-      url === LINKEDIN_GUEST_URL
-        ? htmlResponse(offsiteFragment("http://127.0.0.1:8787/apply"), LINKEDIN_GUEST_URL)
-        : notFoundResponse(),
+    resolveFetch: async (url) => {
+      seen.push(url);
+      if (url === LINKEDIN_GUEST_URL) {
+        return htmlResponse(offsiteFragment(employerUrl), LINKEDIN_GUEST_URL);
+      }
+      if (url === employerUrl) {
+        return {
+          ok: false,
+          status: 302,
+          url: employerUrl,
+          headers: new Headers({ location: privateTarget }),
+          text: async () => "",
+        };
+      }
+      throw new Error(`unsafe request: ${url}`);
+    },
   });
 
-  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.doesNotMatch(delivery.email.html, /127\.0\.0\.1/);
+  assert.ok(!seen.includes(privateTarget));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
@@ -344,8 +443,25 @@ test("the backup Worker keeps LinkedIn when the employer board match is ambiguou
     },
   });
 
-  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.doesNotMatch(delivery.email.html, /jobs\.ashbyhq\.com/);
+  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+});
+
+test("the scheduled backup dispatch resolves the email copy but de-duplicates on LinkedIn", async () => {
+  const employerUrl = "https://jobs.northwind.example/staff-product-designer/apply";
+  const delivery = await deliverThroughScheduledWorker(linkedInJob(), async (url) => {
+    if (url === LINKEDIN_GUEST_URL) {
+      return htmlResponse(offsiteFragment(employerUrl), LINKEDIN_GUEST_URL);
+    }
+    if (url === employerUrl) return htmlResponse("", employerUrl);
+    return null;
+  });
+  const result = await delivery.response.json();
+
+  assert.equal(result.emailed, 1);
+  assert.ok(delivery.email.html.includes(employerUrl));
+  assert.ok(!delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
