@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { buildEmail, toPosting } from "./build-email.mjs";
+import { KNOWN_TOKENS, buildEmail, toPosting } from "./build-email.mjs";
 import { renderMatchEmail } from "./dispatch/render-match-email.mjs";
 
 const TEMPLATE = readFileSync(fileURLToPath(new URL("./email-template.html", import.meta.url)), "utf8");
@@ -54,6 +54,28 @@ test("a clean render leaves no {{...}} tokens and consumes the card markers", ()
   assert.doesNotMatch(html, /\{\{\s*[\w.-]+\s*\}\}/);
   assert.ok(!html.includes("{{JOB_CARDS}}"));
   assert.ok(!html.includes("JOB_CARD_START") && !html.includes("JOB_CARD_END"));
+});
+
+// The dispatcher that fills this template in production is deployed separately
+// from the template itself, so a token added here goes live before the code that
+// understands it. It then survives the fill and the send drops to plain text —
+// which is what shipped on 2026-08-10. This is the check that would have caught
+// it, and it has to run against the raw file, before any comment stripping.
+test("the template uses only tokens the deployed dispatcher can fill", () => {
+  const used = new Set(TEMPLATE.match(/\{\{\s*[\w.-]+\s*\}\}/g) ?? []);
+  const known = new Set(KNOWN_TOKENS);
+
+  const unknown = [...used].filter((token) => !known.has(token));
+  assert.deepEqual(
+    unknown,
+    [],
+    `email-template.html uses ${unknown.join(", ")}, which nothing fills. ` +
+      "Add it to KNOWN_TOKENS *and* to the deployed dispatcher before shipping the template.",
+  );
+
+  // And the contract must not rot in the other direction either.
+  const unused = KNOWN_TOKENS.filter((token) => !used.has(token));
+  assert.deepEqual(unused, [], `KNOWN_TOKENS lists ${unused.join(", ")}, which the template never uses.`);
 });
 
 // ---------------------------------------------------------------------------
