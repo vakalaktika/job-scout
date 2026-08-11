@@ -29,7 +29,9 @@ import { findAtsApplyUrl } from "./ats-boards.mjs";
 const LINKEDIN_HOST = /(^|\.)linkedin\.com$/i;
 const FETCH_TIMEOUT_MS = 10000;
 const MAX_HTML_BYTES = 512 * 1024;
+const MAX_REDIRECT_HOPS = 5;
 const USER_AGENT = "Job Scout apply-link resolver/1.0 (+https://vakalaktika.github.io/job-scout/)";
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 // The guest fragment is the only LinkedIn surface that describes a posting's apply
 // route without a session. The signed-in /jobs/view/ page is a sign-in wall.
@@ -247,18 +249,35 @@ async function followToDestination(url, fetcher) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetcher(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": USER_AGENT },
-    });
-    // Only the settled URL matters here, so the body is dropped rather than read.
-    await response.body?.cancel?.().catch(() => {});
-    const final = String(response?.url || "");
-    if (!isPublicHttpUrl(final)) return url;
-    if (new URL(final).pathname === "/" && new URL(url).pathname !== "/") return url;
-    return final;
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop += 1) {
+      const response = await fetcher(current, {
+        method: "GET",
+        redirect: "manual",
+        signal: controller.signal,
+        headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": USER_AGENT },
+      });
+      // Only the settled URL matters here, so the body is dropped rather than read.
+      await response.body?.cancel?.().catch(() => {});
+
+      if (!REDIRECT_STATUSES.has(response.status)) {
+        const final = String(response?.url || current);
+        if (!isPublicHttpUrl(final)) return "";
+        if (new URL(final).pathname === "/" && new URL(url).pathname !== "/") return url;
+        return final;
+      }
+
+      const location = response.headers?.get?.("location") || "";
+      let next;
+      try {
+        next = new URL(location, current).href;
+      } catch {
+        return "";
+      }
+      if (!isPublicHttpUrl(next)) return "";
+      current = next;
+    }
+    return "";
   } catch {
     return url;
   } finally {
@@ -292,7 +311,10 @@ export async function resolveApplyTarget(postingUrl, { fetcher = fetch, title, c
   if (method !== "offsite") return { url, method };
 
   const direct = parseDirectApplyUrl(html);
-  if (direct) return { url: await followToDestination(direct, fetcher), method: "external" };
+  if (direct) {
+    const destination = await followToDestination(direct, fetcher);
+    return destination ? { url: destination, method: "external" } : { url, method: "unknown" };
+  }
 
   const identity = parsePostingIdentity(html);
   const found = await findAtsApplyUrl(

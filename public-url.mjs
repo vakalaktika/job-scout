@@ -7,7 +7,7 @@
 
 /**
  * True only for a public http(s) URL: no other scheme, no credentials in the
- * authority, no loopback, link-local, or RFC 1918 destination.
+ * authority, no loopback, private, link-local, or otherwise non-routable destination.
  */
 export function isPublicHttpUrl(value) {
   try {
@@ -18,7 +18,13 @@ export function isPublicHttpUrl(value) {
     if (/^(0|10|127)\./.test(host) || /^169\.254\./.test(host) || /^192\.168\./.test(host)) return false;
     const private172 = host.match(/^172\.(\d+)\./);
     if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return false;
-    if (/^(fc|fd|fe80):/i.test(host)) return false;
+    // URL normalizes dotted IPv4-mapped literals such as ::ffff:127.0.0.1 to
+    // ::ffff:7f00:1. Reject the whole IPv4-compatible prefix rather than trying to
+    // recover and re-check every textual IPv4 spelling. Unique-local, link-local,
+    // and multicast IPv6 destinations are likewise never public application pages.
+    if (host.startsWith("::") || /^f[cd]/i.test(host) || /^fe[89ab]/i.test(host) || /^ff/i.test(host)) {
+      return false;
+    }
     return true;
   } catch {
     return false;
