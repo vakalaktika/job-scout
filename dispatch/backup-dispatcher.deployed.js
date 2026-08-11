@@ -172,12 +172,16 @@ var JOB_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["title", "company", "url", "location", "source", "posted_at", "job_summary", "match_reason", "key_requirements"],
+        required: ["title", "company", "url", "location", "salary", "source", "posted_at", "job_summary", "match_reason", "key_requirements"],
         properties: {
           title: { type: "string" },
           company: { type: "string" },
           url: { type: "string" },
           location: { type: "string" },
+          salary: {
+            type: "string",
+            description: "Compensation exactly as stated in the job posting, or an empty string when the posting does not state it."
+          },
           source: { type: "string" },
           posted_at: { type: "string" },
           job_summary: { type: "string" },
@@ -233,6 +237,7 @@ Requirements:
 - Write job_summary as 1-2 plain-language sentences explaining what the person would actually own. Remove employer branding, benefits boilerplate, and filler.
 - Write match_reason as 1-2 specific sentences connecting the posting's responsibilities and requirements to the candidate's resume, target roles, and skills. Do not cite generic preferences as the main reason.
 - Write key_requirements as a compact sentence containing only the 3-5 most consequential requirements.
+- Copy salary exactly as stated in the job posting. If the posting does not state compensation, return an empty string. Never guess, infer, invent, or estimate salary from the title, level, location, or candidate preferences.
 - Do not include any of these previously saved URLs: ${previousUrls.slice(0, 80).join(", ") || "none"}.`;
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -273,7 +278,7 @@ __name2(propertyValue, "propertyValue");
 async function sentPostingSchema(env) {
   let database = await notion(env, `databases/${SENT_POSTINGS_DB}`);
   const patch = {};
-  for (const name of ["Why it matched", "Job summary", "Key requirements"]) {
+  for (const name of ["Why it matched", "Job summary", "Key requirements", "Salary"]) {
     if (!database.properties?.[name]) patch[name] = { rich_text: {} };
   }
   if (!database.properties?.Dispatcher) {
@@ -307,6 +312,7 @@ async function saveJob(env, schema, candidate, job, now, status, dispatcherLabel
   addProperty(properties, schema, "Company", job.company);
   addProperty(properties, schema, "URL", job.url);
   addProperty(properties, schema, "Location", job.location);
+  addProperty(properties, schema, "Salary", job.salary);
   addProperty(properties, schema, "Source", job.source || "OpenAI backup");
   addProperty(properties, schema, "Date sent", now.toISOString());
   addProperty(properties, schema, "Date posted", /^\d{4}-\d{2}-\d{2}/.test(job.posted_at) ? job.posted_at.slice(0, 10) : "");
@@ -346,6 +352,7 @@ __name2(escapeHtml, "escapeHtml");
 function metaLine(job) {
   const parts = [];
   if (job.location) parts.push(escapeHtml(job.location));
+  if (job.salary) parts.push(escapeHtml(job.salary));
   if (job.source) parts.push(escapeHtml(job.source));
   return parts.join(" &nbsp;\xB7&nbsp; ");
 }
@@ -418,7 +425,8 @@ function fallbackEmail({ candidate, jobs }) {
   const firstName = String(candidate.name || "").trim().split(/\s+/)[0] || "there";
   const lines = jobs.map((job) => {
     const posted = job.posted_at || "date not listed";
-    return `${job.company} – ${job.title} (${job.location || "Remote"}) — posted ${posted}
+    const metadata = [job.location || "Remote", job.salary, job.source].filter(Boolean).join(" · ");
+    return `${job.company} – ${job.title} (${metadata}) — posted ${posted}
 ${job.match_reason}
 ${job.url}`;
   });
@@ -464,6 +472,7 @@ function sanitizeJob(raw) {
     company: String(raw?.company || "").slice(0, 300),
     url: String(raw?.url || "").trim(),
     location: String(raw?.location || "").slice(0, 300),
+    salary: String(raw?.salary || "").trim().slice(0, 120),
     source: String(raw?.source || "").slice(0, 100),
     posted_at: String(raw?.posted_at || "").slice(0, 40),
     workplace_type: String(raw?.workplace_type || "").trim().slice(0, 20),
@@ -675,9 +684,15 @@ var worker_default = {
   }
 };
 export {
+  JOB_SCHEMA,
+  buildEmail,
   worker_default as default,
   estimateCost,
+  fallbackEmail,
   isStale,
+  saveJob,
+  sanitizeJob,
+  scoutJobs,
   staleHours
 };
 //# sourceMappingURL=worker.js.map
