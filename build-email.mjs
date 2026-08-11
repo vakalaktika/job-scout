@@ -14,6 +14,29 @@
 //   const html = buildEmail(templateHtml, { headline, runDate, firstName }, postings);
 //   if (html === null) { /* zero postings -> do not send */ }
 
+/**
+ * Every token this builder knows how to fill — and, just as importantly, every
+ * token the SEPARATELY DEPLOYED dispatcher knows how to fill.
+ *
+ * email-template.html is published to GitHub Pages and fetched live at send
+ * time, but the dispatcher that fills it ships on its own schedule. A token
+ * added to the template therefore reaches production before the code that
+ * understands it does: it survives the fill, assertNoTokensLeft refuses the
+ * HTML, and the send degrades to plain text. That is what a {{TITLE_ATTR}} /
+ * {{COMPANY_ATTR}} pair did to every match email on 2026-08-10.
+ *
+ * The test suite holds the template to this list, so adding a token to one
+ * without the other fails locally instead of in someone's inbox. Growing the
+ * list means shipping the dispatcher first.
+ */
+export const KNOWN_TOKENS = Object.freeze([
+  // per-email
+  "{{HEADLINE}}", "{{RUN_DATE}}", "{{FIRST_NAME}}", "{{JOB_CARDS}}",
+  // per-card
+  "{{TITLE}}", "{{URL}}", "{{COMPANY}}", "{{META_LINE}}", "{{MATCH_REASON}}",
+  "{{WORKPLACE_LABEL}}", "{{POSTED_LABEL}}", "{{POSTED_BG}}", "{{POSTED_FG}}",
+]);
+
 /** The three printable workplace values, canonicalised. Anything else = delete row. */
 const WORKPLACE_CANON = { remote: "Remote", hybrid: "Hybrid", "on-site": "On-site", onsite: "On-site" };
 
@@ -172,11 +195,6 @@ function fillCard(exemplar, p) {
   // ------------------------------------------------------------------------
 
   const posted = freshness(p.postedDaysAgo, p.postedDate);
-  // Attribute variants first: "{{TITLE}}" is a prefix of nothing, but
-  // "{{TITLE_ATTR}}" contains "{{TITLE}}" nowhere — the tokens are distinct, and
-  // filling the attribute ones first keeps that true regardless.
-  card = replaceAll(card, "{{TITLE_ATTR}}", escapeAttr(p.title));
-  card = replaceAll(card, "{{COMPANY_ATTR}}", escapeAttr(p.company));
   card = replaceAll(card, "{{COMPANY}}", escapeHtml(p.company));
   card = replaceAll(card, "{{TITLE}}", escapeHtml(p.title));
   card = replaceAll(card, "{{URL}}", escapeAttr(p.url));

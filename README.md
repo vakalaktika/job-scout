@@ -293,11 +293,23 @@ renders the real builder's output in a real engine rather than trusting the mark
   footer was 2.31:1 and the unknown-freshness pill 2.34:1 — the least certain postings
   were the hardest to read.
 - **Structure and destinations are stated.** The headline is an `h1` and each posting
-  title an `h2`, so the message can be moved through by structure; each card's CTA carries
-  an `aria-label` naming its own posting, because five links all called "View posting"
-  tell a screen-reader user nothing. Values written into attributes use the
-  `{{TITLE_ATTR}}` / `{{COMPANY_ATTR}}` tokens, which are attribute-escaped —
-  `{{TITLE}}` only escapes `&`, `<`, and `>`.
+  title an `h2`, so the message can be moved through by structure; each card's CTA names
+  its own posting — "View posting at Deepgram" — because five links all called "View
+  posting" tell a screen-reader user nothing. That name is **visible text, not an
+  `aria-label`**: an accessible name has to contain the visible label, so speaking "View
+  <title> at <company>" over a painted "View posting" trades one failure for another. It
+  also keeps the value in text content, where `escapeHtml` is enough. `{{URL}}` is the
+  only token written into an attribute, and the only one that gets `escapeAttr`.
+
+**One rule governs this template: never add a token the deployed dispatcher does not
+already fill.** `email-template.html` is published to GitHub Pages and fetched live at
+send time, but the dispatcher that fills it deploys separately — so a new token reaches
+production *before* the code that understands it. It survives the fill, trips the leak
+guard, and the entire send degrades to plain text. That is precisely what a
+`{{TITLE_ATTR}}` / `{{COMPANY_ATTR}}` pair did to every match email on 2026-08-10. The
+contract is `KNOWN_TOKENS` in `build-email.mjs`, and `build-email.test.mjs` holds the
+template to it in both directions, so the drift now fails a local test instead of an
+inbox. Extending the list means shipping the dispatcher first.
 
 **Dashboard.** The member opens the SPA, which calls the Worker's `session`/`state`
 action. The Worker returns the member's recent postings (within their posting-age window,

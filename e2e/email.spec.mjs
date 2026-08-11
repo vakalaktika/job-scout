@@ -145,25 +145,41 @@ test("each posting link says which posting it opens", async ({ page }) => {
 
   const names = await page
     .getByRole("link")
-    .evaluateAll((links) => links.map((link) => link.getAttribute("aria-label") || link.textContent.trim()));
-  const viewLinks = names.filter((name) => name.startsWith("View "));
+    .evaluateAll((links) => links.map((link) => link.textContent.trim().replace(/\s+/g, " ")));
 
+  // Each card carries two links: the h2 title and the CTA beneath it. Neither
+  // may be a bare "View posting" — five identically named links tell a
+  // screen-reader user nothing about which one they are about to follow. The
+  // name is visible text rather than an aria-label on purpose: an accessible
+  // name has to contain the visible label, so overriding "View posting" with a
+  // spoken "View <title> at <company>" trades one failure for another.
+  const titleLinks = names.filter((name) => name.startsWith("Senior Product Designer"));
+  const viewLinks = names.filter((name) => name.startsWith("View posting"));
+
+  expect(titleLinks.length).toBe(5);
   expect(viewLinks.length).toBe(5);
   for (const name of viewLinks) {
-    expect(name).toContain("Senior Product Designer");
     expect(name).toContain("Northwind Financial Technologies International");
   }
 });
 
-// A title carrying a quote must not break out of the attribute it is placed in.
-test("a posting title cannot escape the accessible name it is written into", () => {
+// {{URL}} is the only token written into an attribute, so it is the only one
+// that can break out of one. Title and company are text content.
+test("a posting URL cannot break out of the href it is written into", () => {
   const risky = buildEmail(
     template,
     { headline: "1 new match", runDate: "Mon", firstName: "Alex" },
-    [posting(0, { title: 'Designer" onmouseover="alert(1)', company: "Acme & Co" })],
+    [
+      posting(0, {
+        url: 'https://example.com/x" onmouseover="alert(1)',
+        title: 'Designer" & <script>alert(2)</script>',
+        company: "Acme & Co",
+      }),
+    ],
   );
 
   expect(risky).not.toContain('onmouseover="alert(1)"');
-  expect(risky).toContain("&quot;");
+  expect(risky).toContain("&quot;"); // the URL's quote, attribute-escaped
+  expect(risky).not.toContain("<script>");
   expect(risky).toContain("Acme &amp; Co");
 });

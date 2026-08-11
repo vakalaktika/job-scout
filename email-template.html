@@ -11,9 +11,18 @@
        per-card placeholders, and concatenate the filled cards in order
        (freshest first).
     3. Replace the single {{JOB_CARDS}} token with the concatenated cards.
-    4. Ship. Remove the exemplar's fenced comment entirely; no {{...}} token
+    4. Ship. Remove the exemplar's fenced comment entirely; no {{…}} token
        may survive in the sent email. If there are zero new postings, do not
        send the email at all.
+
+  NEVER ADD A TOKEN THE DEPLOYED DISPATCHER DOES NOT ALREADY FILL. This file is
+  published to GitHub Pages and fetched live at send time, but the dispatcher
+  that fills it is deployed separately — so a new token reaches production before
+  the code that understands it does. It then survives the fill, trips the leak
+  guard, and the whole send degrades to plain text. That is exactly what a new
+  TITLE_ATTR / COMPANY_ATTR pair did on 2026-08-10 (written without braces here
+  on purpose — the test suite scans this file for tokens). The list below is the
+  contract; extending it means shipping the dispatcher first.
 
   BEFORE SENDING — check that every posting URL is still live, and drop the ones
   that are not. Beta users repeatedly reported opening alerts that linked to
@@ -34,7 +43,9 @@
   Per-card placeholders (inside the exemplar):
     {{TITLE}}         exact job title
     {{URL}}           direct link to the posting
-    {{COMPANY}}       company name
+    {{COMPANY}}       company name — appears twice: the card's eyebrow and the
+                      CTA label, which names its own posting so five cards do not
+                      all end in a link called "View posting"
     {{META_LINE}}     "San Diego, CA &nbsp;·&nbsp; $170k–$200k &nbsp;·&nbsp; LinkedIn"
                       (omit the salary segment if not listed)
                       Do NOT put remote status here — use {{WORKPLACE_LABEL}} so it
@@ -53,11 +64,13 @@
     {{MATCH_REASON}}  one sentence on why it fits their profile
     {{POSTED_LABEL}}  "Posted today" / "Posted yesterday" / "Posted 3 days ago" /
                       "Posted Jul 3 (9 days ago)" / "Posting date not listed"
-    {{POSTED_BG}} / {{POSTED_FG}}  freshness pill colors:
-        0–2 days:   bg #dcfce7  fg #15803d   (green — fresh)
-        3–7 days:   bg #fef3c7  fg #b45309   (amber — recent)
-        8+  days:   bg #f1f5f9  fg #64748b   (gray — older)
-        unknown:    bg #f1f5f9  fg #94a3b8
+    {{POSTED_BG}} / {{POSTED_FG}}  freshness pill colors. Every pair clears the
+                      WCAG AA 4.5:1 floor, because the pill is 12px text:
+        0–2 days:   bg #dcfce7  fg #15803d   (green — fresh, 4.57:1)
+        3–7 days:   bg #fef3c7  fg #b45309   (amber — recent, 4.51:1)
+        8+  days:   bg #f1f5f9  fg #556174   (gray — older, 5.34:1)
+        unknown:    bg #f1f5f9  fg #556174   (same gray; the label, not the tint,
+                      is what tells the two apart)
 
   Design language matches the Job Scout form: warm stone neutrals, pine accent.
 -->
@@ -195,14 +208,20 @@
                     <!--
                       Every card ended with a link named "View posting", so a
                       screen-reader user listing the links heard the same name
-                      five times with nothing to tell them apart. The visible
-                      label stays short; the accessible name says which posting.
-                      {{TITLE_ATTR}} and {{COMPANY_ATTR}} are attribute-escaped
-                      variants of the same values — never put {{TITLE}} in an
-                      attribute, it only escapes &, < and >.
+                      five times with nothing to tell them apart. The company goes
+                      in the VISIBLE label, not an aria-label: an accessible name
+                      has to contain the visible text, so a spoken "View <title>
+                      at <company>" painted as "View posting" trades one failure
+                      for another. It also keeps the value in text, where the
+                      dispatcher's HTML escaping is enough — {{URL}} is the only
+                      token written into an attribute, and the only one that gets
+                      attribute escaping.
+
+                      {{COMPANY}} is deliberate: it is a token the deployed
+                      dispatcher already fills. See HOW TO FILL at the top.
                     -->
-                    <a href="{{URL}}" aria-label="View {{TITLE_ATTR}} at {{COMPANY_ATTR}}" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; background-color:#226551; border-radius:8px; padding:10px 20px; text-decoration:none;">
-                      View posting&nbsp;&rarr;
+                    <a href="{{URL}}" style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; color:#ffffff; background-color:#226551; border-radius:8px; padding:10px 20px; text-decoration:none;">
+                      View posting at {{COMPANY}}&nbsp;&rarr;
                     </a>
                   </td>
                 </tr>
