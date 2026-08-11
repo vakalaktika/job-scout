@@ -19,6 +19,10 @@ const TEMPLATE = readFileSync(
 );
 const TODAY = new Date().toISOString().slice(0, 10);
 const NOW = new Date(`${TODAY}T12:00:00Z`);
+const LINKEDIN_JOB_URL = "https://www.linkedin.com/jobs/view/4123456789";
+const LINKEDIN_GUEST_URL =
+  "https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4123456789";
+const NORTHWIND_ASHBY_URL = "https://api.ashbyhq.com/posting-api/job-board/northwind";
 
 const candidate = {
   id: "candidate-1",
@@ -96,7 +100,10 @@ async function captureNotionWrite(value) {
   }
 }
 
-async function deliverThroughWorker(value, { templateAvailable = true, initialSchema = {} } = {}) {
+async function deliverThroughWorker(
+  value,
+  { templateAvailable = true, initialSchema = {}, resolveFetch } = {},
+) {
   const originalFetch = globalThis.fetch;
   const captured = { email: null, notion: null, schemaPatch: null };
   globalThis.fetch = async (url, init = {}) => {
@@ -121,6 +128,8 @@ async function deliverThroughWorker(value, { templateAvailable = true, initialSc
       captured.notion = JSON.parse(init.body);
       return Response.json({ id: "saved-job" });
     }
+    const resolverResponse = await resolveFetch?.(target, init);
+    if (resolverResponse) return resolverResponse;
     throw new Error(`unexpected fetch: ${init.method || "GET"} ${target}`);
   };
 
@@ -149,6 +158,34 @@ async function deliverThroughWorker(value, { templateAvailable = true, initialSc
     globalThis.fetch = originalFetch;
   }
 }
+
+const linkedInJob = () => ({
+  ...job(undefined),
+  url: LINKEDIN_JOB_URL,
+  source: "LinkedIn",
+});
+
+const htmlResponse = (body, url) => ({
+  ok: true,
+  status: 200,
+  url,
+  text: async () => body,
+});
+
+const notFoundResponse = () => ({
+  ok: false,
+  status: 404,
+  url: "",
+  text: async () => "",
+});
+
+const offsiteFragment = (href = "") => `
+  <a class="topcard__org-name-link" href="https://www.linkedin.com/company/northwind">Northwind</a>
+  <h2 class="topcard__title">Staff Product Designer</h2>
+  <a href="${href}" data-tracking-control-name="public_jobs_apply-link-offsite">Apply</a>`;
+
+const easyApplyFragment = `
+  <button data-tracking-control-name="public_jobs_apply-link-onsite">Easy Apply</button>`;
 
 test("salary stated in the posting survives search, email, fallback text, and Notion", async () => {
   const salary = "$175k–$205k";
@@ -224,6 +261,92 @@ test("the backup Worker's plain-text delivery omits salary when the posting does
   assert.match(delivery.email.text, /Remote \(US\) · Company site/);
   assert.doesNotMatch(delivery.email.text, /\$undefined|\$null/);
   assert.equal("Salary" in delivery.notion.properties, false);
+});
+
+test("the backup Worker emails a confirmed external employer link but saves the original LinkedIn URL", async () => {
+  const employerUrl = "https://jobs.northwind.example/staff-product-designer/apply";
+  const delivery = await deliverThroughWorker(linkedInJob(), {
+    resolveFetch: async (url) => {
+      if (url === LINKEDIN_GUEST_URL) {
+        return htmlResponse(offsiteFragment(employerUrl), LINKEDIN_GUEST_URL);
+      }
+      if (url === employerUrl) return htmlResponse("", employerUrl);
+      return null;
+    },
+  });
+
+  assert.match(delivery.email.html, new RegExp(employerUrl));
+  assert.doesNotMatch(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+});
+
+test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () => {
+  const delivery = await deliverThroughWorker(linkedInJob(), {
+    resolveFetch: async (url) =>
+      url === LINKEDIN_GUEST_URL
+        ? htmlResponse(easyApplyFragment, LINKEDIN_GUEST_URL)
+        : null,
+  });
+
+  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+});
+
+test("the backup Worker keeps LinkedIn when an external application cannot be resolved", async () => {
+  const delivery = await deliverThroughWorker(linkedInJob(), {
+    resolveFetch: async (url) =>
+      url === LINKEDIN_GUEST_URL
+        ? htmlResponse(offsiteFragment(), LINKEDIN_GUEST_URL)
+        : notFoundResponse(),
+  });
+
+  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+});
+
+test("the backup Worker refuses an unsafe external application link", async () => {
+  const delivery = await deliverThroughWorker(linkedInJob(), {
+    resolveFetch: async (url) =>
+      url === LINKEDIN_GUEST_URL
+        ? htmlResponse(offsiteFragment("http://127.0.0.1:8787/apply"), LINKEDIN_GUEST_URL)
+        : notFoundResponse(),
+  });
+
+  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.doesNotMatch(delivery.email.html, /127\.0\.0\.1/);
+  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+});
+
+test("the backup Worker keeps LinkedIn when the employer board match is ambiguous", async () => {
+  const delivery = await deliverThroughWorker(linkedInJob(), {
+    resolveFetch: async (url) => {
+      if (url === LINKEDIN_GUEST_URL) {
+        return htmlResponse(offsiteFragment(), LINKEDIN_GUEST_URL);
+      }
+      if (url === NORTHWIND_ASHBY_URL) {
+        return htmlResponse(
+          JSON.stringify({
+            jobs: [
+              {
+                title: "Staff Product Designer",
+                applyUrl: "https://jobs.ashbyhq.com/northwind/nyc/application",
+              },
+              {
+                title: "Staff Product Designer",
+                applyUrl: "https://jobs.ashbyhq.com/northwind/sfo/application",
+              },
+            ],
+          }),
+          NORTHWIND_ASHBY_URL,
+        );
+      }
+      return notFoundResponse();
+    },
+  });
+
+  assert.match(delivery.email.html, new RegExp(LINKEDIN_JOB_URL));
+  assert.doesNotMatch(delivery.email.html, /jobs\.ashbyhq\.com/);
+  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
 test("the backup Worker keeps its authenticated status route intact", async () => {
