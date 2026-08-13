@@ -19,6 +19,7 @@ import {
   enrichJobBrief,
   extractJobPostingText,
   hasCompleteBrief,
+  hasDirectApplyTarget,
   issueToken,
   keepForSession,
   lastDispatchAt,
@@ -782,6 +783,26 @@ test("the dashboard link points at the apply page while the original post stays 
   const easyApply = clientJob({ id: "b", url: post, apply_url: "", apply_method: "linkedin" });
   assert.equal(easyApply.url, post, "Easy Apply keeps sending the member to LinkedIn");
   assert.equal(easyApply.posting_url, post);
+});
+
+test("the dashboard only exposes jobs with a confirmed application destination", () => {
+  const post = "https://www.linkedin.com/jobs/view/4123456789";
+  assert.equal(hasDirectApplyTarget({ url: "https://jobs.lever.co/acme/abc-123" }), true);
+  assert.equal(
+    hasDirectApplyTarget({
+      url: post,
+      apply_url: "https://job-boards.greenhouse.io/acme/jobs/771",
+      apply_method: "external",
+    }),
+    true,
+  );
+  assert.equal(hasDirectApplyTarget({ url: post, apply_method: "linkedin" }), true);
+  assert.equal(hasDirectApplyTarget({ url: post, apply_method: "unknown" }), false);
+  assert.equal(hasDirectApplyTarget({ url: post, apply_method: "" }), false);
+  assert.equal(
+    hasDirectApplyTarget({ url: post, apply_url: post, apply_method: "external" }),
+    false,
+  );
 });
 
 test("closed postings sort last without being removed", () => {
