@@ -783,6 +783,10 @@ test("the dashboard link points at the apply page while the original post stays 
   const easyApply = clientJob({ id: "b", url: post, apply_url: "", apply_method: "linkedin" });
   assert.equal(easyApply.url, post, "Easy Apply keeps sending the member to LinkedIn");
   assert.equal(easyApply.posting_url, post);
+
+  const unresolved = clientJob({ id: "c", url: post, apply_url: "", apply_method: "unknown" });
+  assert.equal(unresolved.url, "", "action responses must not leak an unresolved LinkedIn link");
+  assert.equal(unresolved.posting_url, "");
 });
 
 test("the dashboard only exposes jobs with a confirmed application destination", () => {

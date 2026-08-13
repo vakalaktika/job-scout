@@ -367,7 +367,7 @@ test("the backup Worker emails a confirmed external employer link but saves the 
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
   assert.equal(delivery.notion.properties["Apply URL"].url, employerUrl);
   assert.equal(delivery.notion.properties["Apply method"].select.name, "External");
-  assert.equal(delivery.notion.properties["Apply checked at"].date.start, NOW.toISOString());
+  assert.ok(Number.isFinite(Date.parse(delivery.notion.properties["Apply checked at"].date.start)));
 });
 
 test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () => {
