@@ -295,7 +295,7 @@ async function resolveApplyTarget(postingUrl, { fetcher = fetch, title, company 
 }
 async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
   const inFlight = /* @__PURE__ */ new Map();
-  return Promise.all(
+  const resolvedRecords = await Promise.all(
     (records || []).map(async (record) => {
       const url = record?.url;
       if (!isLinkedInJobUrl(url)) return record;
@@ -310,9 +310,16 @@ async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
         );
       }
       const resolved = await inFlight.get(url);
-      return resolved.method === "external" ? { ...record, url: resolved.url, apply_method: "external" } : { ...record, apply_method: resolved.method };
+      if (resolved.method === "external") {
+        return { ...record, url: resolved.url, apply_method: "external" };
+      }
+      if (resolved.method === "linkedin") {
+        return { ...record, apply_method: "linkedin" };
+      }
+      return null;
     })
   );
+  return resolvedRecords.filter(Boolean);
 }
 
 // dispatch/backup-dispatcher.source.mjs
@@ -515,7 +522,9 @@ Resume text:
 ${resumeText || "No resume text was available. Do not claim a resume-specific match."}
 
 Requirements:
-- Link directly to the original employer or authoritative job posting, not a search page.
+- Link directly to the employer's application page or applicant tracking system, not
+  a search page, aggregator, social-network listing, or other hand-off page. Use a
+  LinkedIn URL only when the role is confirmed to use LinkedIn Easy Apply.
 - Only include roles that appear open now and match the preferences.
 - Only include jobs posted within the last ${maxPostingAge} days. If the posted date cannot be verified, exclude the job.
 - Provide the verified posted date as an ISO date.
@@ -781,6 +790,14 @@ async function handleSendEmail(request, env) {
   }
   const now = /* @__PURE__ */ new Date();
   const emailJobs = await resolveApplyLinks(jobs);
+  if (!emailJobs.length) {
+    return json({
+      ok: true,
+      sent: false,
+      skipped: "no_direct_application_links",
+      withheld: jobs.length
+    });
+  }
   let emailPayload;
   try {
     emailPayload = emailTemplate ? buildEmail({ template: emailTemplate, candidate, jobs: emailJobs, now }) : fallbackEmail({ candidate, jobs: emailJobs });
@@ -899,6 +916,7 @@ async function dispatch(env, { dryRun = false, force = false } = {}) {
       await env.BACKUP_STATE.put(budget.key, String(spent), { expirationTtl: 45 * 24 * 60 * 60 });
       if (!unique.length) continue;
       const emailJobs = await resolveApplyLinks(unique);
+      if (!emailJobs.length) continue;
       let emailPayload;
       try {
         emailPayload = emailTemplate ? buildEmail({ template: emailTemplate, candidate, jobs: emailJobs, now }) : fallbackEmail({ candidate, jobs: emailJobs });

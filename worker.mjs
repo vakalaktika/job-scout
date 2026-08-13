@@ -303,6 +303,20 @@ export const clientJob = (job) => {
   return { ...result, url: apply_url || job.url, posting_url: job.url };
 };
 
+// An employer/ATS URL is already an application destination. A LinkedIn URL is
+// deliverable only after the resolver confirms either its external destination or
+// that LinkedIn itself hosts the application through Easy Apply. Anything else is
+// withheld from members until a later resolution sweep succeeds.
+export const hasDirectApplyTarget = (job) => {
+  if (!linkedInJobId(job?.url)) return isPublicHttpUrl(job?.url);
+  if (job?.apply_method === "linkedin") return true;
+  return (
+    job?.apply_method === "external" &&
+    isPublicHttpUrl(job?.apply_url) &&
+    !linkedInJobId(job?.apply_url)
+  );
+};
+
 export const hasCompleteBrief = (job) =>
   [job?.summary, job?.match_reason, job?.key_requirements].every(
     (value) => String(value || "").trim().length > 0,
@@ -1749,7 +1763,9 @@ async function sessionResponse(env, candidate, extra = {}) {
   const jobsWithApplyLinks = await sweepApplyLinks(env, recentJobs);
   const jobsWithBriefs = await enrichMissingBriefs(env, candidate, member, jobsWithApplyLinks);
   const jobsWithLinks = await sweepLinkStatus(env, jobsWithBriefs);
-  const steered = applySteerAway(jobsWithLinks, member);
+  const applyReadyJobs = jobsWithLinks.filter(hasDirectApplyTarget);
+  const withheldApplyLinks = jobsWithLinks.length - applyReadyJobs.length;
+  const steered = applySteerAway(applyReadyJobs, member);
   const lastRunAt = lastDispatchAt(memberJobs);
   const firstScout = await firstScoutSnapshot(env, candidate, memberJobs);
   const sessionExpiresAt = new Date(Date.now() + SESSION_SECONDS * 1000).toISOString();
@@ -1762,7 +1778,7 @@ async function sessionResponse(env, candidate, extra = {}) {
     ok: true,
     member,
     jobs: demoteClosedPostings(steered.jobs).map(clientJob),
-    hidden_count: steered.hiddenCount,
+    hidden_count: steered.hiddenCount + withheldApplyLinks,
     // When the scout last delivered, so the dashboard can say so instead of
     // leaving members guessing whether an empty list means "nothing found" or
     // "nothing has run yet".
