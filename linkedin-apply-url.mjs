@@ -270,7 +270,7 @@ async function followToDestination(url, fetcher) {
 
       if (!REDIRECT_STATUSES.has(response.status)) {
         const final = String(response?.url || current);
-        if (!isPublicHttpUrl(final)) return "";
+        if (!isPublicHttpUrl(final) || isLinkedInUrl(final)) return "";
         if (new URL(final).pathname === "/" && new URL(url).pathname !== "/") return url;
         return final;
       }
@@ -283,6 +283,7 @@ async function followToDestination(url, fetcher) {
         return "";
       }
       if (!isPublicHttpUrl(next)) return "";
+      if (isLinkedInUrl(next)) return "";
       current = next;
     }
     return "";
@@ -333,7 +334,9 @@ export async function resolveApplyTarget(postingUrl, { fetcher = fetch, title, c
     },
     { fetcher },
   );
-  return found ? { url: found, method: "external" } : { url, method: "unknown" };
+  return isOffLinkedInUrl(found)
+    ? { url: found, method: "external" }
+    : { url, method: "unknown" };
 }
 
 /**
@@ -354,6 +357,7 @@ export async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
   const resolvedRecords = await Promise.all(
     (records || []).map(async (record) => {
       const url = record?.url;
+      if (!isPublicHttpUrl(url)) return null;
       if (!isLinkedInUrl(url)) return record;
       if (!isLinkedInJobUrl(url)) return null;
       if (!inFlight.has(url)) {

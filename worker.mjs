@@ -315,7 +315,7 @@ export const hasDirectApplyTarget = (job) => {
   return (
     job?.apply_method === "external" &&
     isPublicHttpUrl(job?.apply_url) &&
-    !linkedInJobId(job?.apply_url)
+    !isLinkedInUrl(job?.apply_url)
   );
 };
 
