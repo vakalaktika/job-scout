@@ -382,13 +382,23 @@ test("resolves a batch of records without mutating them, fetching each URL once"
   assert.equal(records[0].title, resolved[0].title);
 });
 
-test("a record whose resolution throws keeps the link it arrived with", async () => {
+test("omits a LinkedIn record when its external application cannot be resolved", async () => {
   const linkedInPost = "https://www.linkedin.com/jobs/view/4123456789";
   const fetcher = async () => {
     throw new Error("network");
   };
-  const [resolved] = await resolveApplyLinks([{ url: linkedInPost }], { fetcher });
-  assert.deepEqual(resolved, { url: linkedInPost, apply_method: "unknown" });
+  const resolved = await resolveApplyLinks([{ url: linkedInPost }], { fetcher });
+  assert.deepEqual(resolved, []);
+});
+
+test("keeps LinkedIn only when it is the confirmed Easy Apply destination", async () => {
+  const linkedInPost = "https://www.linkedin.com/jobs/view/4123456789";
+  const fetcher = async (url) => {
+    assert.equal(url, GUEST("4123456789"));
+    return htmlResponse(easyApplyFragment, url);
+  };
+  const resolved = await resolveApplyLinks([{ url: linkedInPost }], { fetcher });
+  assert.deepEqual(resolved, [{ url: linkedInPost, apply_method: "linkedin" }]);
 });
 
 // ---------------------------------------------------------------------------

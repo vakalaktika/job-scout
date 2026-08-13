@@ -375,16 +375,19 @@ test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () =>
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
-test("the backup Worker keeps LinkedIn when an external application cannot be resolved", async () => {
+test("the backup Worker does not send a match whose external application cannot be resolved", async () => {
   const delivery = await deliverThroughWorker(linkedInJob(), {
     resolveFetch: async (url) =>
       url === LINKEDIN_GUEST_URL
         ? htmlResponse(offsiteFragment(), LINKEDIN_GUEST_URL)
         : notFoundResponse(),
   });
+  const result = await delivery.response.json();
 
-  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
-  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, "no_direct_application_links");
+  assert.equal(delivery.email, null);
+  assert.equal(delivery.notion, null);
 });
 
 test("the backup Worker refuses an unsafe external application link", async () => {
