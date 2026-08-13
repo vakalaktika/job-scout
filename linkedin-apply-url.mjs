@@ -17,8 +17,8 @@
 //
 //   external  the employer's own link, established beyond doubt -> send that.
 //   linkedin  Easy Apply; LinkedIn *is* the application -> send the post.
-//   unknown   offsite but unresolvable, a bot wall, or a timeout -> send the post.
-//             Guessing a link we could not establish is worse than one extra click.
+//   unknown   offsite but unresolvable, a bot wall, or a timeout -> withhold it.
+//             A LinkedIn hand-off is not a deliverable application destination.
 //
 // Everything that parses is pure and separately exported; only resolveApplyTarget()
 // and resolveApplyLinks() touch the network, and both are fetcher-injectable.
@@ -60,6 +60,14 @@ export function linkedInJobId(value) {
   // digits ("foo-123456-engineer-4123456789") still resolves to the trailing id.
   const viewed = url.pathname.match(/\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})(?=$|[/?#])/);
   return viewed ? viewed[1] : "";
+}
+
+export function isLinkedInUrl(value) {
+  try {
+    return LINKEDIN_HOST.test(new URL(String(value ?? "")).hostname);
+  } catch {
+    return false;
+  }
 }
 
 export const isLinkedInJobUrl = (value) => Boolean(linkedInJobId(value));
@@ -262,7 +270,7 @@ async function followToDestination(url, fetcher) {
 
       if (!REDIRECT_STATUSES.has(response.status)) {
         const final = String(response?.url || current);
-        if (!isPublicHttpUrl(final)) return "";
+        if (!isPublicHttpUrl(final) || isLinkedInUrl(final)) return "";
         if (new URL(final).pathname === "/" && new URL(url).pathname !== "/") return url;
         return final;
       }
@@ -275,6 +283,7 @@ async function followToDestination(url, fetcher) {
         return "";
       }
       if (!isPublicHttpUrl(next)) return "";
+      if (isLinkedInUrl(next)) return "";
       current = next;
     }
     return "";
@@ -325,13 +334,18 @@ export async function resolveApplyTarget(postingUrl, { fetcher = fetch, title, c
     },
     { fetcher },
   );
-  return found ? { url: found, method: "external" } : { url, method: "unknown" };
+  return isOffLinkedInUrl(found)
+    ? { url: found, method: "external" }
+    : { url, method: "unknown" };
 }
 
 /**
  * Resolve a batch of sent-posting records before they are rendered into an email.
  * Records are copied, never mutated, and each distinct URL is resolved once.
- * A record whose resolution fails keeps the link it arrived with.
+ * A LinkedIn record is returned only when its final application destination is
+ * confirmed: either an employer/ATS URL or LinkedIn itself for Easy Apply. Unknown
+ * LinkedIn records are omitted so callers cannot accidentally deliver an
+ * intermediary link.
  *
  * @template {{ url?: string, title?: string, company?: string }} T
  * @param {T[]} records
@@ -340,10 +354,12 @@ export async function resolveApplyTarget(postingUrl, { fetcher = fetch, title, c
  */
 export async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
   const inFlight = new Map();
-  return Promise.all(
+  const resolvedRecords = await Promise.all(
     (records || []).map(async (record) => {
       const url = record?.url;
-      if (!isLinkedInJobUrl(url)) return record;
+      if (!isPublicHttpUrl(url)) return null;
+      if (!isLinkedInUrl(url)) return record;
+      if (!isLinkedInJobUrl(url)) return null;
       if (!inFlight.has(url)) {
         inFlight.set(
           url,
@@ -355,9 +371,14 @@ export async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
         );
       }
       const resolved = await inFlight.get(url);
-      return resolved.method === "external"
-        ? { ...record, url: resolved.url, apply_method: "external" }
-        : { ...record, apply_method: resolved.method };
+      if (resolved.method === "external") {
+        return { ...record, url: resolved.url, posting_url: url, apply_method: "external" };
+      }
+      if (resolved.method === "linkedin") {
+        return { ...record, apply_method: "linkedin" };
+      }
+      return null;
     }),
   );
+  return resolvedRecords.filter(Boolean);
 }

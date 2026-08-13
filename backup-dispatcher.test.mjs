@@ -65,6 +65,9 @@ const schema = {
   "Key requirements": { type: "rich_text" },
   Status: { type: "select" },
   Dispatcher: { type: "select" },
+  "Apply URL": { type: "url" },
+  "Apply method": { type: "select" },
+  "Apply checked at": { type: "date" },
 };
 
 async function captureSearchResult(salary) {
@@ -105,7 +108,7 @@ async function deliverThroughWorker(
   { templateAvailable = true, initialSchema = {}, resolveFetch } = {},
 ) {
   const originalFetch = globalThis.fetch;
-  const captured = { email: null, notion: null, schemaPatch: null };
+  const captured = { email: null, notion: null, notionWrites: [], schemaPatch: null };
   globalThis.fetch = async (url, init = {}) => {
     const target = String(url);
     if (target.endsWith("/email-template.html")) {
@@ -126,6 +129,7 @@ async function deliverThroughWorker(
     }
     if (target === "https://api.notion.com/v1/pages") {
       captured.notion = JSON.parse(init.body);
+      captured.notionWrites = [...captured.notionWrites, captured.notion];
       return Response.json({ id: "saved-job" });
     }
     const resolverResponse = await resolveFetch?.(target, init);
@@ -144,7 +148,7 @@ async function deliverThroughWorker(
         body: JSON.stringify({
           candidate_email: candidate.email,
           candidate_name: candidate.name,
-          jobs: [value],
+          jobs: Array.isArray(value) ? value : [value],
         }),
       }),
       {
@@ -317,6 +321,14 @@ test("salary missing from the posting stays empty and the email makes no univers
   assert.equal("Salary" in notionWrite.properties, false);
 });
 
+test("the backup boundary rejects private and unrecognized LinkedIn URLs", () => {
+  assert.equal(sanitizeJob({ ...job("$180k"), url: "http://127.0.0.1/apply" }), null);
+  assert.equal(
+    sanitizeJob({ ...job("$180k"), url: "https://www.linkedin.com/jobs/search/?keywords=designer" }),
+    null,
+  );
+});
+
 test("the backup Worker's send endpoint keeps salary through its real delivery boundary", async () => {
   const salary = "$190k–$225k";
   const delivery = await deliverThroughWorker(job(salary));
@@ -361,6 +373,9 @@ test("the backup Worker emails a confirmed external employer link but saves the 
   assert.ok(delivery.email.html.includes(employerUrl));
   assert.ok(!delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  assert.equal(delivery.notion.properties["Apply URL"].url, employerUrl);
+  assert.equal(delivery.notion.properties["Apply method"].select.name, "External");
+  assert.ok(Number.isFinite(Date.parse(delivery.notion.properties["Apply checked at"].date.start)));
 });
 
 test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () => {
@@ -373,21 +388,44 @@ test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () =>
 
   assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  assert.equal(delivery.notion.properties["Apply method"].select.name, "LinkedIn");
 });
 
-test("the backup Worker keeps LinkedIn when an external application cannot be resolved", async () => {
-  const delivery = await deliverThroughWorker(linkedInJob(), {
+test("a mixed batch emails and stores only jobs with confirmed application destinations", async () => {
+  const direct = job("$180k");
+  const unresolved = { ...linkedInJob(), title: "Unresolved Product Designer" };
+  const delivery = await deliverThroughWorker([direct, unresolved], {
     resolveFetch: async (url) =>
       url === LINKEDIN_GUEST_URL
         ? htmlResponse(offsiteFragment(), LINKEDIN_GUEST_URL)
         : notFoundResponse(),
   });
 
-  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
-  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  const result = await delivery.response.json();
+  assert.equal(result.sent, true);
+  assert.ok(delivery.email.html.includes(direct.url));
+  assert.ok(!delivery.email.html.includes(LINKEDIN_JOB_URL));
+  assert.equal(delivery.notionWrites.length, 1);
+  assert.equal(delivery.notionWrites[0].properties.URL.url, direct.url);
+  assert.deepEqual(result.logged, [direct.url]);
 });
 
-test("the backup Worker refuses an unsafe external application link", async () => {
+test("the backup Worker does not send a match whose external application cannot be resolved", async () => {
+  const delivery = await deliverThroughWorker(linkedInJob(), {
+    resolveFetch: async (url) =>
+      url === LINKEDIN_GUEST_URL
+        ? htmlResponse(offsiteFragment(), LINKEDIN_GUEST_URL)
+        : notFoundResponse(),
+  });
+  const result = await delivery.response.json();
+
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, "no_direct_application_links");
+  assert.equal(delivery.email, null);
+  assert.equal(delivery.notion, null);
+});
+
+test("the backup Worker refuses an unsafe external application link without sending LinkedIn", async () => {
   const employerUrl = "https://apply.northwind.example/redirect/771";
   const privateTarget = "http://127.0.0.1:8787/apply";
   const seen = [];
@@ -410,13 +448,15 @@ test("the backup Worker refuses an unsafe external application link", async () =
     },
   });
 
-  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
-  assert.doesNotMatch(delivery.email.html, /127\.0\.0\.1/);
+  const result = await delivery.response.json();
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, "no_direct_application_links");
+  assert.equal(delivery.email, null);
+  assert.equal(delivery.notion, null);
   assert.ok(!seen.includes(privateTarget));
-  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
-test("the backup Worker keeps LinkedIn when the employer board match is ambiguous", async () => {
+test("the backup Worker withholds an ambiguous employer board match", async () => {
   const delivery = await deliverThroughWorker(linkedInJob(), {
     resolveFetch: async (url) => {
       if (url === LINKEDIN_GUEST_URL) {
@@ -443,9 +483,11 @@ test("the backup Worker keeps LinkedIn when the employer board match is ambiguou
     },
   });
 
-  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
-  assert.doesNotMatch(delivery.email.html, /jobs\.ashbyhq\.com/);
-  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  const result = await delivery.response.json();
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, "no_direct_application_links");
+  assert.equal(delivery.email, null);
+  assert.equal(delivery.notion, null);
 });
 
 test("the scheduled backup dispatch resolves the email copy but de-duplicates on LinkedIn", async () => {

@@ -27,7 +27,8 @@
 //     -F 'metadata={"main_module":"worker.js"};type=application/json' \
 //     -F 'worker.js=@dispatch/backup-dispatcher.deployed.js;filename=worker.js;type=application/javascript+module'
 //
-import { resolveApplyLinks } from "../linkedin-apply-url.mjs";
+import { isLinkedInJobUrl, isLinkedInUrl, resolveApplyLinks } from "../linkedin-apply-url.mjs";
+import { isPublicHttpUrl } from "../public-url.mjs";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -230,7 +231,9 @@ Resume text:
 ${resumeText || "No resume text was available. Do not claim a resume-specific match."}
 
 Requirements:
-- Link directly to the original employer or authoritative job posting, not a search page.
+- Link directly to the employer's application page or applicant tracking system, not
+  a search page, aggregator, social-network listing, or other hand-off page. Use a
+  LinkedIn URL only when the role is confirmed to use LinkedIn Easy Apply.
 - Only include roles that appear open now and match the preferences.
 - Only include jobs posted within the last ${maxPostingAge} days. If the posted date cannot be verified, exclude the job.
 - Provide the verified posted date as an ISO date.
@@ -281,6 +284,18 @@ async function sentPostingSchema(env) {
   for (const name of ["Why it matched", "Job summary", "Key requirements", "Salary"]) {
     if (!database.properties?.[name]) patch[name] = { rich_text: {} };
   }
+  if (!database.properties?.["Apply URL"]) patch["Apply URL"] = { url: {} };
+  if (!database.properties?.["Apply method"]) {
+    patch["Apply method"] = {
+      select: {
+        options: [
+          { name: "External", color: "green" },
+          { name: "LinkedIn", color: "blue" },
+        ],
+      },
+    };
+  }
+  if (!database.properties?.["Apply checked at"]) patch["Apply checked at"] = { date: {} };
   if (!database.properties?.Dispatcher) {
     patch.Dispatcher = {
       select: {
@@ -310,7 +325,15 @@ async function saveJob(env, schema, candidate, job, now, status, dispatcherLabel
   addProperty(properties, schema, "Job Title", job.title);
   addProperty(properties, schema, "Company – Title", `${job.company} – ${job.title}`);
   addProperty(properties, schema, "Company", job.company);
-  addProperty(properties, schema, "URL", job.url);
+  addProperty(properties, schema, "URL", job.posting_url || job.url);
+  addProperty(properties, schema, "Apply URL", job.apply_method === "external" ? job.url : "");
+  addProperty(
+    properties,
+    schema,
+    "Apply method",
+    job.apply_method === "external" ? "External" : job.apply_method === "linkedin" ? "LinkedIn" : "",
+  );
+  addProperty(properties, schema, "Apply checked at", job.apply_method ? now.toISOString() : "");
   addProperty(properties, schema, "Location", job.location);
   addProperty(properties, schema, "Salary", job.salary);
   addProperty(properties, schema, "Source", job.source || "OpenAI backup");
@@ -480,7 +503,8 @@ function sanitizeJob(raw) {
     job_summary: String(raw?.job_summary || "").slice(0, 1900),
     key_requirements: String(raw?.key_requirements || "").slice(0, 1900)
   };
-  if (!/^https?:\/\//.test(job.url) || !job.title || !job.company) return null;
+  if (!isPublicHttpUrl(job.url) || !job.title || !job.company) return null;
+  if (isLinkedInUrl(job.url) && !isLinkedInJobUrl(job.url)) return null;
   return job;
 }
 __name(sanitizeJob, "sanitizeJob");
@@ -506,6 +530,14 @@ async function handleSendEmail(request, env) {
   }
   const now = /* @__PURE__ */ new Date();
   const emailJobs = await resolveApplyLinks(jobs);
+  if (!emailJobs.length) {
+    return json({
+      ok: true,
+      sent: false,
+      skipped: "no_direct_application_links",
+      withheld: jobs.length,
+    });
+  }
   let emailPayload;
   try {
     emailPayload = emailTemplate ? buildEmail({ template: emailTemplate, candidate, jobs: emailJobs, now }) : fallbackEmail({ candidate, jobs: emailJobs });
@@ -521,12 +553,12 @@ async function handleSendEmail(request, env) {
   const schema = await sentPostingSchema(env);
   const logged = [];
   const logFailed = [];
-  for (const job of jobs) {
+  for (const job of emailJobs) {
     try {
       await saveJob(env, schema, candidate, job, now, "Emailed", "Job Scout dispatcher");
-      logged.push(job.url);
+      logged.push(job.posting_url || job.url);
     } catch (error) {
-      logFailed.push({ url: job.url, error: String(error.message).slice(0, 200) });
+      logFailed.push({ url: job.posting_url || job.url, error: String(error.message).slice(0, 200) });
     }
   }
   return json({
@@ -624,6 +656,7 @@ async function dispatch(env, { dryRun = false, force = false } = {}) {
       await env.BACKUP_STATE.put(budget.key, String(spent), { expirationTtl: 45 * 24 * 60 * 60 });
       if (!unique.length) continue;
       const emailJobs = await resolveApplyLinks(unique);
+      if (!emailJobs.length) continue;
       let emailPayload;
       try {
         emailPayload = emailTemplate ? buildEmail({ template: emailTemplate, candidate, jobs: emailJobs, now }) : fallbackEmail({ candidate, jobs: emailJobs });
@@ -638,7 +671,7 @@ async function dispatch(env, { dryRun = false, force = false } = {}) {
         text: emailPayload.text
       });
       emailed += 1;
-      for (const job of unique) {
+      for (const job of emailJobs) {
         await saveJob(env, schema, candidate, job, now, "Emailed");
         saved += 1;
       }

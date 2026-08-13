@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   isLinkedInJobUrl,
+  isLinkedInUrl,
   linkedInJobId,
   parseApplyMethod,
   parseDirectApplyUrl,
@@ -98,6 +99,12 @@ test("ignores LinkedIn URLs that are not postings", () => {
   assert.equal(linkedInJobId("https://www.linkedin.com/in/someone"), "");
   assert.equal(linkedInJobId("not a url"), "");
   assert.equal(isLinkedInJobUrl(undefined), false);
+});
+
+test("recognizes every LinkedIn host even when the URL is not a resolvable posting", () => {
+  assert.equal(isLinkedInUrl("https://www.linkedin.com/jobs/search/?keywords=designer"), true);
+  assert.equal(isLinkedInUrl("https://lnkd.in/jobs/4123456789"), false);
+  assert.equal(isLinkedInUrl("https://linkedin.com.evil.example/jobs/view/4123456789"), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -317,6 +324,32 @@ test("refuses a redirect to private space before making the unsafe request", asy
   assert.ok(!seen.includes(privateTarget));
 });
 
+test("refuses an external apply redirect that loops back to a LinkedIn intermediary", async () => {
+  const posting = "https://www.linkedin.com/jobs/view/4123456789";
+  const handoff = "https://apply.example.com/job/771";
+  const linkedinSearch = "https://www.linkedin.com/jobs/search/?keywords=designer";
+  const fetcher = async (url) => {
+    if (url === GUEST("4123456789")) {
+      return htmlResponse(legacyOffsiteFragment(handoff));
+    }
+    if (url === handoff) {
+      return {
+        ok: false,
+        status: 302,
+        url: handoff,
+        headers: new Headers({ location: linkedinSearch }),
+        text: async () => "",
+      };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+
+  assert.deepEqual(await resolveApplyTarget(posting, { fetcher }), {
+    method: "unknown",
+    url: posting,
+  });
+});
+
 test("keeps the LinkedIn post when the posting is Easy Apply", async () => {
   const fetcher = async () => htmlResponse(easyApplyFragment);
   const posting = "https://www.linkedin.com/jobs/view/4123456789";
@@ -382,13 +415,49 @@ test("resolves a batch of records without mutating them, fetching each URL once"
   assert.equal(records[0].title, resolved[0].title);
 });
 
-test("a record whose resolution throws keeps the link it arrived with", async () => {
+test("omits a LinkedIn record when its external application cannot be resolved", async () => {
   const linkedInPost = "https://www.linkedin.com/jobs/view/4123456789";
   const fetcher = async () => {
     throw new Error("network");
   };
-  const [resolved] = await resolveApplyLinks([{ url: linkedInPost }], { fetcher });
-  assert.deepEqual(resolved, { url: linkedInPost, apply_method: "unknown" });
+  const resolved = await resolveApplyLinks([{ url: linkedInPost }], { fetcher });
+  assert.deepEqual(resolved, []);
+});
+
+test("keeps LinkedIn only when it is the confirmed Easy Apply destination", async () => {
+  const linkedInPost = "https://www.linkedin.com/jobs/view/4123456789";
+  const fetcher = async (url) => {
+    assert.equal(url, GUEST("4123456789"));
+    return htmlResponse(easyApplyFragment, url);
+  };
+  const resolved = await resolveApplyLinks([{ url: linkedInPost }], { fetcher });
+  assert.deepEqual(resolved, [{ url: linkedInPost, apply_method: "linkedin" }]);
+});
+
+test("omits unrecognized LinkedIn job and search URLs instead of treating them as direct", async () => {
+  const fetcher = async () => {
+    throw new Error("unrecognized LinkedIn URLs must not be fetched or delivered");
+  };
+  assert.deepEqual(
+    await resolveApplyLinks(
+      [
+        { url: "https://www.linkedin.com/jobs/search/?keywords=designer" },
+        { url: "https://www.linkedin.com/jobs/view/not-a-numeric-id" },
+      ],
+      { fetcher },
+    ),
+    [],
+  );
+});
+
+test("omits unsafe direct URLs at the shared resolver boundary", async () => {
+  assert.deepEqual(
+    await resolveApplyLinks([
+      { url: "http://127.0.0.1/apply" },
+      { url: "https://user:pass@example.com/apply" },
+    ]),
+    [],
+  );
 });
 
 // ---------------------------------------------------------------------------
