@@ -390,7 +390,7 @@ test("the backup Worker does not send a match whose external application cannot 
   assert.equal(delivery.notion, null);
 });
 
-test("the backup Worker refuses an unsafe external application link", async () => {
+test("the backup Worker refuses an unsafe external application link without sending LinkedIn", async () => {
   const employerUrl = "https://apply.northwind.example/redirect/771";
   const privateTarget = "http://127.0.0.1:8787/apply";
   const seen = [];
@@ -413,13 +413,15 @@ test("the backup Worker refuses an unsafe external application link", async () =
     },
   });
 
-  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
-  assert.doesNotMatch(delivery.email.html, /127\.0\.0\.1/);
+  const result = await delivery.response.json();
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, "no_direct_application_links");
+  assert.equal(delivery.email, null);
+  assert.equal(delivery.notion, null);
   assert.ok(!seen.includes(privateTarget));
-  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
 });
 
-test("the backup Worker keeps LinkedIn when the employer board match is ambiguous", async () => {
+test("the backup Worker withholds an ambiguous employer board match", async () => {
   const delivery = await deliverThroughWorker(linkedInJob(), {
     resolveFetch: async (url) => {
       if (url === LINKEDIN_GUEST_URL) {
@@ -446,9 +448,11 @@ test("the backup Worker keeps LinkedIn when the employer board match is ambiguou
     },
   });
 
-  assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
-  assert.doesNotMatch(delivery.email.html, /jobs\.ashbyhq\.com/);
-  assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  const result = await delivery.response.json();
+  assert.equal(result.sent, false);
+  assert.equal(result.skipped, "no_direct_application_links");
+  assert.equal(delivery.email, null);
+  assert.equal(delivery.notion, null);
 });
 
 test("the scheduled backup dispatch resolves the email copy but de-duplicates on LinkedIn", async () => {
