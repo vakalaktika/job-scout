@@ -324,6 +324,32 @@ test("refuses a redirect to private space before making the unsafe request", asy
   assert.ok(!seen.includes(privateTarget));
 });
 
+test("refuses an external apply redirect that loops back to a LinkedIn intermediary", async () => {
+  const posting = "https://www.linkedin.com/jobs/view/4123456789";
+  const handoff = "https://apply.example.com/job/771";
+  const linkedinSearch = "https://www.linkedin.com/jobs/search/?keywords=designer";
+  const fetcher = async (url) => {
+    if (url === GUEST("4123456789")) {
+      return htmlResponse(legacyOffsiteFragment(handoff));
+    }
+    if (url === handoff) {
+      return {
+        ok: false,
+        status: 302,
+        url: handoff,
+        headers: new Headers({ location: linkedinSearch }),
+        text: async () => "",
+      };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+
+  assert.deepEqual(await resolveApplyTarget(posting, { fetcher }), {
+    method: "unknown",
+    url: posting,
+  });
+});
+
 test("keeps the LinkedIn post when the posting is Easy Apply", async () => {
   const fetcher = async () => htmlResponse(easyApplyFragment);
   const posting = "https://www.linkedin.com/jobs/view/4123456789";
@@ -420,6 +446,16 @@ test("omits unrecognized LinkedIn job and search URLs instead of treating them a
       ],
       { fetcher },
     ),
+    [],
+  );
+});
+
+test("omits unsafe direct URLs at the shared resolver boundary", async () => {
+  assert.deepEqual(
+    await resolveApplyLinks([
+      { url: "http://127.0.0.1/apply" },
+      { url: "https://user:pass@example.com/apply" },
+    ]),
     [],
   );
 });

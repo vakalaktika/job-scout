@@ -811,6 +811,14 @@ test("the dashboard only exposes jobs with a confirmed application destination",
     hasDirectApplyTarget({ url: post, apply_url: post, apply_method: "external" }),
     false,
   );
+  assert.equal(
+    hasDirectApplyTarget({
+      url: post,
+      apply_url: "https://www.linkedin.com/jobs/search/?keywords=designer",
+      apply_method: "external",
+    }),
+    false,
+  );
 });
 
 test("posting fetches refuse a redirect from a public URL into private space", async () => {
