@@ -321,6 +321,14 @@ test("salary missing from the posting stays empty and the email makes no univers
   assert.equal("Salary" in notionWrite.properties, false);
 });
 
+test("the backup boundary rejects private and unrecognized LinkedIn URLs", () => {
+  assert.equal(sanitizeJob({ ...job("$180k"), url: "http://127.0.0.1/apply" }), null);
+  assert.equal(
+    sanitizeJob({ ...job("$180k"), url: "https://www.linkedin.com/jobs/search/?keywords=designer" }),
+    null,
+  );
+});
+
 test("the backup Worker's send endpoint keeps salary through its real delivery boundary", async () => {
   const salary = "$190k–$225k";
   const delivery = await deliverThroughWorker(job(salary));

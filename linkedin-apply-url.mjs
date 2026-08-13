@@ -62,6 +62,14 @@ export function linkedInJobId(value) {
   return viewed ? viewed[1] : "";
 }
 
+export function isLinkedInUrl(value) {
+  try {
+    return LINKEDIN_HOST.test(new URL(String(value ?? "")).hostname);
+  } catch {
+    return false;
+  }
+}
+
 export const isLinkedInJobUrl = (value) => Boolean(linkedInJobId(value));
 
 /**
@@ -346,7 +354,8 @@ export async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
   const resolvedRecords = await Promise.all(
     (records || []).map(async (record) => {
       const url = record?.url;
-      if (!isLinkedInJobUrl(url)) return record;
+      if (!isLinkedInUrl(url)) return record;
+      if (!isLinkedInJobUrl(url)) return null;
       if (!inFlight.has(url)) {
         inFlight.set(
           url,
@@ -359,7 +368,7 @@ export async function resolveApplyLinks(records, { fetcher = fetch } = {}) {
       }
       const resolved = await inFlight.get(url);
       if (resolved.method === "external") {
-        return { ...record, url: resolved.url, apply_method: "external" };
+        return { ...record, url: resolved.url, posting_url: url, apply_method: "external" };
       }
       if (resolved.method === "linkedin") {
         return { ...record, apply_method: "linkedin" };

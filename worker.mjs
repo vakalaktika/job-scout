@@ -1,4 +1,4 @@
-import { linkedInJobId, resolveApplyTarget } from "./linkedin-apply-url.mjs";
+import { isLinkedInUrl, linkedInJobId, resolveApplyTarget } from "./linkedin-apply-url.mjs";
 import { isPublicHttpUrl } from "./public-url.mjs";
 
 // ORIGIN is the browser origin for CORS and nothing else. An origin has no path
@@ -300,6 +300,7 @@ export const clientJob = (job) => {
   // The member's click should land where they actually apply. The Notion URL column
   // keeps carrying the original post, so the dispatcher's de-duplication history is
   // untouched, and posting_url keeps it reachable from the dashboard.
+  if (!hasDirectApplyTarget(job)) return { ...result, url: "", posting_url: "" };
   return { ...result, url: apply_url || job.url, posting_url: job.url };
 };
 
@@ -308,7 +309,8 @@ export const clientJob = (job) => {
 // that LinkedIn itself hosts the application through Easy Apply. Anything else is
 // withheld from members until a later resolution sweep succeeds.
 export const hasDirectApplyTarget = (job) => {
-  if (!linkedInJobId(job?.url)) return isPublicHttpUrl(job?.url);
+  if (!isLinkedInUrl(job?.url)) return isPublicHttpUrl(job?.url);
+  if (!linkedInJobId(job?.url)) return false;
   if (job?.apply_method === "linkedin") return true;
   return (
     job?.apply_method === "external" &&
@@ -485,15 +487,27 @@ async function fetchPostingPage(url, fetcher) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const response = await fetcher(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        Accept: "text/html,application/xhtml+xml",
-        "User-Agent": "Job Scout brief enricher/1.0 (+https://vakalaktika.github.io/job-scout/)",
-      },
-    });
+    let current = url;
+    let response;
+    for (let hop = 0; hop <= 5; hop += 1) {
+      response = await fetcher(current, {
+        method: "GET",
+        redirect: "manual",
+        signal: controller.signal,
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "User-Agent": "Job Scout brief enricher/1.0 (+https://vakalaktika.github.io/job-scout/)",
+        },
+      });
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      const location = response.headers?.get?.("location") || "";
+      const next = new URL(location, current).href;
+      if (!isPublicHttpUrl(next)) return { html: "", liveness: "unknown" };
+      current = next;
+    }
+    if (!response || [301, 302, 303, 307, 308].includes(response.status)) {
+      return { html: "", liveness: "unknown" };
+    }
     if (response.status === 404 || response.status === 410) return { html: "", liveness: "gone" };
     if (!response.ok) return { html: "", liveness: "unknown" };
     const contentType = response.headers.get("content-type") || "";
