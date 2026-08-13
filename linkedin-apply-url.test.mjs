@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   isLinkedInJobUrl,
+  isLinkedInUrl,
   linkedInJobId,
   parseApplyMethod,
   parseDirectApplyUrl,
@@ -98,6 +99,12 @@ test("ignores LinkedIn URLs that are not postings", () => {
   assert.equal(linkedInJobId("https://www.linkedin.com/in/someone"), "");
   assert.equal(linkedInJobId("not a url"), "");
   assert.equal(isLinkedInJobUrl(undefined), false);
+});
+
+test("recognizes every LinkedIn host even when the URL is not a resolvable posting", () => {
+  assert.equal(isLinkedInUrl("https://www.linkedin.com/jobs/search/?keywords=designer"), true);
+  assert.equal(isLinkedInUrl("https://lnkd.in/jobs/4123456789"), false);
+  assert.equal(isLinkedInUrl("https://linkedin.com.evil.example/jobs/view/4123456789"), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -399,6 +406,22 @@ test("keeps LinkedIn only when it is the confirmed Easy Apply destination", asyn
   };
   const resolved = await resolveApplyLinks([{ url: linkedInPost }], { fetcher });
   assert.deepEqual(resolved, [{ url: linkedInPost, apply_method: "linkedin" }]);
+});
+
+test("omits unrecognized LinkedIn job and search URLs instead of treating them as direct", async () => {
+  const fetcher = async () => {
+    throw new Error("unrecognized LinkedIn URLs must not be fetched or delivered");
+  };
+  assert.deepEqual(
+    await resolveApplyLinks(
+      [
+        { url: "https://www.linkedin.com/jobs/search/?keywords=designer" },
+        { url: "https://www.linkedin.com/jobs/view/not-a-numeric-id" },
+      ],
+      { fetcher },
+    ),
+    [],
+  );
 });
 
 // ---------------------------------------------------------------------------

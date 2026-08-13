@@ -800,9 +800,39 @@ test("the dashboard only exposes jobs with a confirmed application destination",
   assert.equal(hasDirectApplyTarget({ url: post, apply_method: "unknown" }), false);
   assert.equal(hasDirectApplyTarget({ url: post, apply_method: "" }), false);
   assert.equal(
+    hasDirectApplyTarget({ url: "https://www.linkedin.com/jobs/search/?keywords=designer" }),
+    false,
+  );
+  assert.equal(
     hasDirectApplyTarget({ url: post, apply_url: post, apply_method: "external" }),
     false,
   );
+});
+
+test("posting fetches refuse a redirect from a public URL into private space", async () => {
+  const publicUrl = "https://jobs.example.com/redirect/771";
+  const privateUrl = "http://169.254.169.254/latest/meta-data";
+  const seen = [];
+  const fetcher = async (url, init) => {
+    seen.push(url);
+    if (url === publicUrl) {
+      assert.equal(init.redirect, "manual");
+      return {
+        ok: false,
+        status: 302,
+        url: publicUrl,
+        headers: new Headers({ location: privateUrl }),
+        text: async () => "",
+      };
+    }
+    throw new Error(`unsafe request: ${url}`);
+  };
+
+  assert.deepEqual(await postingTextForJob({ url: publicUrl }, fetcher), {
+    text: "",
+    liveness: "unknown",
+  });
+  assert.deepEqual(seen, [publicUrl]);
 });
 
 test("closed postings sort last without being removed", () => {

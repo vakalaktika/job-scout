@@ -65,6 +65,9 @@ const schema = {
   "Key requirements": { type: "rich_text" },
   Status: { type: "select" },
   Dispatcher: { type: "select" },
+  "Apply URL": { type: "url" },
+  "Apply method": { type: "select" },
+  "Apply checked at": { type: "date" },
 };
 
 async function captureSearchResult(salary) {
@@ -105,7 +108,7 @@ async function deliverThroughWorker(
   { templateAvailable = true, initialSchema = {}, resolveFetch } = {},
 ) {
   const originalFetch = globalThis.fetch;
-  const captured = { email: null, notion: null, schemaPatch: null };
+  const captured = { email: null, notion: null, notionWrites: [], schemaPatch: null };
   globalThis.fetch = async (url, init = {}) => {
     const target = String(url);
     if (target.endsWith("/email-template.html")) {
@@ -126,6 +129,7 @@ async function deliverThroughWorker(
     }
     if (target === "https://api.notion.com/v1/pages") {
       captured.notion = JSON.parse(init.body);
+      captured.notionWrites = [...captured.notionWrites, captured.notion];
       return Response.json({ id: "saved-job" });
     }
     const resolverResponse = await resolveFetch?.(target, init);
@@ -144,7 +148,7 @@ async function deliverThroughWorker(
         body: JSON.stringify({
           candidate_email: candidate.email,
           candidate_name: candidate.name,
-          jobs: [value],
+          jobs: Array.isArray(value) ? value : [value],
         }),
       }),
       {
@@ -361,6 +365,9 @@ test("the backup Worker emails a confirmed external employer link but saves the 
   assert.ok(delivery.email.html.includes(employerUrl));
   assert.ok(!delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  assert.equal(delivery.notion.properties["Apply URL"].url, employerUrl);
+  assert.equal(delivery.notion.properties["Apply method"].select.name, "External");
+  assert.equal(delivery.notion.properties["Apply checked at"].date.start, NOW.toISOString());
 });
 
 test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () => {
@@ -373,6 +380,26 @@ test("the backup Worker keeps LinkedIn in the email for Easy Apply", async () =>
 
   assert.ok(delivery.email.html.includes(LINKEDIN_JOB_URL));
   assert.equal(delivery.notion.properties.URL.url, LINKEDIN_JOB_URL);
+  assert.equal(delivery.notion.properties["Apply method"].select.name, "LinkedIn");
+});
+
+test("a mixed batch emails and stores only jobs with confirmed application destinations", async () => {
+  const direct = job("$180k");
+  const unresolved = { ...linkedInJob(), title: "Unresolved Product Designer" };
+  const delivery = await deliverThroughWorker([direct, unresolved], {
+    resolveFetch: async (url) =>
+      url === LINKEDIN_GUEST_URL
+        ? htmlResponse(offsiteFragment(), LINKEDIN_GUEST_URL)
+        : notFoundResponse(),
+  });
+
+  const result = await delivery.response.json();
+  assert.equal(result.sent, true);
+  assert.ok(delivery.email.html.includes(direct.url));
+  assert.ok(!delivery.email.html.includes(LINKEDIN_JOB_URL));
+  assert.equal(delivery.notionWrites.length, 1);
+  assert.equal(delivery.notionWrites[0].properties.URL.url, direct.url);
+  assert.deepEqual(result.logged, [direct.url]);
 });
 
 test("the backup Worker does not send a match whose external application cannot be resolved", async () => {
