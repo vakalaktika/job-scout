@@ -257,7 +257,7 @@ Requirements:
   });
   if (!response.ok) throw new Error(`OpenAI: ${response.status} ${(await response.text()).slice(0, 500)}`);
   const payload = await response.json();
-  const jobs = (JSON.parse(responseText(payload)).jobs || []).filter((job) => {
+  const jobs = (JSON.parse(responseText(payload)).jobs || []).map(sanitizeJob).filter(Boolean).filter((job) => {
     const posted = Date.parse(job.posted_at || "");
     if (!Number.isFinite(posted)) return false;
     const age = Math.max(0, Math.floor((Date.now() - posted) / 864e5));
@@ -284,6 +284,19 @@ async function sentPostingSchema(env) {
   for (const name of ["Why it matched", "Job summary", "Key requirements", "Salary"]) {
     if (!database.properties?.[name]) patch[name] = { rich_text: {} };
   }
+  if (!database.properties?.["Brief status"]) {
+    patch["Brief status"] = {
+      select: {
+        options: [
+          { name: "Ready", color: "green" },
+          { name: "Unavailable", color: "gray" },
+          { name: "Failed", color: "red" },
+        ],
+      },
+    };
+  }
+  if (!database.properties?.["Brief error"]) patch["Brief error"] = { rich_text: {} };
+  if (!database.properties?.["Brief updated at"]) patch["Brief updated at"] = { date: {} };
   if (!database.properties?.["Apply URL"]) patch["Apply URL"] = { url: {} };
   if (!database.properties?.["Apply method"]) {
     patch["Apply method"] = {
@@ -343,6 +356,9 @@ async function saveJob(env, schema, candidate, job, now, status, dispatcherLabel
   addProperty(properties, schema, "Why it matched", job.match_reason);
   addProperty(properties, schema, "Job summary", job.job_summary);
   addProperty(properties, schema, "Key requirements", job.key_requirements);
+  addProperty(properties, schema, "Brief status", "Ready");
+  if (schema["Brief error"]) properties["Brief error"] = richText("");
+  addProperty(properties, schema, "Brief updated at", now.toISOString());
   addProperty(properties, schema, "Status", status);
   addProperty(properties, schema, "Dispatcher", dispatcherLabel);
   return notion(env, "pages", "POST", { parent: { database_id: SENT_POSTINGS_DB }, properties });
@@ -489,22 +505,29 @@ function authorizedSend(request, env) {
 }
 __name(authorizedSend, "authorizedSend");
 __name2(authorizedSend, "authorizedSend");
+const cleanInputString = (value) => typeof value === "string" ? value.trim() : "";
+const hasCompleteJobBrief = (job) =>
+  [job?.job_summary, job?.match_reason, job?.key_requirements].every(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
+
 function sanitizeJob(raw) {
   const job = {
-    title: String(raw?.title || "").slice(0, 300),
-    company: String(raw?.company || "").slice(0, 300),
-    url: String(raw?.url || "").trim(),
-    location: String(raw?.location || "").slice(0, 300),
-    salary: String(raw?.salary || "").trim().slice(0, 120),
-    source: String(raw?.source || "").slice(0, 100),
-    posted_at: String(raw?.posted_at || "").slice(0, 40),
-    workplace_type: String(raw?.workplace_type || "").trim().slice(0, 20),
-    match_reason: String(raw?.match_reason || "").slice(0, 1900),
-    job_summary: String(raw?.job_summary || "").slice(0, 1900),
-    key_requirements: String(raw?.key_requirements || "").slice(0, 1900)
+    title: cleanInputString(raw?.title).slice(0, 300),
+    company: cleanInputString(raw?.company).slice(0, 300),
+    url: cleanInputString(raw?.url),
+    location: cleanInputString(raw?.location).slice(0, 300),
+    salary: cleanInputString(raw?.salary).slice(0, 120),
+    source: cleanInputString(raw?.source).slice(0, 100),
+    posted_at: cleanInputString(raw?.posted_at).slice(0, 40),
+    workplace_type: cleanInputString(raw?.workplace_type).slice(0, 20),
+    match_reason: cleanInputString(raw?.match_reason).slice(0, 1900),
+    job_summary: cleanInputString(raw?.job_summary).slice(0, 1900),
+    key_requirements: cleanInputString(raw?.key_requirements).slice(0, 1900)
   };
   if (!isPublicHttpUrl(job.url) || !job.title || !job.company) return null;
   if (isLinkedInUrl(job.url) && !isLinkedInJobUrl(job.url)) return null;
+  if (!hasCompleteJobBrief(job)) return null;
   return job;
 }
 __name(sanitizeJob, "sanitizeJob");
@@ -520,7 +543,13 @@ async function handleSendEmail(request, env) {
   }
   const candidate = { email, name: String(body.candidate_name || "").slice(0, 200) };
   const jobs = body.jobs.slice(0, 20).map(sanitizeJob).filter(Boolean);
-  if (!jobs.length) return json({ ok: false, error: "no_valid_jobs: each job needs title, company, and an http(s) url" }, 400);
+  if (!jobs.length) {
+    return json({
+      ok: false,
+      error:
+        "no_valid_jobs: each job needs title, company, an http(s) url, and a complete job brief",
+    }, 400);
+  }
   let emailTemplate = null;
   let templateError = null;
   try {

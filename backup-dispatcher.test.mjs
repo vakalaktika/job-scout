@@ -63,6 +63,9 @@ const schema = {
   "Why it matched": { type: "rich_text" },
   "Job summary": { type: "rich_text" },
   "Key requirements": { type: "rich_text" },
+  "Brief status": { type: "select" },
+  "Brief error": { type: "rich_text" },
+  "Brief updated at": { type: "date" },
   Status: { type: "select" },
   Dispatcher: { type: "select" },
   "Apply URL": { type: "url" },
@@ -341,6 +344,52 @@ test("the backup Worker's send endpoint keeps salary through its real delivery b
     delivery.notion.properties.Salary.rich_text[0].text.content,
     salary,
   );
+});
+
+test("complete briefs are saved atomically and marked ready", async () => {
+  const complete = await captureNotionWrite(job("$190k–$225k"));
+
+  assert.equal(complete.properties["Brief status"].select.name, "Ready");
+  assert.equal(complete.properties["Brief error"].rich_text[0].text.content, "");
+  assert.equal(complete.properties["Brief updated at"].date.start, NOW.toISOString());
+  assert.ok(complete.properties["Job summary"]);
+  assert.ok(complete.properties["Why it matched"]);
+  assert.ok(complete.properties["Key requirements"]);
+});
+
+test("ingestion rejects a job when any generated brief field is missing", () => {
+  for (const field of ["job_summary", "match_reason", "key_requirements"]) {
+    assert.equal(sanitizeJob({ ...job("$190k–$225k"), [field]: "  " }), null);
+  }
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), job_summary: { text: "fake" } }), null);
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), title: "   " }), null);
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), company: ["Northwind"] }), null);
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), url: { href: "https://example.com/job" } }), null);
+});
+
+test("the send boundary self-heals the brief bookkeeping properties", async () => {
+  const delivery = await deliverThroughWorker(job("$190k–$225k"));
+
+  assert.deepEqual(delivery.schemaPatch.properties["Brief status"], {
+    select: {
+      options: [
+        { name: "Ready", color: "green" },
+        { name: "Unavailable", color: "gray" },
+        { name: "Failed", color: "red" },
+      ],
+    },
+  });
+  assert.deepEqual(delivery.schemaPatch.properties["Brief error"], { rich_text: {} });
+  assert.deepEqual(delivery.schemaPatch.properties["Brief updated at"], { date: {} });
+});
+
+test("the send endpoint neither emails nor stores a partial brief", async () => {
+  const delivery = await deliverThroughWorker({ ...job("$190k–$225k"), job_summary: "" });
+
+  assert.equal(delivery.response.status, 400);
+  assert.match((await delivery.response.json()).error, /complete job brief/i);
+  assert.equal(delivery.email, null);
+  assert.equal(delivery.notion, null);
 });
 
 test("the backup Worker's plain-text delivery omits salary when the posting does not list it", async () => {

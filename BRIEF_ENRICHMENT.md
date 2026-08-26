@@ -23,8 +23,16 @@ Up to four missing briefs are repaired concurrently on a session request. This b
 usage while allowing later requests to fill the remainder. An authenticated `job_brief` action can
 force one job through the same path.
 
-Existing dashboard code does not need to change: once the Worker returns the persisted fields, the
-current job-card component renders the detailed layout automatically.
+The dashboard also repairs a brief on demand. Opening an incomplete `Job brief` calls the
+authenticated `job_brief` action, shows an accessible loading state, and replaces the card in place
+when all three fields return. A failed or still-incomplete response becomes an actionable retry
+state instead of generic filler. The collapsed card previews `Job summary`; `Why it matched` is
+reserved for the expanded brief.
+
+New dispatcher records are all-or-nothing at the delivery boundary: `Job summary`, `Why it matched`,
+and `Key requirements` must all be non-empty before a posting can be emailed or saved. Valid records
+are stored with `Brief status = Ready`. Existing partial records remain visible and are repaired by
+the session sweep or the on-open action above.
 
 ## Safety and failure behavior
 

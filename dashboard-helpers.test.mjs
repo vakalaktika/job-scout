@@ -23,10 +23,12 @@ const {
   __jsAppNote,
   __jsPassNote,
   __jsContextLines,
+  __jsHasBrief,
+  __jsBriefTeaser,
 } = new Function(
   `const ${bundle.slice(start, end)};` +
     "return{__jsBand,__jsPosted,__jsReqs,__jsFilters,__jsRunLabel," +
-    "__jsAppNote,__jsPassNote,__jsContextLines}",
+    "__jsAppNote,__jsPassNote,__jsContextLines,__jsHasBrief,__jsBriefTeaser}",
 )();
 
 // Postings carry a bare "YYYY-MM-DD" that the bundle parses at local midnight,
@@ -157,6 +159,35 @@ test("the search context splits into lines and ignores the blank ones", () => {
   assert.deepEqual(__jsContextLines("first\n\n  second  \n"), ["first", "second"]);
   assert.deepEqual(__jsContextLines(""), []);
   assert.deepEqual(__jsContextLines(undefined), []);
+});
+
+test("a job brief is complete only when all three generated fields are present", () => {
+  assert.equal(
+    __jsHasBrief({
+      summary: "Own the production floor and its daily operating targets.",
+      match_reason: "Your manufacturing supervision experience maps to the role.",
+      key_requirements: "People leadership; safety; continuous improvement.",
+    }),
+    true,
+  );
+  assert.equal(
+    __jsHasBrief({
+      summary: "",
+      match_reason: "Your manufacturing supervision experience maps to the role.",
+      key_requirements: "People leadership; safety; continuous improvement.",
+    }),
+    false,
+  );
+});
+
+test("the collapsed card previews the role summary, never the match reason", () => {
+  const job = {
+    summary: "Own the production floor and its daily operating targets.",
+    match_reason: "Your manufacturing supervision experience maps to the role.",
+  };
+
+  assert.equal(__jsBriefTeaser(job), job.summary);
+  assert.equal(__jsBriefTeaser({ match_reason: job.match_reason }), "");
 });
 
 test("the heading says when the scout last ran and drops the ordering when empty", () => {
