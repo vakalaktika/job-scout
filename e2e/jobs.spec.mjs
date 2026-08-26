@@ -20,7 +20,7 @@ test.beforeEach(async ({ request }) => {
   await resetWorker(request);
 });
 
-test("a collapsed job previews its summary and expanded details do not repeat the match reason", async ({ page }) => {
+test("a collapsed job previews its summary and expanded details do not repeat the match reason", async ({ page, request }) => {
   await openDashboard(page);
 
   const firstCard = card(page, 1);
@@ -33,6 +33,9 @@ test("a collapsed job previews its summary and expanded details do not repeat th
   await expect(firstCard.getByText("Why it matched")).toBeVisible();
   await expect(firstCard.getByText("Your payments and design-systems work lines up with this team.")).toBeVisible();
   await expect(firstCard.locator(".job-match-note")).toHaveCount(0);
+
+  const state = await workerState(request);
+  expect(state.requests.filter(({ action }) => action === "job_brief")).toHaveLength(0);
 });
 
 test("opening an incomplete brief prepares and replaces it without a reload", async ({ page, request }) => {
@@ -80,6 +83,55 @@ test("a failed brief request is explained and can be retried", async ({ page, re
 
   await expect(firstCard.getByRole("alert")).toContainText("We couldn’t prepare this brief yet");
   await expect(firstCard.getByRole("button", { name: "Try again" })).toBeVisible();
+
+  await request.post("/__test/state", {
+    data: {
+      failures: {},
+      briefResults: {
+        "job-1": {
+          summary: "Runs the production floor, team, safety, and daily output.",
+          match_reason: "Your manufacturing supervision background maps directly to this team.",
+          key_requirements: "People leadership; safety; lean manufacturing.",
+          brief_status: "Ready",
+        },
+      },
+    },
+  });
+  await firstCard.getByRole("button", { name: "Try again" }).click();
+  await expect(firstCard.getByText("Runs the production floor, team, safety, and daily output.")).toBeVisible();
+
+  const state = await workerState(request);
+  expect(state.requests.filter(({ action }) => action === "job_brief")).toHaveLength(2);
+});
+
+test("rapid brief opens share one enrichment request", async ({ page, request }) => {
+  const current = await workerState(request);
+  await resetWorker(request, {
+    jobs: [{ ...current.jobs[0], summary: "", key_requirements: "", brief_status: "Pending" }, current.jobs[1]],
+    delays: { job_brief: 350 },
+    briefResults: {
+      "job-1": {
+        summary: "Runs the production floor, team, safety, and daily output.",
+        match_reason: "Your manufacturing supervision background maps directly to this team.",
+        key_requirements: "People leadership; safety; lean manufacturing.",
+        brief_status: "Ready",
+      },
+    },
+  });
+  await openDashboard(page);
+
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.includes("Job brief"));
+    // Open, close, then reopen before enrichment resolves. The third click
+    // exercises the per-job request lock rather than merely the disclosure.
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await expect(card(page, 1).getByText("Runs the production floor, team, safety, and daily output.")).toBeVisible();
+
+  const state = await workerState(request);
+  expect(state.requests.filter(({ action }) => action === "job_brief")).toHaveLength(1);
 });
 
 // The exact shape of the old bug: a slow save on one card and a fast one on

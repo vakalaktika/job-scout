@@ -350,7 +350,7 @@ test("complete briefs are saved atomically and marked ready", async () => {
   const complete = await captureNotionWrite(job("$190k–$225k"));
 
   assert.equal(complete.properties["Brief status"].select.name, "Ready");
-  assert.equal(complete.properties["Brief error"].rich_text.length, 0);
+  assert.equal(complete.properties["Brief error"].rich_text[0].text.content, "");
   assert.equal(complete.properties["Brief updated at"].date.start, NOW.toISOString());
   assert.ok(complete.properties["Job summary"]);
   assert.ok(complete.properties["Why it matched"]);
@@ -361,6 +361,10 @@ test("ingestion rejects a job when any generated brief field is missing", () => 
   for (const field of ["job_summary", "match_reason", "key_requirements"]) {
     assert.equal(sanitizeJob({ ...job("$190k–$225k"), [field]: "  " }), null);
   }
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), job_summary: { text: "fake" } }), null);
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), title: "   " }), null);
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), company: ["Northwind"] }), null);
+  assert.equal(sanitizeJob({ ...job("$190k–$225k"), url: { href: "https://example.com/job" } }), null);
 });
 
 test("the send boundary self-heals the brief bookkeeping properties", async () => {

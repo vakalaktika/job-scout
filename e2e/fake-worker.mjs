@@ -92,6 +92,7 @@ const initialState = () => ({
   jobDelays: {},
   // Per-action forced failures: { job_decision: { status: 500, error: "boom" } }.
   failures: {},
+  briefResults: {},
   requests: [],
   scoutStatusAfterStart: null,
 });
@@ -214,6 +215,13 @@ async function handleApi(payload) {
     });
     if (!job) return [404, { ok: false, error: "unknown_job" }];
     return [200, { ok: true, job }];
+  }
+
+  if (action === "job_brief") {
+    const job = findJob(payload.job_id);
+    if (!job) return [404, { ok: false, error: "unknown_job" }];
+    const enriched = updateJob(payload.job_id, state.briefResults[payload.job_id] || {});
+    return [200, { ok: true, job: enriched }];
   }
 
   // The bare preference save, which is also how cadence and pause are written.

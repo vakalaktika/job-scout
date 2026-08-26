@@ -101,6 +101,11 @@ const scoutFailureBranch =
   'copy:"We tried several times and it still didn’t start, so this one needs us. Your regular scout schedule is active and will keep looking — reply to your invitation email and we’ll pick it up from there.",' +
   'canStart:!1}};';
 
+const briefHelpers =
+  '__jsHasBrief=l=>[l&&l.summary,l&&l.match_reason,l&&l.key_requirements]' +
+  '.every(e=>String(e||"").trim().length>0),' +
+  '__jsBriefTeaser=l=>String(l&&l.summary||"").trim(),';
+
 // Shared card helpers, injected beside the date helpers they build on so they
 // stay inside the same const list rather than leaking a global.
 const cardHelpers =
@@ -135,6 +140,7 @@ const cardHelpers =
   'return t?(xA(l.applied_at)>=14?`Applied ${t} · still no reply`:`Applied ${t}`):"Applied"},' +
   '__jsPassNote=l=>l&&l.decision==="Not interested"&&l.feedback?`You passed on this: ${l.feedback}`:"",' +
   '__jsContextLines=l=>String(l||"").split("\\n").map(e=>e.trim()).filter(Boolean),' +
+  briefHelpers +
   // An empty list is ambiguous without this: members could not tell "nothing
   // matched this run" from "the scout has never run". The ordering half of the
   // line is dropped when there is nothing to order.
@@ -154,6 +160,8 @@ const cardHelpers =
   scoutFailureBranch +
   'return{eyebrow:"Your first run",title:"Your preferences are saved.",' +
   'copy:"Your scout will run on its regular schedule. Matching jobs will arrive by email and appear here.",canStart:!1}}';
+
+const preBriefCardHelpers = cardHelpers.replace(briefHelpers, "");
 
 // The bundle already carried the helpers above before __jsScoutView was added.
 // Keep that exact prior form as a migration anchor so replacing the helper list
@@ -196,6 +204,7 @@ const retrylessCardHelpers = cardHelpers.replace(
 patch(
   "inject the freshness, requirement, run-label, and tracking helpers",
   [
+    `${postedHelper},/*first-scout-helpers*/${preBriefCardHelpers}`,
     `${postedHelper},/*first-scout-helpers*/${retrylessCardHelpers}`,
     `${postedHelper},${cardHelpers},${previousCardHelpers}`,
     `${postedHelper},${previousCardHelpers}`,
@@ -217,6 +226,45 @@ patch(
     '}catch(__jsE){console.error(__jsE),K("We couldn’t start that search. Your regular schedule is still active.")}' +
     'finally{__jsSetScoutBusy(!1)}},' +
     'P=({items:ue,saved:z=!1})=>Y.jsx(Ut.div,{layout:!0,className:"history-list job-review-list"',
+);
+
+const previousBriefLoader =
+  '},__jsSetBriefState=(__jsI,__jsS)=>__jsSetBriefStates(__jsL=>({...__jsL,[__jsI]:__jsS})),' +
+  '__jsLoadBrief=async __jsJ=>{if(__jsBriefStates[__jsJ.id]==="loading")return;' +
+  '__jsSetBriefState(__jsJ.id,"loading");try{' +
+  'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"job_brief",session_token:n,job_id:__jsJ.id})}),' +
+  '__jsD=await __jsR.json();' +
+  'if(!__jsR.ok||!__jsD.ok||!__jsHasBrief(__jsD.job))throw new Error(__jsD.error||"brief_incomplete");' +
+  'T(__jsL=>__jsL.map(__jsI=>__jsI.id===__jsJ.id?{...__jsI,...__jsD.job}:__jsI)),' +
+  '__jsSetBriefState(__jsJ.id,"ready")' +
+  '}catch(__jsE){console.error(__jsE),__jsSetBriefState(__jsJ.id,"error")}},' +
+  '__jsToggleBrief=__jsJ=>{const __jsO=A!==__jsJ.id;S(__jsO?__jsJ.id:null);' +
+  'if(__jsO&&!__jsHasBrief(__jsJ))__jsLoadBrief(__jsJ)},' +
+  '__jsStartScout=async()=>{';
+const briefLoader =
+  '},__jsSetBriefState=(__jsI,__jsS)=>__jsSetBriefStates(__jsL=>({...__jsL,[__jsI]:__jsS})),' +
+  '__jsLoadBrief=__jsJ=>{const __jsI=__jsJ.id,__jsExisting=__jsBriefRequests.current.get(__jsI);' +
+  'if(__jsExisting)return __jsExisting;const __jsRequest=(async()=>{' +
+  '__jsSetBriefState(__jsI,"loading");try{' +
+  'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"job_brief",session_token:n,job_id:__jsI})}),' +
+  '__jsD=await __jsR.json();' +
+  'if(!__jsR.ok||!__jsD.ok||!__jsHasBrief(__jsD.job))throw new Error(__jsD.error||"brief_incomplete");' +
+  'T(__jsL=>__jsL.map(__jsJ=>__jsJ.id===__jsI?{...__jsJ,...__jsD.job}:__jsJ)),' +
+  '__jsSetBriefState(__jsI,"ready")' +
+  '}catch(__jsE){console.error(__jsE),__jsSetBriefState(__jsI,"error")}' +
+  'finally{if(__jsBriefRequests.current.get(__jsI)===__jsRequest)' +
+  '__jsBriefRequests.current.delete(__jsI)}})();' +
+  '__jsBriefRequests.current.set(__jsI,__jsRequest);return __jsRequest},' +
+  '__jsToggleBrief=__jsJ=>{const __jsO=A!==__jsJ.id;S(__jsO?__jsJ.id:null);' +
+  'if(__jsO&&!__jsHasBrief(__jsJ))__jsLoadBrief(__jsJ)},' +
+  '__jsStartScout=async()=>{';
+
+patch(
+  "load an incomplete brief when its disclosure opens",
+  [previousBriefLoader, '},__jsStartScout=async()=>{'],
+  briefLoader,
 );
 
 const firstScoutPollOriginal =
@@ -481,13 +529,75 @@ patch(
 // language the email uses, and requirements render as the list they describe
 // instead of one run-on paragraph nobody finished reading.
 // ---------------------------------------------------------------------------
+const currentBriefContent =
+  'Y.jsxs("div",{children:[Y.jsx("span",{children:"Job summary"}),' +
+  'Y.jsx("p",{children:$.summary||"A concise summary is not available for this posting yet. Open the original posting for the full role details."})]}),' +
+  'Y.jsxs("div",{children:[Y.jsx("span",{children:"Why it matched"}),' +
+  'Y.jsx("p",{children:$.match_reason||W3($,l)})]}),' +
+  '$.key_requirements?Y.jsxs("div",{children:[Y.jsx("span",{children:"Key requirements"}),' +
+  'Y.jsx("ul",{className:"job-brief-requirements",children:__jsReqs($.key_requirements)' +
+  '.map((__r,__i)=>Y.jsx("li",{children:__r},__i))})]}):null';
+
+const completeBriefContent =
+  'Y.jsxs("div",{children:[Y.jsx("span",{children:"Job summary"}),' +
+  'Y.jsx("p",{children:$.summary})]}),' +
+  'Y.jsxs("div",{children:[Y.jsx("span",{children:"Why it matched"}),' +
+  'Y.jsx("p",{children:$.match_reason})]}),' +
+  'Y.jsxs("div",{children:[Y.jsx("span",{children:"Key requirements"}),' +
+  'Y.jsx("ul",{className:"job-brief-requirements",children:__jsReqs($.key_requirements)' +
+  '.map((__r,__i)=>Y.jsx("li",{children:__r},__i))})]})';
+const alignedBriefFragment = completeBriefContent.slice('Y.jsxs("'.length);
+const currentBriefFragment = currentBriefContent.slice('Y.jsxs("'.length);
+
 patch(
   "align brief headings with the generated fields and list the requirements",
-  'div",{children:[Y.jsx("span",{children:"What the role is"}),Y.jsx("p",{children:$.summary||"A concise summary is not available for this posting yet. Open the original posting for the full role details."})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"Why it fits you"}),Y.jsx("p",{children:$.match_reason||W3($,l)})]}),$.key_requirements?Y.jsxs("div",{children:[Y.jsx("span",{children:"What matters most"}),Y.jsx("p",{children:$.key_requirements})]}):null',
-  'div",{children:[Y.jsx("span",{children:"Job summary"}),Y.jsx("p",{children:$.summary||"A concise summary is not available for this posting yet. Open the original posting for the full role details."})]}),' +
-    'Y.jsxs("div",{children:[Y.jsx("span",{children:"Why it matched"}),Y.jsx("p",{children:$.match_reason||W3($,l)})]}),' +
-    '$.key_requirements?Y.jsxs("div",{children:[Y.jsx("span",{children:"Key requirements"}),' +
-    'Y.jsx("ul",{className:"job-brief-requirements",children:__jsReqs($.key_requirements).map((__r,__i)=>Y.jsx("li",{children:__r},__i))})]}):null',
+  [
+    currentBriefFragment,
+    'div",{children:[Y.jsx("span",{children:"What the role is"}),Y.jsx("p",{children:$.summary||"A concise summary is not available for this posting yet. Open the original posting for the full role details."})]}),Y.jsxs("div",{children:[Y.jsx("span",{children:"Why it fits you"}),Y.jsx("p",{children:$.match_reason||W3($,l)})]}),$.key_requirements?Y.jsxs("div",{children:[Y.jsx("span",{children:"What matters most"}),Y.jsx("p",{children:$.key_requirements})]}):null',
+  ],
+  alignedBriefFragment,
+);
+
+patch(
+  "preview the role summary without repeating its match reason",
+  'Y.jsx("p",{className:"job-match-note",children:W3($,l)})',
+  'Y.jsx(Bc,{initial:!1,mode:"popLayout",children:' +
+    'A!==$.id&&__jsBriefTeaser($)?Y.jsx(Ut.p,{className:"job-match-note",' +
+    'initial:a?!1:{opacity:0,y:-2},animate:{opacity:1,y:0},' +
+    'exit:a?{opacity:0}:{opacity:0,y:-2},transition:oh,' +
+    'children:__jsBriefTeaser($)},`brief-teaser-${$.id}`):null})',
+);
+
+patch(
+  "request incomplete briefs and render their progress",
+  [completeBriefContent, currentBriefContent],
+  'Y.jsx(Bc,{initial:!1,mode:"wait",children:__jsHasBrief($)?' +
+    'Y.jsxs(Ut.div,{className:"job-brief-content",initial:a?!1:{opacity:0,y:2},' +
+    'animate:{opacity:1,y:0},exit:a?{opacity:0}:{opacity:0,y:-2},transition:oh,' +
+    `children:[${completeBriefContent}]},"ready"):` +
+    '__jsBriefStates[$.id]==="loading"?' +
+    'Y.jsx(Ut.div,{className:"job-brief-state",role:"status","aria-live":"polite",' +
+    'initial:a?!1:{opacity:0,y:2},animate:{opacity:1,y:0},exit:a?{opacity:0}:{opacity:0,y:-2},' +
+    'transition:oh,children:"Preparing your job brief…"},"loading"):' +
+    'Y.jsxs(Ut.div,{className:"job-brief-state is-error",role:"alert",' +
+    'initial:a?!1:{opacity:0,y:2},animate:{opacity:1,y:0},exit:a?{opacity:0}:{opacity:0,y:-2},' +
+    'transition:oh,children:[Y.jsx("p",{children:' +
+    '"We couldn’t prepare this brief yet. Open the original posting for the full role details."}),' +
+    'Y.jsx(Ut.button,{type:"button",className:"brief-retry-button",onClick:()=>__jsLoadBrief($),' +
+    'whileTap:a?void 0:{scale:.97},transition:La,children:"Try again"})]},"error")})',
+);
+
+patch(
+  "open job briefs through the enrichment-aware handler",
+  'onClick:()=>S(A===$.id?null:$.id),whileTap:{scale:.97}',
+  'onClick:()=>__jsToggleBrief($),whileTap:{scale:.97}',
+);
+
+patch(
+  "expose brief loading to assistive technology",
+  'layout:!0,className:"job-brief",initial:a?!1:{opacity:0,y:-3}',
+  'layout:!0,className:"job-brief","aria-busy":__jsBriefStates[$.id]==="loading",' +
+    'initial:a?!1:{opacity:0,y:-3}',
 );
 
 patch(
@@ -505,28 +615,57 @@ patch(
 // gone 4.75:1. A closed card is muted with a background rather than the mockup's
 // opacity, which would have dragged its text back under the AA floor.
 // ---------------------------------------------------------------------------
+const briefStateStyles =
+  ".job-brief-content{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:20px}" +
+  ".job-brief-content>div:last-child:nth-child(3){grid-column:1/-1}" +
+  ".job-brief-state{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;" +
+  "gap:14px;min-height:68px;border-radius:10px;background:var(--green-pale);" +
+  "color:var(--green-deep);padding:14px 16px;font-size:13px;font-weight:600}" +
+  ".job-brief-state.is-error{border:1px solid #e0cfc8;background:var(--clay-pale);color:#7e4639}" +
+  ".job-brief-state p{margin:0;color:inherit}" +
+  ".brief-retry-button{flex:0 0 auto;min-height:44px;border:1px solid currentColor;border-radius:8px;" +
+  "background:var(--surface);color:inherit;padding:10px 13px;font-size:13px;font-weight:700}" +
+  "@media(max-width:780px){.job-brief-content{grid-template-columns:1fr}" +
+  ".job-brief-content>div:last-child:nth-child(3){grid-column:auto}" +
+  ".job-brief-state{align-items:flex-start;flex-direction:column}}";
+
+const dashboardCardStyles =
+  ".posted-pill.fresh{border:1px solid #bbf7d0;background:#dcfce7;color:#15803d}" +
+  ".posted-pill.recent{border:1px solid #e3c89d;background:#f8eddb;color:#75501f}" +
+  ".posted-pill.old{border:1px solid #dfe3e8;background:#f1f5f9;color:#546070}" +
+  ".workplace-badge{border:1px solid #cfe0d8;border-radius:999px;background:#e7f0ec;color:#1b5343;padding:4px 8px}" +
+  ".status-badge{border-radius:999px;padding:4px 8px;font-size:10px;letter-spacing:.04em;text-transform:uppercase}" +
+  ".status-badge.live{background:var(--green-pale);color:var(--green-deep)}" +
+  ".status-badge.gone{background:#fbeae7;color:var(--clay)}" +
+  ".job-review-card.is-gone{border-color:#ead9d4;background:var(--canvas)}" +
+  ".job-review-card.is-gone .history-main h3{color:var(--ink-soft)}" +
+  ".job-salary{border-radius:6px;background:#f3f3ef;color:#6d6b65;padding:3px 6px}" +
+  ".job-filter-seg{display:flex;flex-wrap:wrap;gap:6px;margin:0 2px 14px}" +
+  ".job-filter-seg button{display:inline-flex;align-items:center;gap:6px;min-height:38px;" +
+  "border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink-soft);" +
+  "padding:8px 14px;font-size:13px;font-weight:600}" +
+  '.job-filter-seg button[aria-selected="true"]{border-color:var(--ink);background:var(--ink);color:#fff}' +
+  ".job-filter-seg button b{font-weight:700;opacity:.75}" +
+  ".job-brief-requirements{margin:6px 0 0;padding-left:17px;color:#474641;font-size:13px;line-height:1.55}" +
+  ".job-brief-requirements li{margin-bottom:3px}" +
+  briefStateStyles +
+  ".decision-button.save.is-on{border-color:#cfe0d8;background:var(--green-pale);color:var(--green-deep)}";
+const preBriefDashboardCardStyles = dashboardCardStyles.replace(briefStateStyles, "");
+
 patch(
   "style the freshness bands, badges, filter, and requirement list",
-  ".posted-pill.aging{border:1px solid #e3c89d;background:#f8eddb;color:#75501f}",
-  ".posted-pill.fresh{border:1px solid #bbf7d0;background:#dcfce7;color:#15803d}" +
-    ".posted-pill.recent{border:1px solid #e3c89d;background:#f8eddb;color:#75501f}" +
-    ".posted-pill.old{border:1px solid #dfe3e8;background:#f1f5f9;color:#546070}" +
-    ".workplace-badge{border:1px solid #cfe0d8;border-radius:999px;background:#e7f0ec;color:#1b5343;padding:4px 8px}" +
-    ".status-badge{border-radius:999px;padding:4px 8px;font-size:10px;letter-spacing:.04em;text-transform:uppercase}" +
-    ".status-badge.live{background:var(--green-pale);color:var(--green-deep)}" +
-    ".status-badge.gone{background:#fbeae7;color:var(--clay)}" +
-    ".job-review-card.is-gone{border-color:#ead9d4;background:var(--canvas)}" +
-    ".job-review-card.is-gone .history-main h3{color:var(--ink-soft)}" +
-    ".job-salary{border-radius:6px;background:#f3f3ef;color:#6d6b65;padding:3px 6px}" +
-    ".job-filter-seg{display:flex;flex-wrap:wrap;gap:6px;margin:0 2px 14px}" +
-    ".job-filter-seg button{display:inline-flex;align-items:center;gap:6px;min-height:38px;" +
-    "border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink-soft);" +
-    "padding:8px 14px;font-size:13px;font-weight:600}" +
-    '.job-filter-seg button[aria-selected="true"]{border-color:var(--ink);background:var(--ink);color:#fff}' +
-    ".job-filter-seg button b{font-weight:700;opacity:.75}" +
-    ".job-brief-requirements{margin:6px 0 0;padding-left:17px;color:#474641;font-size:13px;line-height:1.55}" +
-    ".job-brief-requirements li{margin-bottom:3px}" +
-    ".decision-button.save.is-on{border-color:#cfe0d8;background:var(--green-pale);color:var(--green-deep)}",
+  [
+    preBriefDashboardCardStyles,
+    ".posted-pill.aging{border:1px solid #e3c89d;background:#f8eddb;color:#75501f}",
+  ],
+  dashboardCardStyles,
+  "css",
+);
+
+patch(
+  "style brief progress and retry states",
+  ".job-brief-requirements li{margin-bottom:3px}",
+  ".job-brief-requirements li{margin-bottom:3px}" + briefStateStyles,
   "css",
 );
 
@@ -550,10 +689,31 @@ patch(
 //     a status row — applied, interviewing, offer, rejected, no response — and
 //     says how long it has been quiet.
 // ---------------------------------------------------------------------------
+const briefStateDeclaration =
+  '[__jsBriefStates,__jsSetBriefStates]=W.useState({}),' +
+  '__jsBriefRequests=W.useRef(new Map()),';
+const previousBriefStateDeclaration =
+  '[__jsBriefStates,__jsSetBriefStates]=W.useState({}),';
+const dashboardState =
+  'const[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),' +
+  '[__jsOther,__jsSetOther]=W.useState(!1),' +
+  '[__jsRestored,__jsSetRestored]=W.useState([]),' +
+  '[__jsContext,__jsSetContext]=W.useState(e&&e.member&&e.member.match_context||""),' +
+  '[__jsScout,__jsSetScout]=W.useState(e&&e.first_scout||{status:"unavailable"}),' +
+  '[__jsScoutBusy,__jsSetScoutBusy]=W.useState(!1),' +
+  briefStateDeclaration +
+  '[d,p]=W.useState(null),';
+const preBriefDashboardState = dashboardState.replace(briefStateDeclaration, "");
+const previousBriefDashboardState = dashboardState.replace(
+  briefStateDeclaration,
+  previousBriefStateDeclaration,
+);
 
 patch(
   "add the filter, disclosure, restored, and search-context state",
   [
+    previousBriefDashboardState,
+    preBriefDashboardState,
     'const[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),' +
       "[__jsOther,__jsSetOther]=W.useState(!1)," +
       "[__jsRestored,__jsSetRestored]=W.useState([])," +
@@ -562,13 +722,18 @@ patch(
     'const[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),[d,p]=W.useState(null),',
     'const[c,h]=W.useState("For you"),[d,p]=W.useState(null),',
   ],
-  'const[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),' +
-    "[__jsOther,__jsSetOther]=W.useState(!1)," +
-    "[__jsRestored,__jsSetRestored]=W.useState([])," +
-    '[__jsContext,__jsSetContext]=W.useState(e&&e.member&&e.member.match_context||""),' +
-    '[__jsScout,__jsSetScout]=W.useState(e&&e.first_scout||{status:"unavailable"}),' +
-    '[__jsScoutBusy,__jsSetScoutBusy]=W.useState(!1),' +
-    "[d,p]=W.useState(null),",
+  dashboardState,
+);
+
+patch(
+  "track brief loading and failure per job",
+  [
+    '[__jsScoutBusy,__jsSetScoutBusy]=W.useState(!1),' + previousBriefStateDeclaration + '[d,p]=W.useState(null),',
+    '[__jsScoutBusy,__jsSetScoutBusy]=W.useState(!1),[d,p]=W.useState(null),',
+  ],
+  '[__jsScoutBusy,__jsSetScoutBusy]=W.useState(!1),' +
+    briefStateDeclaration +
+    '[d,p]=W.useState(null),',
 );
 
 // ---------------------------------------------------------------------------
