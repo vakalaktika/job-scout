@@ -725,12 +725,13 @@ npx wrangler secret put SESSION_SECRET   # HMAC key for signing session tokens
 npx wrangler secret put OPENAI_API_KEY   # for job-brief enrichment
 npx wrangler secret put RESEND_API_KEY   # for sending magic-link sign-in emails
 npx wrangler secret put FIRST_SCOUT_ROUTINE_TOKEN # per-routine API trigger token
-npx wrangler secret put ADMIN_ACCESS_CODE # access code whose linked candidate owns the Admin tab
 ```
 
-`ADMIN_ACCESS_CODE` is resolved to its linked Notion candidate on every authorization
-check. The code is never returned to the browser or committed to the repository; if the
-secret is unset or cannot be resolved, admin access fails closed for everyone.
+Admin access is controlled per access code in Notion. The **Access Codes** table has an
+**Admin** checkbox column (auto-created on first sign-in); tick it on any code row to give
+that code's linked candidate the Admin tab, untick it to remove access. A revoked code is
+never admin regardless of the checkbox. The check runs on every authorization and fails
+closed, so a candidate with no Admin-ticked, non-revoked code sees no Admin tab.
 
 Non-secret Worker vars (in `wrangler.jsonc`, overridable):
 

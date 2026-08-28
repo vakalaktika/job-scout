@@ -1526,17 +1526,18 @@ async function queryDatabasePages(env, databaseId, options = {}) {
 
 async function isAdminCandidate(env, candidate) {
   if (!candidate?.id) return false;
-  const configuredAccessCode = String(env.ADMIN_ACCESS_CODE || "").trim().toUpperCase();
-  if (!configuredAccessCode) return false;
   try {
+    // Admin is a per-code toggle: any access code linked to this candidate whose
+    // "Admin" checkbox is ticked (and that is not revoked) grants the Admin tab.
     const result = await notion(env, `databases/${CODES_DB}/query`, "POST", {
-      filter: { property: "Code", title: { equals: configuredAccessCode } },
-      page_size: 1,
+      filter: { property: "Linked candidate", relation: { contains: candidate.id } },
+      page_size: 100,
     });
-    const accessRow = result.results?.[0];
-    if (!accessRow || plain(accessRow.properties?.Status) === "Revoked") return false;
-    return (accessRow.properties?.["Linked candidate"]?.relation || [])
-      .some(({ id }) => id === candidate.id);
+    return (result.results || []).some(
+      (row) =>
+        row.properties?.Admin?.checkbox === true &&
+        plain(row.properties?.Status) !== "Revoked",
+    );
   } catch (error) {
     console.error("Unable to verify admin membership", String(error?.message || error));
     return false;
@@ -1560,6 +1561,19 @@ async function ensureMagicProperties(env) {
   await notion(env, `databases/${CAND_DB}`, "PATCH", {
     properties: { "Magic nonce": { rich_text: {} } },
   });
+}
+
+// Auto-provision the per-code Admin toggle so it can be ticked in Notion without
+// any manual schema work. Provisioning never blocks sign-in: if it fails the
+// Admin column simply stays absent and admin access stays closed.
+async function ensureCodeAdminProperty(env) {
+  try {
+    await notion(env, `databases/${CODES_DB}`, "PATCH", {
+      properties: { Admin: { checkbox: {} } },
+    });
+  } catch (error) {
+    console.error("Unable to ensure Admin code property", String(error?.message || error));
+  }
 }
 
 async function sendMagicLinkEmail(env, email, url) {
@@ -2139,6 +2153,7 @@ export default {
       const linked = sessionAuth?.member_id || row?.properties["Linked candidate"]?.relation?.[0]?.id;
 
       if (payload.action === "validate" || payload.action === "state") {
+        await ensureCodeAdminProperty(env);
         const candidate = linked ? await notion(env, `pages/${linked}`, "GET") : null;
         if (!candidate) {
           return json({ ok: true, code_status: status || "Unused", needs_setup: true, member: null, jobs: [] });

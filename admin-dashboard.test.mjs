@@ -17,6 +17,7 @@ const richText = (value) => ({
 const email = (value) => ({ type: "email", email: value });
 const select = (value) => ({ type: "select", select: value ? { name: value } : null });
 const date = (value) => ({ type: "date", date: value ? { start: value } : null });
+const checkbox = (value) => ({ type: "checkbox", checkbox: Boolean(value) });
 
 const candidatePage = ({ id, name, address, status = "Active", frequency = "Daily" }) => ({
   id,
@@ -76,7 +77,7 @@ test("recommendation stats summarize every user without mutating source records"
   assert.deepEqual({ candidates, jobs }, source);
 });
 
-test("admin stats rejects a valid session that is not linked to the admin access code", async () => {
+test("admin stats rejects a valid session whose linked code has Admin unticked", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     const path = new URL(url).pathname;
@@ -90,10 +91,11 @@ test("admin stats rejects a valid session that is not linked to the admin access
     if (path.includes("/databases/111ed911-f8ea-4e69-b6a5-c8c6f7479058/query")) {
       return Response.json({
         results: [{
-          id: "code-admin",
+          id: "code-regular",
           properties: {
-            Code: title("SCOUT-TEST-ADMIN"),
-            "Linked candidate": { relation: [{ id: "cand-admin" }] },
+            Code: title("SCOUT-TEST-USER"),
+            Admin: checkbox(false),
+            "Linked candidate": { relation: [{ id: "cand-regular" }] },
           },
         }],
         has_more: false,
@@ -107,7 +109,6 @@ test("admin stats rejects a valid session that is not linked to the admin access
     const env = {
       SESSION_SECRET: "test-secret",
       NOTION_TOKEN: "test-notion",
-      ADMIN_ACCESS_CODE: "SCOUT-TEST-ADMIN",
     };
     const token = await issueToken(env, {
       purpose: "session",
@@ -127,7 +128,7 @@ test("admin stats rejects a valid session that is not linked to the admin access
   }
 });
 
-test("a revoked admin access code cannot expose or request admin data", async () => {
+test("a revoked code with Admin ticked cannot expose or request admin data", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     const path = new URL(url).pathname;
@@ -144,6 +145,7 @@ test("a revoked admin access code cannot expose or request admin data", async ()
           id: "code-admin",
           properties: {
             Code: title("SCOUT-TEST-ADMIN"),
+            Admin: checkbox(true),
             Status: select("Revoked"),
             "Linked candidate": { relation: [{ id: "cand-admin" }] },
           },
@@ -159,7 +161,6 @@ test("a revoked admin access code cannot expose or request admin data", async ()
     const env = {
       SESSION_SECRET: "test-secret",
       NOTION_TOKEN: "test-notion",
-      ADMIN_ACCESS_CODE: "SCOUT-TEST-ADMIN",
     };
     const token = await issueToken(env, {
       purpose: "session",
@@ -179,7 +180,7 @@ test("a revoked admin access code cannot expose or request admin data", async ()
   }
 });
 
-test("a session without admin configuration receives an explicit false admin flag", async () => {
+test("a candidate with no Admin-ticked code receives an explicit false admin flag", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     const path = new URL(url).pathname;
@@ -189,6 +190,9 @@ test("a session without admin configuration receives an explicit false admin fla
         name: "Regular Member",
         address: "regular@example.com",
       }));
+    }
+    if (path.includes("/databases/111ed911-f8ea-4e69-b6a5-c8c6f7479058/query")) {
+      return Response.json({ results: [], has_more: false });
     }
     if (path.includes("/databases/236b97b7-af8b-4c3d-8d67-f57fdc6386c6/query")) {
       return Response.json({ results: [], has_more: false });
@@ -238,6 +242,7 @@ test("admin stats returns aggregate recommendation data for the linked admin acc
           id: "code-admin",
           properties: {
             Code: title("SCOUT-TEST-ADMIN"),
+            Admin: checkbox(true),
             "Linked candidate": { relation: [{ id: "cand-admin" }] },
           },
         }],
@@ -258,7 +263,6 @@ test("admin stats returns aggregate recommendation data for the linked admin acc
     const env = {
       SESSION_SECRET: "test-secret",
       NOTION_TOKEN: "test-notion",
-      ADMIN_ACCESS_CODE: "SCOUT-TEST-ADMIN",
     };
     const token = await issueToken(env, {
       purpose: "session",
