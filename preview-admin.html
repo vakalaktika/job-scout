@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png" />
+    <title>Job Scout — Admin preview</title>
+    <script>
+      (function seedAdminPreview() {
+        const SESSION_KEY = "job-scout-session-v1";
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        localStorage.setItem(
+          SESSION_KEY,
+          JSON.stringify({ token: "preview-token", expiresAt }),
+        );
+
+        // On localhost the bundle rewrites the API base to /api/job-scout, so
+        // match by "has an action in the JSON body" rather than by hostname.
+        const isWorkerCall = (url, body) => {
+          if (/job-scout-intake\.vakalaktika\.workers\.dev/.test(url)) return true;
+          if (/\/api\/job-scout(?:$|[/?])/.test(url)) return true;
+          try { return !!JSON.parse(body || "").action; } catch { return false; }
+        };
+
+        const member = {
+          id: "preview-admin",
+          name: "Ed (preview)",
+          email: "ed@uxed.me",
+          status: "Active",
+          target_roles: "Product designer",
+          regions: "San Francisco, CA, US",
+          region_city: "San Francisco",
+          region_state: "CA",
+          region_country: "US",
+          min_salary: "180000",
+          seniority: "Senior",
+          remote: "Yes",
+          work_mode: "Remote",
+          work_modes: ["Remote", "Hybrid"],
+          frequency: "Weekly",
+          notes: "",
+          steer_away_terms: "",
+          steer_away_mode: "rank",
+          resume_suggestions: [],
+          match_context: "",
+          first_scout_status: "complete",
+          first_scout_requested_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
+          first_scout_completed_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
+          is_admin: true,
+        };
+
+        const sessionResponse = {
+          ok: true,
+          member,
+          jobs: [],
+          hidden_count: 0,
+          last_run_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
+          first_scout: {
+            status: "complete",
+            completed_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
+            can_retry: false,
+          },
+          session_token: "preview-token",
+          session_expires_at: expiresAt,
+        };
+
+        const users = [
+          { id: "u1", name: "Aisha Rahman",   email: "aisha@example.com",   status: "Active",  frequency: "Weekly",  recommendations: 42, awaiting_review: 6, saved: 12, passed: 20, applications: 4, latest_recommendation_at: new Date(Date.now() - 1 * 86400e3).toISOString() },
+          { id: "u2", name: "Ben Kimura",     email: "ben@example.com",     status: "Active",  frequency: "Daily",   recommendations: 38, awaiting_review: 3, saved: 9,  passed: 22, applications: 4, latest_recommendation_at: new Date(Date.now() - 2 * 86400e3).toISOString() },
+          { id: "u3", name: "Carla Vega",     email: "carla@example.com",   status: "Active",  frequency: "Weekly",  recommendations: 27, awaiting_review: 1, saved: 6,  passed: 15, applications: 5, latest_recommendation_at: new Date(Date.now() - 3 * 86400e3).toISOString() },
+          { id: "u4", name: "Diego Serrano",  email: "diego@example.com",   status: "Paused",  frequency: "Weekly",  recommendations: 18, awaiting_review: 0, saved: 4,  passed: 10, applications: 4, latest_recommendation_at: new Date(Date.now() - 9 * 86400e3).toISOString() },
+          { id: "u5", name: "Ed (you)",       email: "ed@uxed.me",          status: "Active",  frequency: "Weekly",  recommendations: 14, awaiting_review: 2, saved: 5,  passed: 6,  applications: 1, latest_recommendation_at: new Date(Date.now() - 4 * 86400e3).toISOString() },
+          { id: "u6", name: "Fatima Osei",    email: "fatima@example.com",  status: "Active",  frequency: "Weekly",  recommendations: 11, awaiting_review: 4, saved: 3,  passed: 4,  applications: 0, latest_recommendation_at: new Date(Date.now() - 5 * 86400e3).toISOString() },
+          { id: "u7", name: "Gregor Ilic",    email: "gregor@example.com",  status: "Revoked", frequency: "Not set", recommendations: 0,  awaiting_review: 0, saved: 0,  passed: 0,  applications: 0, latest_recommendation_at: "" },
+        ];
+
+        const adminStatsResponse = {
+          ok: true,
+          stats: {
+            generated_at: new Date().toISOString(),
+            summary: {
+              users: users.length,
+              recommendations: users.reduce((t, u) => t + u.recommendations, 0),
+              awaiting_review: users.reduce((t, u) => t + u.awaiting_review, 0),
+              applications: users.reduce((t, u) => t + u.applications, 0),
+            },
+            users,
+          },
+        };
+
+        const scoutStatusResponse = {
+          ok: true,
+          first_scout: sessionResponse.first_scout,
+        };
+
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = async (input, init) => {
+          try {
+            const url = typeof input === "string" ? input : input?.url || "";
+            const body = init && init.body ? String(init.body) : "";
+            if (!isWorkerCall(url, body)) return originalFetch(input, init);
+            let action = "";
+            try { action = JSON.parse(body).action || ""; } catch {}
+            const respond = (data) =>
+              new Response(JSON.stringify(data), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            if (action === "session") return respond(sessionResponse);
+            if (action === "admin_stats") return respond(adminStatsResponse);
+            if (action === "scout_status") return respond(scoutStatusResponse);
+            console.warn("[preview] unmocked action:", action, body);
+            return respond({ ok: false, error: "not_mocked_in_preview" });
+          } catch (err) {
+            console.error("[preview] fetch stub failed", err);
+            return originalFetch(input, init);
+          }
+        };
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index-BdD4MZod.js?v=admin-stats-menu"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-uR5-NbPW.css?v=admin-stats-menu">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
