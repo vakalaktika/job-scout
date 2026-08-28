@@ -113,7 +113,7 @@ test("admin stats rejects a valid session that is not linked to the admin access
       purpose: "session",
       member_id: "cand-regular",
       email: "regular@example.com",
-    });
+    }, 3600);
     const response = await worker.fetch(new Request("https://worker.example", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -122,6 +122,97 @@ test("admin stats rejects a valid session that is not linked to the admin access
 
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { ok: false, error: "admin_forbidden" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a revoked admin access code cannot expose or request admin data", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/pages/cand-admin")) {
+      return Response.json(candidatePage({
+        id: "cand-admin",
+        name: "Former Admin",
+        address: "former-admin@example.com",
+      }));
+    }
+    if (path.includes("/databases/111ed911-f8ea-4e69-b6a5-c8c6f7479058/query")) {
+      return Response.json({
+        results: [{
+          id: "code-admin",
+          properties: {
+            Code: title("SCOUT-TEST-ADMIN"),
+            Status: select("Revoked"),
+            "Linked candidate": { relation: [{ id: "cand-admin" }] },
+          },
+        }],
+        has_more: false,
+      });
+    }
+    throw new Error(`Unexpected Notion request: ${url}`);
+  };
+
+  try {
+    const { issueToken } = await import("./worker.mjs");
+    const env = {
+      SESSION_SECRET: "test-secret",
+      NOTION_TOKEN: "test-notion",
+      ADMIN_ACCESS_CODE: "SCOUT-TEST-ADMIN",
+    };
+    const token = await issueToken(env, {
+      purpose: "session",
+      member_id: "cand-admin",
+      email: "former-admin@example.com",
+    }, 3600);
+    const response = await worker.fetch(new Request("https://worker.example", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "admin_stats", session_token: token }),
+    }), env);
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { ok: false, error: "admin_forbidden" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a session without admin configuration receives an explicit false admin flag", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith("/pages/cand-regular")) {
+      return Response.json(candidatePage({
+        id: "cand-regular",
+        name: "Regular Member",
+        address: "regular@example.com",
+      }));
+    }
+    if (path.includes("/databases/236b97b7-af8b-4c3d-8d67-f57fdc6386c6/query")) {
+      return Response.json({ results: [], has_more: false });
+    }
+    throw new Error(`Unexpected Notion request: ${url}`);
+  };
+
+  try {
+    const { issueToken } = await import("./worker.mjs");
+    const env = { SESSION_SECRET: "test-secret", NOTION_TOKEN: "test-notion" };
+    const token = await issueToken(env, {
+      purpose: "session",
+      member_id: "cand-regular",
+      email: "regular@example.com",
+    }, 3600);
+    const response = await worker.fetch(new Request("https://worker.example", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "session", session_token: token }),
+    }), env);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.member.is_admin, false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -173,7 +264,7 @@ test("admin stats returns aggregate recommendation data for the linked admin acc
       purpose: "session",
       member_id: "cand-admin",
       email: "admin@example.com",
-    });
+    }, 3600);
     const response = await worker.fetch(new Request("https://worker.example", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -196,14 +287,18 @@ test("the shipped dashboard has a protected Admin tab and an avatar account menu
   const stylesheet = await readFile(new URL("./assets/index-uR5-NbPW.css", import.meta.url), "utf8");
 
   assert.match(bundle, /action:"admin_stats",session_token:n/);
-  assert.match(bundle, /is_admin\?\[\{label:"Admin"/);
-  assert.match(bundle, /aria-label:"Open account menu"/);
-  assert.match(bundle, /aria-haspopup:"menu"/);
+  assert.match(bundle, /__jsIsAdmin\?\[\{label:"Admin"/);
+  assert.match(bundle, /"aria-label":"Open account menu"/);
+  assert.match(bundle, /"aria-haspopup":"menu"/);
   assert.match(bundle, /role:"menu"/);
-  assert.match(bundle, /role:"menuitem"[^}]+children:\[.*Settings/);
-  assert.match(bundle, /role:"menuitem"[^}]+Log out/);
+  assert.match(bundle, /role:"menuitem".{0,500}"Settings"/);
+  assert.match(bundle, /role:"menuitem".{0,500}"Log out"/);
   assert.doesNotMatch(bundle, /\{label:"Settings",icon:LL\}/);
   assert.match(stylesheet, /\.account-menu\{/);
   assert.match(stylesheet, /\.admin-stat-grid\{/);
   assert.match(stylesheet, /@media\(prefers-reduced-motion:reduce\)/);
+  assert.equal(
+    stylesheet.match(/Account menu and admin recommendation dashboard/g)?.length,
+    1,
+  );
 });

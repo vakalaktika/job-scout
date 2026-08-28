@@ -74,7 +74,7 @@ test("the authorized account can inspect per-user recommendation stats", async (
   await page.getByRole("button", { name: /^Admin$/ }).click();
   await expect(page.getByRole("heading", { name: "Recommendation overview" })).toBeVisible();
   await expect(page.getByText("14", { exact: true })).toBeVisible();
-  await expect(page.getByRole("row", { name: /Jordan Lee/ })).toContainText(["7", "3", "2", "2", "1"]);
+  await expect(page.getByRole("row", { name: /Jordan Lee/ })).toContainText(/7\s*3\s*2\s*2\s*1/);
 
   const state = await workerState(request);
   expect(state.requests.filter(({ action }) => action === "admin_stats")).toHaveLength(1);
