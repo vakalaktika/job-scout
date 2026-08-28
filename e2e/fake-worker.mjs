@@ -84,6 +84,7 @@ const baseJob = (index) => ({
 const initialState = () => ({
   member: baseMember(),
   jobs: [baseJob(1), baseJob(2)],
+  adminStats: null,
   firstScout: { status: "unavailable", requested_at: "", completed_at: "", can_retry: false },
   magic: { nonce: "nonce-1", spent: false },
   // Per-action artificial latency, so a test can make one response overtake
@@ -166,6 +167,11 @@ async function handleApi(payload) {
 
   if (action === "scout_status") {
     return [200, { ok: true, first_scout: state.firstScout }];
+  }
+
+  if (action === "admin_stats") {
+    if (!state.member?.is_admin) return [403, { ok: false, error: "admin_forbidden" }];
+    return [200, { ok: true, stats: state.adminStats }];
   }
 
   if (action === "run_scout_once") {

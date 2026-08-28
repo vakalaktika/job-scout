@@ -35,7 +35,8 @@ export const openDashboard = async (page) => {
 };
 
 export const openEditor = async (page) => {
-  await page.getByRole("button", { name: /^Settings$/ }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await page.getByRole("button", { name: /Edit preferences|Review preferences/ }).first().click();
   await expect(page.getByRole("heading", { name: "Edit your preferences" })).toBeVisible();
 };
