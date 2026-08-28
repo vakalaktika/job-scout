@@ -74,13 +74,14 @@ test("the job list is fully named and reachable by thumb", async ({ page }) => {
 });
 
 // The exact regression: the labels are hidden from view, not from the reader.
-test("the collapsed primary navigation still says which view each icon opens", async ({ page }) => {
+test("the collapsed primary navigation and account menu keep every destination named", async ({ page }) => {
   await openDashboard(page);
 
-  for (const label of ["For you", "Settings"]) {
-    await expect(page.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
-  }
+  await expect(page.getByRole("button", { name: /^For you/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Saved/ })).toBeVisible();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Log out" })).toBeVisible();
   // The label is present but not painted, which is the whole point.
   const painted = await page.locator(".nav-link span").first().evaluate((el) => {
     const style = getComputedStyle(el);
@@ -94,8 +95,9 @@ test("the navigation says which view you are actually in", async ({ page }) => {
   await openDashboard(page);
 
   await expect(page.getByRole("button", { name: /^For you/ })).toHaveAttribute("aria-current", "page");
-  await page.getByRole("button", { name: /^Settings/ }).click();
-  await expect(page.getByRole("button", { name: /^Settings/ })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { name: /Keep your scout useful/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^For you/ })).not.toHaveAttribute("aria-current", "page");
 });
 
@@ -116,7 +118,8 @@ test("an expanded job card keeps every control named and thumb-sized", async ({ 
 
 test("the settings view is fully named and reachable by thumb", async ({ page }) => {
   await openDashboard(page);
-  await page.getByRole("button", { name: /^Settings/ }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: /Keep your scout useful/ })).toBeVisible();
 
   await expectAccessible(page);
@@ -124,7 +127,8 @@ test("the settings view is fully named and reachable by thumb", async ({ page })
 
 test("every preference tab is fully named and reachable by thumb", async ({ page }) => {
   await openDashboard(page);
-  await page.getByRole("button", { name: /^Settings/ }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await page.getByRole("button", { name: /Edit preferences|Review preferences/ }).first().click();
   await expect(page.getByRole("heading", { name: "Edit your preferences" })).toBeVisible();
 
@@ -138,7 +142,8 @@ test("every preference tab is fully named and reachable by thumb", async ({ page
 // A slider announced as "17" is a number with nothing to say what it counts.
 test("the posting-freshness slider says what it is and what its value means", async ({ page }) => {
   await openDashboard(page);
-  await page.getByRole("button", { name: /^Settings/ }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await page.getByRole("button", { name: /Edit preferences|Review preferences/ }).first().click();
   await page.getByRole("tab", { name: "Location & pay" }).click();
 

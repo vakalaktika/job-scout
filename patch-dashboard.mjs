@@ -307,6 +307,199 @@ patch(
 );
 
 // ---------------------------------------------------------------------------
+// Admin recommendation analytics and the avatar account menu.
+//
+// The session response supplies an authorization-derived is_admin flag only for
+// navigation. The admin_stats Worker action repeats the authorization check, so
+// changing this public bundle can never grant access to another member.
+// ---------------------------------------------------------------------------
+
+patch(
+  "add account-menu and admin-dashboard state",
+  'function lP({profile:l,memberState:e,inviteCode:t,sessionToken:n,shouldReduceMotion:a,' +
+    'onEdit:s,onLogout:o,onDelivery:__jsSyncDelivery}){var B;const[c,h]=W.useState("For you"),',
+  'function lP({profile:l,memberState:e,inviteCode:t,sessionToken:n,shouldReduceMotion:a,' +
+    'onEdit:s,onLogout:o,onDelivery:__jsSyncDelivery}){var B;const' +
+    '[__jsAccountOpen,__jsSetAccountOpen]=W.useState(!1),' +
+    '__jsAccountRef=W.useRef(null),__jsAccountButton=W.useRef(null),__jsAccountMenu=W.useRef(null),' +
+    '[__jsAdminStats,__jsSetAdminStats]=W.useState(null),' +
+    '[__jsAdminBusy,__jsSetAdminBusy]=W.useState(!1),' +
+    '[__jsAdminError,__jsSetAdminError]=W.useState(""),' +
+    '__jsIsAdmin=!!(e&&e.member&&e.member.is_admin),' +
+    '[c,h]=W.useState("For you"),',
+);
+
+const adminLoader =
+  '__jsAdminDate=__jsV=>{const __jsD=new Date(String(__jsV||""));' +
+  'return Number.isNaN(__jsD.getTime())?"No recommendations yet":' +
+  '__jsD.toLocaleDateString(void 0,{month:"short",day:"numeric",year:"numeric"})},' +
+  '__jsCloseAccount=(__jsFocus=!1)=>{__jsSetAccountOpen(!1);' +
+  'if(__jsFocus)window.requestAnimationFrame(()=>__jsAccountButton.current&&__jsAccountButton.current.focus())},' +
+  '__jsOpenAccount=()=>{__jsSetAccountOpen(!0);window.requestAnimationFrame(()=>{' +
+  'const __jsFirst=__jsAccountMenu.current&&__jsAccountMenu.current.querySelector("[role=menuitem]");' +
+  'if(__jsFirst)__jsFirst.focus()})},' +
+  '__jsToggleAccount=()=>__jsAccountOpen?__jsCloseAccount():__jsOpenAccount(),' +
+  '__jsAccountKey=__jsE=>{const __jsItems=[...__jsE.currentTarget.querySelectorAll("[role=menuitem]")],' +
+  '__jsIndex=__jsItems.indexOf(document.activeElement);' +
+  'if(__jsE.key==="Escape"){__jsE.preventDefault(),__jsCloseAccount(!0);return}' +
+  'if(__jsE.key==="Tab"){__jsCloseAccount();return}' +
+  'let __jsNext=null;if(__jsE.key==="ArrowDown")__jsNext=(__jsIndex+1)%__jsItems.length;' +
+  'else if(__jsE.key==="ArrowUp")__jsNext=(__jsIndex-1+__jsItems.length)%__jsItems.length;' +
+  'else if(__jsE.key==="Home")__jsNext=0;else if(__jsE.key==="End")__jsNext=__jsItems.length-1;' +
+  'if(__jsNext!==null){__jsE.preventDefault();__jsItems[__jsNext]&&__jsItems[__jsNext].focus()}},' +
+  '__jsLoadAdmin=async()=>{if(__jsAdminBusy||!__jsIsAdmin)return;' +
+  '__jsSetAdminBusy(!0),__jsSetAdminError("");try{' +
+  'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"admin_stats",session_token:n})}),__jsD=await __jsR.json();' +
+  'if(!__jsR.ok||!__jsD.ok||!__jsD.stats)throw new Error(__jsD.error||"admin_stats_failed");' +
+  '__jsSetAdminStats(__jsD.stats)}catch(__jsE){console.error(__jsE),' +
+  '__jsSetAdminError("We couldn’t load recommendation stats. Try again in a moment.")}' +
+  'finally{__jsSetAdminBusy(!1)}},';
+
+patch(
+  "load protected admin recommendation stats",
+  '}),te=[{label:"For you",icon:BL},{label:"Saved",icon:a3,count:j.length},' +
+    '{label:"Settings",icon:LL}];',
+  `}),${adminLoader}te=[{label:"For you",icon:BL},{label:"Saved",icon:a3,count:j.length},` +
+    '...(__jsIsAdmin?[{label:"Admin",icon:m2}]:[])];',
+);
+
+const dashboardEffectsAnchor =
+  'te=[{label:"For you",icon:BL},{label:"Saved",icon:a3,count:j.length},' +
+  '...(__jsIsAdmin?[{label:"Admin",icon:m2}]:[])];' +
+  'W.useEffect(()=>{if(!n||!["queued","running"]';
+
+const dashboardEffects =
+  'te=[{label:"For you",icon:BL},{label:"Saved",icon:a3,count:j.length},' +
+  '...(__jsIsAdmin?[{label:"Admin",icon:m2}]:[])];' +
+  'W.useEffect(()=>{if(c!=="Admin"||!__jsIsAdmin||__jsAdminStats||__jsAdminBusy)return;' +
+  '__jsLoadAdmin()},[c,__jsIsAdmin,__jsAdminStats]);' +
+  'W.useEffect(()=>{if(!__jsAccountOpen)return;const __jsOutside=__jsE=>{' +
+  'if(__jsAccountRef.current&&!__jsAccountRef.current.contains(__jsE.target))__jsCloseAccount()};' +
+  'document.addEventListener("pointerdown",__jsOutside);' +
+  'return()=>document.removeEventListener("pointerdown",__jsOutside)},[__jsAccountOpen]);' +
+  'W.useEffect(()=>{if(!n||!["queued","running"]';
+
+patch(
+  "activate admin loading and close the account menu outside",
+  dashboardEffectsAnchor,
+  dashboardEffects,
+);
+
+const accountActionsOriginal =
+  'Y.jsxs("div",{className:"top-actions",children:[' +
+  'Y.jsxs("span",{className:"link-status",children:[Y.jsx(Jd,{size:16,weight:"fill"})," Invite confirmed"]}),' +
+  'Y.jsx("span",{className:"avatar avatar-user",children:Q})]})';
+
+const accountActions =
+  'Y.jsxs("div",{className:"top-actions",children:[' +
+  'Y.jsxs("span",{className:"link-status",children:[Y.jsx(Jd,{size:16,weight:"fill"})," Invite confirmed"]}),' +
+  'Y.jsxs("div",{className:"account-menu-wrap",ref:__jsAccountRef,children:[' +
+  'Y.jsx(Ut.button,{ref:__jsAccountButton,type:"button",className:"avatar avatar-user account-menu-trigger",' +
+  '"aria-label":"Open account menu","aria-haspopup":"menu","aria-expanded":__jsAccountOpen,' +
+  'onClick:__jsToggleAccount,onKeyDown:__jsE=>{' +
+  'if(__jsE.key==="ArrowDown"){__jsE.preventDefault(),__jsOpenAccount()}' +
+  'else if(__jsE.key==="Escape"&&__jsAccountOpen){__jsE.preventDefault(),__jsCloseAccount(!0)}},' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},children:Q}),' +
+  'Y.jsx(Bc,{mode:"wait",initial:!1,children:__jsAccountOpen?' +
+  'Y.jsxs(Ut.div,{key:"account-menu",ref:__jsAccountMenu,className:"account-menu",role:"menu",' +
+  '"aria-label":"Account",initial:a?{opacity:0}:{opacity:0,y:-6,scale:.98},' +
+  'animate:{opacity:1,y:0,scale:1},exit:a?{opacity:0}:{opacity:0,y:-4,scale:.985},' +
+  'transition:{type:"spring",stiffness:180,damping:24},onKeyDown:__jsAccountKey,children:[' +
+  'Y.jsxs(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,' +
+  'onClick:()=>{h("Settings"),__jsCloseAccount()},whileTap:a?void 0:{scale:.97},' +
+  'transition:{type:"spring",stiffness:400,damping:28},children:[Y.jsx(LL,{size:17}),"Settings"]}),' +
+  'Y.jsxs(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,className:"account-menu-logout",' +
+  'onClick:()=>{__jsCloseAccount(),o()},whileTap:a?void 0:{scale:.97},' +
+  'transition:{type:"spring",stiffness:400,damping:28},children:[Y.jsx(zL,{size:17}),"Log out"]})]' +
+  '},"account-menu"):null})]})]})';
+
+patch(
+  "move settings and logout into the avatar menu",
+  accountActionsOriginal,
+  accountActions,
+);
+
+const adminView =
+  'c==="Admin"&&__jsIsAdmin?Y.jsxs(Ut.div,{className:"view-stack admin-view",' +
+  'initial:a?!1:{opacity:0,y:4},animate:{opacity:1,y:0},exit:a?void 0:{opacity:0,y:-3},' +
+  'transition:{type:"spring",stiffness:180,damping:24},children:[' +
+  'Y.jsxs("div",{className:"page-heading admin-heading",children:[' +
+  'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:"Admin"}),' +
+  'Y.jsx("h1",{children:"Recommendation overview"}),' +
+  'Y.jsx("p",{className:"muted",children:"All-time delivery and response stats for every Job Scout member."})]}),' +
+  'Y.jsx("span",{className:"admin-scope",children:"All time"})]}),' +
+  '__jsAdminStats?Y.jsxs(Y.Fragment,{children:[' +
+  'Y.jsxs("div",{className:"admin-stat-grid","aria-label":"Recommendation totals",children:[' +
+  'Y.jsxs(Ut.div,{className:"admin-stat-card",initial:a?!1:{opacity:0,y:6},animate:{opacity:1,y:0},' +
+  'transition:{type:"spring",stiffness:180,damping:24},children:[Y.jsx("span",{children:"Users"}),' +
+  'Y.jsx("strong",{children:__jsAdminStats.summary.users}),Y.jsx("small",{children:"profiles tracked"})]}),' +
+  'Y.jsxs(Ut.div,{className:"admin-stat-card",initial:a?!1:{opacity:0,y:6},animate:{opacity:1,y:0},' +
+  'transition:{type:"spring",stiffness:180,damping:24},children:[Y.jsx("span",{children:"Recommendations"}),' +
+  'Y.jsx("strong",{children:__jsAdminStats.summary.recommendations}),Y.jsx("small",{children:"jobs delivered"})]}),' +
+  'Y.jsxs(Ut.div,{className:"admin-stat-card",initial:a?!1:{opacity:0,y:6},animate:{opacity:1,y:0},' +
+  'transition:{type:"spring",stiffness:180,damping:24},children:[Y.jsx("span",{children:"Awaiting review"}),' +
+  'Y.jsx("strong",{children:__jsAdminStats.summary.awaiting_review}),Y.jsx("small",{children:"still untouched"})]}),' +
+  'Y.jsxs(Ut.div,{className:"admin-stat-card",initial:a?!1:{opacity:0,y:6},animate:{opacity:1,y:0},' +
+  'transition:{type:"spring",stiffness:180,damping:24},children:[Y.jsx("span",{children:"Applications"}),' +
+  'Y.jsx("strong",{children:__jsAdminStats.summary.applications}),Y.jsx("small",{children:"tracked outcomes"})]})]}),' +
+  'Y.jsxs("section",{className:"admin-table-card",children:[' +
+  'Y.jsxs("div",{className:"admin-table-heading",children:[' +
+  'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:"By member"}),' +
+  'Y.jsx("h2",{children:"Recommendation activity"})]}),' +
+  'Y.jsx("p",{children:`Updated ${__jsAdminDate(__jsAdminStats.generated_at)}`})]}),' +
+  '__jsAdminStats.users.length?Y.jsx("div",{className:"admin-table-scroll",children:' +
+  'Y.jsxs("table",{children:[Y.jsx("thead",{children:Y.jsxs("tr",{children:[' +
+  'Y.jsx("th",{scope:"col",children:"Member"}),Y.jsx("th",{scope:"col",children:"Total"}),' +
+  'Y.jsx("th",{scope:"col",children:"To review"}),Y.jsx("th",{scope:"col",children:"Saved"}),' +
+  'Y.jsx("th",{scope:"col",children:"Passed"}),Y.jsx("th",{scope:"col",children:"Applied"}),' +
+  'Y.jsx("th",{scope:"col",children:"Latest"})]})}),' +
+  'Y.jsx("tbody",{children:__jsAdminStats.users.map(__jsU=>Y.jsxs("tr",{children:[' +
+  'Y.jsx("th",{scope:"row",children:Y.jsxs("div",{className:"admin-member",children:[' +
+  'Y.jsx("strong",{children:__jsU.name}),Y.jsx("span",{children:__jsU.email}),' +
+  'Y.jsx("small",{className:`admin-status ${String(__jsU.status).toLowerCase()}`,children:__jsU.status})]})}),' +
+  'Y.jsx("td",{children:__jsU.recommendations}),Y.jsx("td",{children:__jsU.awaiting_review}),' +
+  'Y.jsx("td",{children:__jsU.saved}),Y.jsx("td",{children:__jsU.passed}),' +
+  'Y.jsx("td",{children:__jsU.applications}),' +
+  'Y.jsx("td",{className:"admin-latest",children:__jsAdminDate(__jsU.latest_recommendation_at)})]' +
+  '},__jsU.id||__jsU.email))})]})}):' +
+  'Y.jsx("p",{className:"admin-empty",children:"No member profiles are available yet."})]})' +
+  ']}) : __jsAdminError?' +
+  'Y.jsxs(Ut.section,{className:"admin-state is-error",role:"alert",initial:a?!1:{opacity:0,y:4},' +
+  'animate:{opacity:1,y:0},transition:{type:"spring",stiffness:180,damping:24},children:[' +
+  'Y.jsxs("div",{children:[Y.jsx("strong",{children:"Stats are temporarily unavailable."}),' +
+  'Y.jsx("p",{children:__jsAdminError})]}),' +
+  'Y.jsx(Ut.button,{type:"button",onClick:__jsLoadAdmin,disabled:__jsAdminBusy,' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},children:"Try again"})]}):' +
+  'Y.jsxs(Ut.section,{className:"admin-state",role:"status","aria-live":"polite",' +
+  'initial:a?!1:{opacity:0,y:4},animate:{opacity:1,y:0},' +
+  'transition:{type:"spring",stiffness:180,damping:24},children:[' +
+  'Y.jsx("span",{className:"admin-loading-dot"}),Y.jsxs("div",{children:[' +
+  'Y.jsx("strong",{children:"Loading recommendation stats"}),' +
+  'Y.jsx("p",{children:"Counting the latest member and job records."})]})]})' +
+  ']},"admin"):null';
+
+patch(
+  "render the protected recommendation analytics view",
+  ']},"saved"):null,c==="Settings"?',
+  `]},"saved"):null,${adminView},c==="Settings"?`,
+);
+
+const settingsLogoutCard =
+  'Y.jsxs("section",{className:"logout-card",children:[' +
+  'Y.jsxs("div",{children:[Y.jsx("p",{className:"eyebrow",children:"Private access"}),' +
+  'Y.jsx("h2",{children:"Signed in on this device"}),' +
+  'Y.jsx("p",{children:"You’ll stay signed in for 30 days. Log out now if this is a shared device."})]}),' +
+  'Y.jsxs(Ut.button,{type:"button",onClick:o,whileTap:{scale:.97},transition:La,' +
+  'children:[Y.jsx(zL,{size:17})," Log out"]})]})';
+
+patch(
+  "remove the old settings logout card",
+  settingsLogoutCard,
+  'Y.jsx("span",{className:"settings-account-moved","aria-hidden":!0})',
+);
+
+// ---------------------------------------------------------------------------
 // One badge row under every title: freshness, workplace, and link status.
 //
 // Four things converge here, so this replacement is the single owner of the
@@ -695,7 +888,13 @@ const briefStateDeclaration =
 const previousBriefStateDeclaration =
   '[__jsBriefStates,__jsSetBriefStates]=W.useState({}),';
 const dashboardState =
-  'const[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),' +
+  'const[__jsAccountOpen,__jsSetAccountOpen]=W.useState(!1),' +
+  '__jsAccountRef=W.useRef(null),__jsAccountButton=W.useRef(null),__jsAccountMenu=W.useRef(null),' +
+  '[__jsAdminStats,__jsSetAdminStats]=W.useState(null),' +
+  '[__jsAdminBusy,__jsSetAdminBusy]=W.useState(!1),' +
+  '[__jsAdminError,__jsSetAdminError]=W.useState(""),' +
+  '__jsIsAdmin=!!(e&&e.member&&e.member.is_admin),' +
+  '[c,h]=W.useState("For you"),[__jsFilter,__jsSetFilter]=W.useState("New"),' +
   '[__jsOther,__jsSetOther]=W.useState(!1),' +
   '[__jsRestored,__jsSetRestored]=W.useState([]),' +
   '[__jsContext,__jsSetContext]=W.useState(e&&e.member&&e.member.match_context||""),' +
@@ -1330,7 +1529,126 @@ patch(
   "css",
 );
 
+const adminAndAccountStyles =
+  "\n\n/* --- Account menu and admin recommendation dashboard --- */\n" +
+  ".account-menu-wrap{position:relative;display:grid;place-items:center}" +
+  ".account-menu-trigger{width:44px;height:44px;cursor:pointer;box-shadow:0 0 0 1px #174b3d12}" +
+  ".account-menu-trigger[aria-expanded=true]{box-shadow:0 0 0 3px var(--green-pale)}" +
+  ".account-menu{position:absolute;top:52px;right:0;z-index:30;display:grid;min-width:190px;" +
+  "overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--surface);" +
+  "padding:6px;box-shadow:0 18px 44px #211f1c24;transform-origin:top right}" +
+  ".account-menu button{display:flex;min-height:44px;align-items:center;gap:10px;width:100%;" +
+  "border:0;border-radius:8px;background:transparent;color:var(--ink);padding:10px 11px;" +
+  "font-size:13px;font-weight:600;text-align:left;cursor:pointer}" +
+  ".account-menu button:hover,.account-menu button:focus-visible{background:var(--green-pale);color:var(--green-deep)}" +
+  ".account-menu .account-menu-logout{margin-top:3px;border-top:1px solid var(--line);border-radius:0 0 8px 8px;color:#7e4639}" +
+  ".account-menu .account-menu-logout:hover,.account-menu .account-menu-logout:focus-visible{background:var(--clay-pale);color:#6c382e}" +
+  ".settings-account-moved{display:none}" +
+  ".admin-heading{align-items:center}" +
+  ".admin-scope{display:inline-flex;min-height:32px;align-items:center;border:1px solid var(--line);" +
+  "border-radius:999px;background:var(--surface);color:var(--ink-soft);padding:0 11px;font-size:11px;font-weight:700}" +
+  ".admin-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}" +
+  ".admin-stat-card{display:flex;min-width:0;flex-direction:column;border:1px solid var(--line);" +
+  "border-radius:12px;background:var(--surface);padding:17px;box-shadow:0 8px 24px #211f1c0a}" +
+  ".admin-stat-card span{color:var(--ink-soft);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}" +
+  ".admin-stat-card strong{margin:10px 0 5px;color:var(--ink);font:600 31px/1 Gelasio,Georgia,serif;letter-spacing:-.04em}" +
+  ".admin-stat-card small{overflow:hidden;color:var(--ink-faint);font-size:10px;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}" +
+  ".admin-table-card{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:var(--shadow)}" +
+  ".admin-table-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid var(--line)}" +
+  ".admin-table-heading h2{margin:5px 0 0;font:600 20px/1.2 Gelasio,Georgia,serif;letter-spacing:-.025em}" +
+  ".admin-table-heading>p{margin:0;color:var(--ink-faint);font-size:11px;font-weight:600}" +
+  ".admin-table-scroll{overflow-x:auto}" +
+  ".admin-table-card table{width:100%;min-width:700px;border-collapse:collapse;font-size:12px}" +
+  ".admin-table-card th,.admin-table-card td{padding:14px 11px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}" +
+  ".admin-table-card thead th{background:var(--paper-deep);color:var(--ink-faint);font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}" +
+  ".admin-table-card th:first-child,.admin-table-card td:first-child{text-align:left}" +
+  ".admin-table-card tbody tr:last-child th,.admin-table-card tbody tr:last-child td{border-bottom:0}" +
+  ".admin-table-card tbody tr:hover{background:#f8faf8}" +
+  ".admin-member{display:grid;justify-items:start;gap:3px;min-width:160px}" +
+  ".admin-member strong{font-size:12px}" +
+  ".admin-member span{max-width:180px;overflow:hidden;color:var(--ink-soft);font-size:10px;text-overflow:ellipsis;white-space:nowrap}" +
+  ".admin-status{display:inline-flex;border-radius:999px;background:var(--green-pale);color:var(--green-deep);padding:3px 6px;font-size:9px;font-weight:700}" +
+  ".admin-status.paused,.admin-status.revoked{background:var(--clay-pale);color:#7e4639}" +
+  ".admin-latest{min-width:116px;color:var(--ink-soft);font-size:10px}" +
+  ".admin-empty{margin:0;padding:28px;color:var(--ink-soft);font-size:13px;text-align:center}" +
+  ".admin-state{display:flex;min-height:170px;align-items:center;justify-content:center;gap:14px;" +
+  "border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:28px;color:var(--ink-soft)}" +
+  ".admin-state>div{display:grid;gap:5px}.admin-state strong{color:var(--ink);font:600 17px Gelasio,Georgia,serif}" +
+  ".admin-state p{margin:0;font-size:12px;line-height:1.5}" +
+  ".admin-loading-dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 0 6px var(--green-pale)}" +
+  ".admin-state.is-error{justify-content:space-between;border-color:#e0cfc8;background:var(--clay-pale)}" +
+  ".admin-state button{min-height:44px;flex:0 0 auto;border:1px solid #7e4639;border-radius:9px;background:var(--surface);" +
+  "color:#7e4639;padding:10px 14px;font-size:12px;font-weight:700}" +
+  "@media(max-width:780px){.account-menu{position:fixed;top:58px;right:12px;min-width:210px}" +
+  ".admin-heading{align-items:flex-start}.admin-scope{display:none}" +
+  ".admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}" +
+  ".admin-stat-card{padding:15px}.admin-table-heading{align-items:flex-start;flex-direction:column;padding:18px}" +
+  ".admin-state{align-items:flex-start;flex-direction:column}.admin-state.is-error{justify-content:flex-start}}" +
+  "@media(max-width:420px){.admin-stat-grid{gap:8px}.admin-stat-card strong{font-size:27px}" +
+  ".admin-table-card{margin-right:-2px;margin-left:-2px}}" +
+  "@media(prefers-reduced-motion:reduce){.account-menu,.account-menu-trigger,.admin-stat-card,.admin-state{" +
+  "transition:none!important;transform:none!important}}";
+
+const adminStyleMarker = "/* --- Account menu and admin recommendation dashboard --- */";
+const adminStyleTerminator =
+  "@media(prefers-reduced-motion:reduce){.account-menu,.account-menu-trigger,.admin-stat-card,.admin-state{" +
+  "transition:none!important;transform:none!important}}";
+
+function adminStyleBlocks(source) {
+  const blocks = [];
+  let cursor = 0;
+  while (true) {
+    const start = source.indexOf(adminStyleMarker, cursor);
+    if (start < 0) return blocks;
+    const terminator = source.indexOf(adminStyleTerminator, start);
+    if (terminator < 0) {
+      throw new Error("Found an unterminated account menu/admin dashboard CSS block.");
+    }
+    const end = terminator + adminStyleTerminator.length;
+    blocks.push({ start, end });
+    cursor = end;
+  }
+}
+
+// Replace stale or duplicated generated blocks as a unit. Older revisions did
+// not have a block-level migration guard, so simply seeing the current block
+// was not enough to prove that an earlier copy was absent.
+const currentAdminStyles = adminAndAccountStyles.trim();
+const existingAdminBlocks = adminStyleBlocks(sources.css);
+if (
+  existingAdminBlocks.length > 0 &&
+  (existingAdminBlocks.length !== 1 ||
+    sources.css.slice(existingAdminBlocks[0].start, existingAdminBlocks[0].end) !== currentAdminStyles)
+) {
+  for (const { start, end } of existingAdminBlocks.toReversed()) {
+    sources.css = sources.css.slice(0, start) + sources.css.slice(end);
+  }
+}
+
+patch(
+  "style the account menu and admin recommendation dashboard",
+  accessibilityFloor,
+  `${accessibilityFloor}${adminAndAccountStyles}`,
+  "css",
+);
+
+// A few later patches intentionally extend an earlier replacement. Their full
+// replacement string is no longer present after extension, so use a narrow,
+// behavior-specific marker to preserve idempotency without undoing the extension.
+const idempotencyMarkers = new Map([
+  [
+    "poll first-scout status and refresh matches once complete",
+    "__jsTimer=window.setInterval(__jsPoll,5000)",
+  ],
+  ["fix session-length copy in settings", "settings-account-moved"],
+]);
+
 for (const { name, from, to, target } of patches) {
+  const marker = idempotencyMarkers.get(name);
+  if (marker && sources[target].includes(marker)) {
+    skipped.push(name);
+    continue;
+  }
   if (sources[target].includes(to)) {
     skipped.push(name);
     continue;
@@ -1341,6 +1659,14 @@ for (const { name, from, to, target } of patches) {
   }
   sources[target] = sources[target].replace(anchor, to);
   applied.push(name);
+}
+
+const finalAdminBlocks = adminStyleBlocks(sources.css);
+if (
+  finalAdminBlocks.length !== 1 ||
+  sources.css.slice(finalAdminBlocks[0].start, finalAdminBlocks[0].end) !== currentAdminStyles
+) {
+  throw new Error("Dashboard CSS must contain exactly one current account menu/admin block.");
 }
 
 for (const [target, path] of Object.entries(targetPaths)) {

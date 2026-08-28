@@ -725,7 +725,12 @@ npx wrangler secret put SESSION_SECRET   # HMAC key for signing session tokens
 npx wrangler secret put OPENAI_API_KEY   # for job-brief enrichment
 npx wrangler secret put RESEND_API_KEY   # for sending magic-link sign-in emails
 npx wrangler secret put FIRST_SCOUT_ROUTINE_TOKEN # per-routine API trigger token
+npx wrangler secret put ADMIN_ACCESS_CODE # access code whose linked candidate owns the Admin tab
 ```
+
+`ADMIN_ACCESS_CODE` is resolved to its linked Notion candidate on every authorization
+check. The code is never returned to the browser or committed to the repository; if the
+secret is unset or cannot be resolved, admin access fails closed for everyone.
 
 Non-secret Worker vars (in `wrangler.jsonc`, overridable):
 

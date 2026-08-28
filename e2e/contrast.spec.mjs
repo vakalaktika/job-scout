@@ -86,7 +86,8 @@ test("every focusable control on the job list shows a ring when tabbed to", asyn
 
 test("control edges clear 3:1 while dividers stay quiet", async ({ page }) => {
   await openDashboard(page);
-  await page.getByRole("button", { name: /^Settings/ }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await page.getByRole("button", { name: /Edit preferences|Review preferences/ }).first().click();
   await page.getByRole("tab", { name: "Location & pay" }).click();
 
@@ -113,7 +114,8 @@ test("control edges clear 3:1 while dividers stay quiet", async ({ page }) => {
 // the one element on screen that must not be focused invisibly.
 test("a programmatically focused step heading shows that it was focused", async ({ page }) => {
   await openDashboard(page);
-  await page.getByRole("button", { name: /^Settings/ }).click();
+  await page.getByRole("button", { name: "Open account menu" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await page.getByRole("button", { name: /Edit preferences|Review preferences/ }).first().click();
   await page.getByRole("tab", { name: "Delivery" }).click();
 

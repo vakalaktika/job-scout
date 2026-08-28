@@ -295,6 +295,63 @@ function jobState(page) {
   };
 }
 
+const recommendationStatsJob = (page) => ({
+  ...jobState(page),
+  candidate_email: plain(page?.properties?.["Candidate email"]),
+});
+
+const normalizedEmail = (value) => String(value || "").trim().toLowerCase();
+
+export function buildAdminRecommendationStats(candidates, jobs, generatedAt = new Date().toISOString()) {
+  const jobsByCandidate = new Map();
+  for (const job of jobs || []) {
+    const email = normalizedEmail(job?.candidate_email);
+    if (!email) continue;
+    const existing = jobsByCandidate.get(email) || [];
+    jobsByCandidate.set(email, [...existing, job]);
+  }
+
+  const users = (candidates || [])
+    .map((candidate) => {
+      const recommendations = jobsByCandidate.get(normalizedEmail(candidate?.email)) || [];
+      const latest = recommendations.reduce((current, job) => {
+        const sentAt = String(job?.sent_at || "");
+        if (!Number.isFinite(Date.parse(sentAt))) return current;
+        return !current || Date.parse(sentAt) > Date.parse(current) ? sentAt : current;
+      }, "");
+      return {
+        id: String(candidate?.id || ""),
+        name: String(candidate?.name || "Unnamed member"),
+        email: String(candidate?.email || ""),
+        status: String(candidate?.status || "Unknown"),
+        frequency: String(candidate?.frequency || "Not set"),
+        recommendations: recommendations.length,
+        awaiting_review: recommendations.filter(
+          (job) => !job?.decision && !job?.application_status,
+        ).length,
+        saved: recommendations.filter((job) => job?.decision === "Interested").length,
+        passed: recommendations.filter((job) => job?.decision === "Not interested").length,
+        applications: recommendations.filter((job) => !!job?.application_status).length,
+        latest_recommendation_at: latest,
+      };
+    })
+    .sort(
+      (left, right) =>
+        right.recommendations - left.recommendations || left.name.localeCompare(right.name),
+    );
+
+  return {
+    generated_at: generatedAt,
+    summary: {
+      users: users.length,
+      recommendations: users.reduce((total, user) => total + user.recommendations, 0),
+      awaiting_review: users.reduce((total, user) => total + user.awaiting_review, 0),
+      applications: users.reduce((total, user) => total + user.applications, 0),
+    },
+    users,
+  };
+}
+
 export const clientJob = (job) => {
   const { _posting_text, brief_error, apply_url, ...result } = job;
   // The member's click should land where they actually apply. The Notion URL column
@@ -1454,6 +1511,51 @@ async function findCandidateByEmail(env, email) {
   return null;
 }
 
+async function queryDatabasePages(env, databaseId, options = {}) {
+  const pages = [];
+  let cursor;
+  do {
+    const body = { page_size: 100, ...options };
+    if (cursor) body.start_cursor = cursor;
+    const result = await notion(env, `databases/${databaseId}/query`, "POST", body);
+    pages.push(...(result.results || []));
+    cursor = result.has_more ? result.next_cursor : null;
+  } while (cursor);
+  return pages;
+}
+
+async function isAdminCandidate(env, candidate) {
+  if (!candidate?.id) return false;
+  const configuredAccessCode = String(env.ADMIN_ACCESS_CODE || "").trim().toUpperCase();
+  if (!configuredAccessCode) return false;
+  try {
+    const result = await notion(env, `databases/${CODES_DB}/query`, "POST", {
+      filter: { property: "Code", title: { equals: configuredAccessCode } },
+      page_size: 1,
+    });
+    const accessRow = result.results?.[0];
+    if (!accessRow || plain(accessRow.properties?.Status) === "Revoked") return false;
+    return (accessRow.properties?.["Linked candidate"]?.relation || [])
+      .some(({ id }) => id === candidate.id);
+  } catch (error) {
+    console.error("Unable to verify admin membership", String(error?.message || error));
+    return false;
+  }
+}
+
+async function loadAdminRecommendationStats(env) {
+  const [candidatePages, jobPages] = await Promise.all([
+    queryDatabasePages(env, CAND_DB),
+    queryDatabasePages(env, SENT_POSTINGS_DB, {
+      sorts: [{ property: "Date sent", direction: "descending" }],
+    }),
+  ]);
+  return buildAdminRecommendationStats(
+    candidatePages.map(memberState),
+    jobPages.map(recommendationStatsJob),
+  );
+}
+
 async function ensureMagicProperties(env) {
   await notion(env, `databases/${CAND_DB}`, "PATCH", {
     properties: { "Magic nonce": { rich_text: {} } },
@@ -1766,6 +1868,7 @@ const DEFAULT_POSTING_AGE_DAYS = 7;
 
 async function sessionResponse(env, candidate, extra = {}) {
   const member = memberState(candidate);
+  const isAdmin = await isAdminCandidate(env, candidate);
   // Number("") coerces to 0, so an explicit "Posted within: 0 days" is honoured
   // instead of being swallowed by a truthiness fallback back to seven.
   const storedAge = Number(member.notes.match(/Posted within:\s*(\d+)/i)?.[1]);
@@ -1790,7 +1893,7 @@ async function sessionResponse(env, candidate, extra = {}) {
   );
   return {
     ok: true,
-    member,
+    member: { ...member, is_admin: isAdmin },
     jobs: demoteClosedPostings(steered.jobs).map(clientJob),
     hidden_count: steered.hiddenCount + withheldApplyLinks,
     // When the scout last delivered, so the dashboard can say so instead of
@@ -1895,6 +1998,14 @@ export default {
         const candidate = await authenticatedCandidate(env, payload.session_token);
         if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
         return json(await sessionResponse(env, candidate));
+      }
+      if (payload.action === "admin_stats") {
+        const candidate = await authenticatedCandidate(env, payload.session_token);
+        if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
+        if (!(await isAdminCandidate(env, candidate))) {
+          return json({ ok: false, error: "admin_forbidden" }, 403);
+        }
+        return json({ ok: true, stats: await loadAdminRecommendationStats(env) });
       }
       if (payload.action === "scout_status") {
         const candidate = await authenticatedCandidate(env, payload.session_token);
