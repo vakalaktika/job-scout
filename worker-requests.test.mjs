@@ -10,6 +10,7 @@ import test from "node:test";
 import worker, { issueToken } from "./worker.mjs";
 
 const SENT_POSTINGS_DB = "236b97b7-af8b-4c3d-8d67-f57fdc6386c6";
+const CANDIDATES_DB = "87f58043-765a-4b49-ae7e-6903e48b6996";
 const CANDIDATE_ID = "cand-1";
 const env = { SESSION_SECRET: "test-secret", NOTION_TOKEN: "notion-test-token" };
 
@@ -20,6 +21,8 @@ const richText = (value) => ({
 
 const candidatePage = (overrides = {}) => ({
   id: CANDIDATE_ID,
+  archived: false,
+  parent: { type: "database_id", database_id: CANDIDATES_DB },
   properties: {
     Name: { type: "title", title: [{ plain_text: "Alex Morgan" }] },
     Email: { type: "email", email: "alex@example.com" },
