@@ -66,27 +66,46 @@
         };
 
         const users = [
-          { id: "u1", name: "Aisha Rahman",   email: "aisha@example.com",   status: "Active",  frequency: "Weekly",  recommendations: 42, awaiting_review: 6, saved: 12, passed: 20, applications: 4, latest_recommendation_at: new Date(Date.now() - 1 * 86400e3).toISOString() },
-          { id: "u2", name: "Ben Kimura",     email: "ben@example.com",     status: "Active",  frequency: "Daily",   recommendations: 38, awaiting_review: 3, saved: 9,  passed: 22, applications: 4, latest_recommendation_at: new Date(Date.now() - 2 * 86400e3).toISOString() },
-          { id: "u3", name: "Carla Vega",     email: "carla@example.com",   status: "Active",  frequency: "Weekly",  recommendations: 27, awaiting_review: 1, saved: 6,  passed: 15, applications: 5, latest_recommendation_at: new Date(Date.now() - 3 * 86400e3).toISOString() },
-          { id: "u4", name: "Diego Serrano",  email: "diego@example.com",   status: "Paused",  frequency: "Weekly",  recommendations: 18, awaiting_review: 0, saved: 4,  passed: 10, applications: 4, latest_recommendation_at: new Date(Date.now() - 9 * 86400e3).toISOString() },
-          { id: "u5", name: "Ed (you)",       email: "ed@uxed.me",          status: "Active",  frequency: "Weekly",  recommendations: 14, awaiting_review: 2, saved: 5,  passed: 6,  applications: 1, latest_recommendation_at: new Date(Date.now() - 4 * 86400e3).toISOString() },
-          { id: "u6", name: "Fatima Osei",    email: "fatima@example.com",  status: "Active",  frequency: "Weekly",  recommendations: 11, awaiting_review: 4, saved: 3,  passed: 4,  applications: 0, latest_recommendation_at: new Date(Date.now() - 5 * 86400e3).toISOString() },
-          { id: "u7", name: "Gregor Ilic",    email: "gregor@example.com",  status: "Revoked", frequency: "Not set", recommendations: 0,  awaiting_review: 0, saved: 0,  passed: 0,  applications: 0, latest_recommendation_at: "" },
+          { id: "u1", name: "Aisha Rahman",   email: "aisha@example.com",   status: "Active",  frequency: "Weekly",  access_code: "SCOUT-A1B2-C3D4", is_admin: false, recommendations: 42, awaiting_review: 6, saved: 12, passed: 20, applications: 4, latest_recommendation_at: new Date(Date.now() - 1 * 86400e3).toISOString() },
+          { id: "u2", name: "Ben Kimura",     email: "ben@example.com",     status: "Active",  frequency: "Daily",   access_code: "SCOUT-E5F6-G7H8", is_admin: false, recommendations: 38, awaiting_review: 3, saved: 9,  passed: 22, applications: 4, latest_recommendation_at: new Date(Date.now() - 2 * 86400e3).toISOString() },
+          { id: "u3", name: "Carla Vega",     email: "carla@example.com",   status: "Active",  frequency: "Weekly",  access_code: "SCOUT-J9K2-L3M4", is_admin: false, recommendations: 27, awaiting_review: 1, saved: 6,  passed: 15, applications: 5, latest_recommendation_at: new Date(Date.now() - 3 * 86400e3).toISOString() },
+          { id: "u4", name: "Diego Serrano",  email: "diego@example.com",   status: "Paused",  frequency: "Weekly",  access_code: "SCOUT-N5P6-Q7R8", is_admin: false, recommendations: 18, awaiting_review: 0, saved: 4,  passed: 10, applications: 4, latest_recommendation_at: new Date(Date.now() - 9 * 86400e3).toISOString() },
+          { id: "u5", name: "Ed (you)",       email: "ed@uxed.me",          status: "Active",  frequency: "Weekly",  access_code: "SCOUT-S9T2-U3V4", is_admin: true,  recommendations: 14, awaiting_review: 2, saved: 5,  passed: 6,  applications: 1, latest_recommendation_at: new Date(Date.now() - 4 * 86400e3).toISOString() },
+          { id: "u6", name: "Fatima Osei",    email: "fatima@example.com",  status: "Active",  frequency: "Weekly",  access_code: "SCOUT-W5X6-Y7Z8", is_admin: false, recommendations: 11, awaiting_review: 4, saved: 3,  passed: 4,  applications: 0, latest_recommendation_at: new Date(Date.now() - 5 * 86400e3).toISOString() },
+          { id: "u7", name: "Gregor Ilic",    email: "gregor@example.com",  status: "Revoked", frequency: "Not set", access_code: "",                is_admin: false, recommendations: 0,  awaiting_review: 0, saved: 0,  passed: 0,  applications: 0, latest_recommendation_at: "" },
         ];
 
-        const adminStatsResponse = {
+        // The preview keeps a mutable roster so admin_manage can echo realistic
+        // fresh stats, mirroring how the Worker returns the updated table.
+        let roster = users.slice();
+        const buildStats = () => ({
           ok: true,
           stats: {
             generated_at: new Date().toISOString(),
             summary: {
-              users: users.length,
-              recommendations: users.reduce((t, u) => t + u.recommendations, 0),
-              awaiting_review: users.reduce((t, u) => t + u.awaiting_review, 0),
-              applications: users.reduce((t, u) => t + u.applications, 0),
+              users: roster.length,
+              recommendations: roster.reduce((t, u) => t + u.recommendations, 0),
+              awaiting_review: roster.reduce((t, u) => t + u.awaiting_review, 0),
+              applications: roster.reduce((t, u) => t + u.applications, 0),
             },
-            users,
+            users: roster,
           },
+        });
+
+        const applyManage = (op, memberId) => {
+          if (op === "delete") {
+            roster = roster.filter((u) => u.id !== memberId);
+            return;
+          }
+          roster = roster.map((u) => {
+            if (u.id !== memberId) return u;
+            if (op === "pause") return { ...u, status: "Paused" };
+            if (op === "resume") return { ...u, status: "Active" };
+            if (op === "revoke") return { ...u, status: "Revoked", access_code: "" };
+            if (op === "set_admin") return { ...u, is_admin: true };
+            if (op === "unset_admin") return { ...u, is_admin: false };
+            return u;
+          });
         };
 
         const scoutStatusResponse = {
@@ -108,7 +127,19 @@
                 headers: { "Content-Type": "application/json" },
               });
             if (action === "session") return respond(sessionResponse);
-            if (action === "admin_stats") return respond(adminStatsResponse);
+            if (action === "admin_stats") return respond(buildStats());
+            if (action === "admin_manage") {
+              let payload = {};
+              try { payload = JSON.parse(body); } catch {}
+              if (payload.member_id === member.id && ["delete", "revoke", "unset_admin"].includes(payload.op)) {
+                return new Response(JSON.stringify({ ok: false, error: "admin_self_forbidden" }), {
+                  status: 409,
+                  headers: { "Content-Type": "application/json" },
+                });
+              }
+              applyManage(payload.op, payload.member_id);
+              return respond(buildStats());
+            }
             if (action === "scout_status") return respond(scoutStatusResponse);
             console.warn("[preview] unmocked action:", action, body);
             return respond({ ok: false, error: "not_mocked_in_preview" });

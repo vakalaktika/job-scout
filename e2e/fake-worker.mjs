@@ -174,6 +174,31 @@ async function handleApi(payload) {
     return [200, { ok: true, stats: state.adminStats }];
   }
 
+  if (action === "admin_manage") {
+    if (!state.member?.is_admin) return [403, { ok: false, error: "admin_forbidden" }];
+    const memberId = String(payload.member_id || "");
+    const operation = String(payload.op || "");
+    const member = state.adminStats?.users?.find((user) => user.id === memberId);
+    if (!member) return [404, { ok: false, error: "member_not_found" }];
+    const users = operation === "delete"
+      ? state.adminStats.users.filter((user) => user.id !== memberId)
+      : state.adminStats.users.map((user) => {
+          if (user.id !== memberId) return user;
+          if (operation === "pause") return { ...user, status: "Paused" };
+          if (operation === "resume") return { ...user, status: "Active" };
+          if (operation === "revoke") return { ...user, status: "Revoked", access_code: "" };
+          if (operation === "set_admin") return { ...user, is_admin: true };
+          if (operation === "unset_admin") return { ...user, is_admin: false };
+          return user;
+        });
+    state.adminStats = {
+      ...state.adminStats,
+      summary: { ...state.adminStats.summary, users: users.length },
+      users,
+    };
+    return [200, { ok: true, stats: state.adminStats }];
+  }
+
   if (action === "run_scout_once") {
     if (!state.firstScout.can_retry && state.firstScout.status !== "available") {
       return [200, { ok: true, first_scout: state.firstScout, already_requested: true }];

@@ -302,7 +302,12 @@ const recommendationStatsJob = (page) => ({
 
 const normalizedEmail = (value) => String(value || "").trim().toLowerCase();
 
-export function buildAdminRecommendationStats(candidates, jobs, generatedAt = new Date().toISOString()) {
+export function buildAdminRecommendationStats(
+  candidates,
+  jobs,
+  generatedAt = new Date().toISOString(),
+  codesByCandidate = new Map(),
+) {
   const jobsByCandidate = new Map();
   for (const job of jobs || []) {
     const email = normalizedEmail(job?.candidate_email);
@@ -319,12 +324,18 @@ export function buildAdminRecommendationStats(candidates, jobs, generatedAt = ne
         if (!Number.isFinite(Date.parse(sentAt))) return current;
         return !current || Date.parse(sentAt) > Date.parse(current) ? sentAt : current;
       }, "");
+      const codeInfo = codesByCandidate.get(String(candidate?.id || "")) || {};
       return {
         id: String(candidate?.id || ""),
         name: String(candidate?.name || "Unnamed member"),
         email: String(candidate?.email || ""),
         status: String(candidate?.status || "Unknown"),
         frequency: String(candidate?.frequency || "Not set"),
+        // The access code and admin flag are only ever assembled server-side for an
+        // authenticated admin, so the members table can reveal a code and label the
+        // admin toggle without a second round trip per row.
+        access_code: String(codeInfo.code || ""),
+        is_admin: !!codeInfo.is_admin,
         recommendations: recommendations.length,
         awaiting_review: recommendations.filter(
           (job) => !job?.decision && !job?.application_status,
@@ -1524,16 +1535,37 @@ async function queryDatabasePages(env, databaseId, options = {}) {
   return pages;
 }
 
+async function linkedCodesForCandidate(env, candidateId) {
+  if (!candidateId) return [];
+  return queryDatabasePages(env, CODES_DB, {
+    filter: { property: "Linked candidate", relation: { contains: candidateId } },
+  });
+}
+
+const normalizedNotionId = (value) => String(value || "").replaceAll("-", "").toLowerCase();
+
+const isCandidatePage = (page) =>
+  !!page &&
+  page.archived !== true &&
+  normalizedNotionId(page.parent?.database_id) === normalizedNotionId(CAND_DB);
+
+async function adminTargetCandidate(env, candidateId) {
+  try {
+    const page = await notion(env, `pages/${candidateId}`, "GET");
+    return isCandidatePage(page) ? page : null;
+  } catch (error) {
+    console.error("Unable to load admin target member", String(error?.message || error));
+    return null;
+  }
+}
+
 async function isAdminCandidate(env, candidate) {
   if (!candidate?.id) return false;
   try {
     // Admin is a per-code toggle: any access code linked to this candidate whose
     // "Admin" checkbox is ticked (and that is not revoked) grants the Admin tab.
-    const result = await notion(env, `databases/${CODES_DB}/query`, "POST", {
-      filter: { property: "Linked candidate", relation: { contains: candidate.id } },
-      page_size: 100,
-    });
-    return (result.results || []).some(
+    const codes = await linkedCodesForCandidate(env, candidate.id);
+    return codes.some(
       (row) =>
         row.properties?.Admin?.checkbox === true &&
         plain(row.properties?.Status) !== "Revoked",
@@ -1544,16 +1576,47 @@ async function isAdminCandidate(env, candidate) {
   }
 }
 
+// Collapse every access code down to one representative per linked candidate: the
+// code the admin table reveals, and whether that member holds admin. A non-revoked
+// code is preferred as the representative, and the admin flag is true if any linked
+// code grants it — matching isAdminCandidate.
+function buildCodesByCandidate(codePages) {
+  const map = new Map();
+  for (const page of codePages || []) {
+    const candidateId = page?.properties?.["Linked candidate"]?.relation?.[0]?.id;
+    if (!candidateId) continue;
+    const code = plain(page.properties?.Code);
+    const status = plain(page.properties?.Status);
+    const grantsAdmin = page.properties?.Admin?.checkbox === true && status !== "Revoked";
+    const existing = map.get(candidateId);
+    if (!existing) {
+      map.set(candidateId, { code, code_id: page.id, is_admin: grantsAdmin, code_status: status });
+      continue;
+    }
+    const preferNew = existing.code_status === "Revoked" && status !== "Revoked";
+    map.set(candidateId, {
+      code: preferNew ? code : existing.code,
+      code_id: preferNew ? page.id : existing.code_id,
+      is_admin: existing.is_admin || grantsAdmin,
+      code_status: preferNew ? status : existing.code_status,
+    });
+  }
+  return map;
+}
+
 async function loadAdminRecommendationStats(env) {
-  const [candidatePages, jobPages] = await Promise.all([
+  const [candidatePages, jobPages, codePages] = await Promise.all([
     queryDatabasePages(env, CAND_DB),
     queryDatabasePages(env, SENT_POSTINGS_DB, {
       sorts: [{ property: "Date sent", direction: "descending" }],
     }),
+    queryDatabasePages(env, CODES_DB),
   ]);
   return buildAdminRecommendationStats(
     candidatePages.map(memberState),
     jobPages.map(recommendationStatsJob),
+    undefined,
+    buildCodesByCandidate(codePages),
   );
 }
 
@@ -1931,9 +1994,10 @@ async function authenticatedCandidate(env, sessionToken) {
   }
   const candidate = await notion(env, `pages/${auth.member_id}`, "GET");
   // Sessions are long-lived bearer tokens, so revocation has to be enforced on
-  // every use rather than waiting for the token to expire. Candidate Status is the
-  // single source of truth here because magic-link sessions carry no access code.
-  if (memberState(candidate).status === "Revoked") return null;
+  // every use rather than waiting for the token to expire. The page must still be
+  // an unarchived candidate and its status must remain usable; magic-link sessions
+  // carry no access code that could provide a second revocation signal.
+  if (!isCandidatePage(candidate) || memberState(candidate).status === "Revoked") return null;
   return candidate;
 }
 
@@ -2018,6 +2082,97 @@ export default {
         if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
         if (!(await isAdminCandidate(env, candidate))) {
           return json({ ok: false, error: "admin_forbidden" }, 403);
+        }
+        return json({ ok: true, stats: await loadAdminRecommendationStats(env) });
+      }
+      if (payload.action === "admin_manage") {
+        const candidate = await authenticatedCandidate(env, payload.session_token);
+        if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
+        if (!(await isAdminCandidate(env, candidate))) {
+          return json({ ok: false, error: "admin_forbidden" }, 403);
+        }
+        const op = String(payload.op || "");
+        const memberId = String(payload.member_id || "");
+        if (!memberId) return json({ ok: false, error: "member_required" }, 400);
+        const allowedOperations = new Set([
+          "pause",
+          "resume",
+          "revoke",
+          "delete",
+          "set_admin",
+          "unset_admin",
+        ]);
+        if (!allowedOperations.has(op)) {
+          return json({ ok: false, error: "unknown_op" }, 400);
+        }
+        // An admin cannot lock themselves out or strip their own access in one
+        // click; those irreversible-feeling moves are refused on your own account.
+        if (
+          normalizedNotionId(memberId) === normalizedNotionId(candidate.id) &&
+          ["delete", "revoke", "unset_admin"].includes(op)
+        ) {
+          return json({ ok: false, error: "admin_self_forbidden" }, 409);
+        }
+        const targetCandidate = await adminTargetCandidate(env, memberId);
+        if (!targetCandidate) return json({ ok: false, error: "member_not_found" }, 404);
+        if (
+          plain(targetCandidate.properties?.Status) === "Revoked" &&
+          ["pause", "resume"].includes(op)
+        ) {
+          return json({ ok: false, error: "member_revoked" }, 409);
+        }
+        const linkedCodes = await linkedCodesForCandidate(env, memberId);
+        const setCandidateStatus = (name) =>
+          notion(env, `pages/${memberId}`, "PATCH", {
+            properties: { Status: { select: { name } } },
+          });
+        const revokeCodes = () =>
+          Promise.all(
+            linkedCodes.map((row) =>
+              notion(env, `pages/${row.id}`, "PATCH", {
+                properties: { Status: { select: { name: "Revoked" } } },
+              }),
+            ),
+          );
+        switch (op) {
+          case "pause":
+            await setCandidateStatus("Paused");
+            break;
+          case "resume":
+            await setCandidateStatus("Active");
+            break;
+          case "revoke":
+            await Promise.all([setCandidateStatus("Revoked"), revokeCodes()]);
+            break;
+          case "delete":
+            // Notion has no hard delete over the API: revoke the codes so they can
+            // never sign back in, then archive the member record (recoverable from
+            // the Notion trash for 30 days). Revoke the member row first so an
+            // existing bearer session stops working even if a later code write fails.
+            await setCandidateStatus("Revoked");
+            await revokeCodes();
+            await notion(env, `pages/${memberId}`, "PATCH", { archived: true });
+            break;
+          case "set_admin":
+          case "unset_admin": {
+            await ensureCodeAdminProperty(env);
+            const grant = op === "set_admin";
+            // Granting must use a code that can actually confer admin. Revoking clears
+            // every linked code so no stale checkbox can become authoritative later.
+            const activeCodes = linkedCodes.filter(
+              (row) => plain(row.properties?.Status) !== "Revoked",
+            );
+            const targets = grant ? activeCodes.slice(0, 1) : linkedCodes;
+            if (!targets.length) return json({ ok: false, error: "no_linked_code" }, 409);
+            await Promise.all(
+              targets.map((row) =>
+                notion(env, `pages/${row.id}`, "PATCH", {
+                  properties: { Admin: { checkbox: grant } },
+                }),
+              ),
+            );
+            break;
+          }
         }
         return json({ ok: true, stats: await loadAdminRecommendationStats(env) });
       }

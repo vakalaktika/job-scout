@@ -500,6 +500,307 @@ patch(
 );
 
 // ---------------------------------------------------------------------------
+// Admin member management: per-row menu (view/copy code, pause/resume, admin
+// toggle, revoke, delete) with a confirmation modal for the destructive moves.
+//
+// Every action posts admin_manage to the Worker, which re-checks admin rights and
+// returns fresh stats, so the table re-renders from the server's truth. Nothing
+// here can grant access this public bundle could not already request.
+// ---------------------------------------------------------------------------
+
+// State for the open row menu, the pending destructive confirmation, transient
+// "copied" feedback, the in-flight action key, and the last management error.
+// Anchored on the end of the dashboard state block rather than on the admin-error
+// declaration, because that declaration sits inside another patch's idempotency
+// string — inserting there would break its anchor on re-run.
+const manageStateAnchor = '__jsBriefRequests=W.useRef(new Map()),[d,p]=W.useState(null),';
+const previousManageState =
+  manageStateAnchor +
+  '[__jsRowMenu,__jsSetRowMenu]=W.useState(""),' +
+  '[__jsPending,__jsSetPending]=W.useState(null),' +
+  '[__jsCopied,__jsSetCopied]=W.useState(""),' +
+  '[__jsManageBusy,__jsSetManageBusy]=W.useState(""),' +
+  '[__jsManageError,__jsSetManageError]=W.useState(""),';
+const manageState =
+  manageStateAnchor +
+  '__jsRowTrigger=W.useRef(null),__jsRowMenuRef=W.useRef(null),' +
+  '__jsModalTrigger=W.useRef(null),__jsModalRef=W.useRef(null),' +
+  '[__jsRowMenu,__jsSetRowMenu]=W.useState(""),' +
+  '[__jsPending,__jsSetPending]=W.useState(null),' +
+  '[__jsCopied,__jsSetCopied]=W.useState(""),' +
+  '[__jsManageBusy,__jsSetManageBusy]=W.useState(""),' +
+  '[__jsManageError,__jsSetManageError]=W.useState(""),';
+
+patch(
+  "add admin member-management state",
+  [previousManageState, manageStateAnchor],
+  manageState,
+);
+
+const previousManageHandlers =
+  '__jsManageMsg=__jsC=>({admin_self_forbidden:"You can\\u2019t apply that to your own account.",' +
+  'no_linked_code:"That member has no access code to update.",' +
+  'admin_forbidden:"Your admin access has changed. Reload and sign in again.",' +
+  'invalid_session:"Your session expired. Reload to continue.",' +
+  'member_required:"That member could not be identified."}[__jsC]||' +
+  '"That action didn\\u2019t go through. Try again."),' +
+  '__jsCopy=async(__jsK,__jsT)=>{if(!__jsT)return;' +
+  'try{await navigator.clipboard.writeText(String(__jsT))}catch(__jsE){console.error(__jsE)}' +
+  '__jsSetCopied(__jsK);window.setTimeout(()=>__jsSetCopied(""),1500)},' +
+  '__jsManage=async(__jsId,__jsOp)=>{if(__jsManageBusy)return;' +
+  '__jsSetManageBusy(__jsId+":"+__jsOp),__jsSetManageError("");try{' +
+  'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"admin_manage",op:__jsOp,member_id:__jsId,session_token:n})}),' +
+  '__jsD=await __jsR.json();' +
+  'if(!__jsR.ok||!__jsD.ok||!__jsD.stats)throw new Error(__jsD.error||"admin_manage_failed");' +
+  '__jsSetAdminStats(__jsD.stats)}catch(__jsE){console.error(__jsE),' +
+  '__jsSetManageError(__jsManageMsg(__jsE&&__jsE.message))}' +
+  'finally{__jsSetManageBusy(""),__jsSetPending(null),__jsSetRowMenu("")}},';
+
+const manageHandlers =
+  '__jsManageMsg=__jsC=>({admin_self_forbidden:"You can\\u2019t apply that to your own account.",' +
+  'no_linked_code:"That member has no active access code to update.",' +
+  'member_not_found:"That member is no longer available.",' +
+  'admin_forbidden:"Your admin access has changed. Reload and sign in again.",' +
+  'invalid_session:"Your session expired. Reload to continue.",' +
+  'member_required:"That member could not be identified."}[__jsC]||' +
+  '"That action didn\\u2019t go through. Try again."),' +
+  '__jsCloseRow=(__jsFocus=!1)=>{__jsSetRowMenu("");if(__jsFocus)' +
+  'window.requestAnimationFrame(()=>{const __jsT=__jsRowTrigger.current;' +
+  'if(__jsT&&__jsT.isConnected)__jsT.focus()})},' +
+  '__jsOpenRow=(__jsId,__jsTrigger)=>{__jsRowTrigger.current=__jsTrigger,__jsSetRowMenu(__jsId);' +
+  'window.requestAnimationFrame(()=>{const __jsFirst=__jsRowMenuRef.current&&' +
+  '__jsRowMenuRef.current.querySelector("[role=menuitem]:not(:disabled)");if(__jsFirst)__jsFirst.focus()})},' +
+  '__jsToggleRow=(__jsId,__jsTrigger)=>__jsRowMenu===__jsId?' +
+  '__jsCloseRow(!0):__jsOpenRow(__jsId,__jsTrigger),' +
+  '__jsRowKey=__jsE=>{const __jsItems=[...__jsE.currentTarget.querySelectorAll(' +
+  '"[role=menuitem]:not(:disabled)")],__jsIndex=__jsItems.indexOf(document.activeElement);' +
+  'if(__jsE.key==="Escape"){__jsE.preventDefault(),__jsCloseRow(!0);return}' +
+  'if(__jsE.key==="Tab"){__jsCloseRow();return}' +
+  'let __jsNext=null;if(__jsE.key==="ArrowDown")__jsNext=(__jsIndex+1)%__jsItems.length;' +
+  'else if(__jsE.key==="ArrowUp")__jsNext=(__jsIndex-1+__jsItems.length)%__jsItems.length;' +
+  'else if(__jsE.key==="Home")__jsNext=0;else if(__jsE.key==="End")__jsNext=__jsItems.length-1;' +
+  'if(__jsNext!==null){__jsE.preventDefault();__jsItems[__jsNext]&&__jsItems[__jsNext].focus()}},' +
+  '__jsOpenPending=(__jsValue,__jsTrigger)=>{__jsModalTrigger.current=__jsTrigger,' +
+  '__jsSetPending(__jsValue)},' +
+  '__jsClosePending=(__jsFocus=!0)=>{__jsSetPending(null);if(__jsFocus)' +
+  'window.requestAnimationFrame(()=>{const __jsT=__jsModalTrigger.current;' +
+  'if(__jsT&&__jsT.isConnected)__jsT.focus()})},' +
+  '__jsTrapPending=__jsE=>{if(__jsE.key==="Escape"){' +
+  '__jsE.preventDefault(),__jsClosePending();return}if(__jsE.key!=="Tab")return;' +
+  'const __jsItems=[...__jsE.currentTarget.querySelectorAll("button:not(:disabled)")];' +
+  'if(!__jsItems.length)return;const __jsFirst=__jsItems[0],__jsLast=__jsItems[__jsItems.length-1];' +
+  'if(__jsE.shiftKey&&document.activeElement===__jsFirst){__jsE.preventDefault(),__jsLast.focus()}' +
+  'else if(!__jsE.shiftKey&&document.activeElement===__jsLast){__jsE.preventDefault(),__jsFirst.focus()}},' +
+  '__jsCopy=async(__jsK,__jsT)=>{if(!__jsT)return;' +
+  'try{await navigator.clipboard.writeText(String(__jsT))}catch(__jsE){console.error(__jsE)}' +
+  '__jsSetCopied(__jsK);window.setTimeout(()=>__jsSetCopied(""),1500)},' +
+  '__jsManage=async(__jsId,__jsOp)=>{if(__jsManageBusy)return;' +
+  '__jsSetManageBusy(__jsId+":"+__jsOp),__jsSetManageError("");try{' +
+  'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"admin_manage",op:__jsOp,member_id:__jsId,session_token:n})}),' +
+  '__jsD=await __jsR.json();' +
+  'if(!__jsR.ok||!__jsD.ok||!__jsD.stats)throw new Error(__jsD.error||"admin_manage_failed");' +
+  '__jsSetAdminStats(__jsD.stats)}catch(__jsE){console.error(__jsE),' +
+  '__jsSetManageError(__jsManageMsg(__jsE&&__jsE.message))}' +
+  'finally{__jsSetManageBusy(""),__jsSetPending(null),__jsCloseRow(!__jsPending)}},';
+
+patch(
+  "add admin member-management handlers",
+  [
+    `finally{__jsSetAdminBusy(!1)}},${previousManageHandlers}`,
+    'finally{__jsSetAdminBusy(!1)}},',
+  ],
+  `finally{__jsSetAdminBusy(!1)}},${manageHandlers}`,
+);
+
+// A confirmed revoke keeps the member row, so focus can and should return to its
+// Manage trigger. Delete is the one exception because that row no longer exists.
+patch(
+  "restore focus after an admin management action",
+  'finally{__jsSetManageBusy(""),__jsSetPending(null),__jsCloseRow(!__jsPending)}},',
+  'finally{__jsSetManageBusy(""),__jsSetPending(null),__jsCloseRow(__jsOp!=="delete")}},',
+);
+
+// Close the open row menu on outside click or Escape, mirroring the account menu.
+const accountOutsideEffect =
+  'document.addEventListener("pointerdown",__jsOutside);' +
+  'return()=>document.removeEventListener("pointerdown",__jsOutside)},[__jsAccountOpen]);';
+const previousRowMenuEffect =
+  accountOutsideEffect +
+  'W.useEffect(()=>{if(!__jsRowMenu)return;' +
+  'const __jsOut=__jsE=>{if(!(__jsE.target&&__jsE.target.closest&&__jsE.target.closest(".admin-row-menu")))__jsSetRowMenu("")},' +
+  '__jsKey=__jsE=>{if(__jsE.key==="Escape")__jsSetRowMenu("")};' +
+  'document.addEventListener("pointerdown",__jsOut),document.addEventListener("keydown",__jsKey);' +
+  'return()=>{document.removeEventListener("pointerdown",__jsOut),document.removeEventListener("keydown",__jsKey)}},[__jsRowMenu]);';
+const rowMenuAndModalEffects =
+  accountOutsideEffect +
+  'W.useEffect(()=>{if(!__jsRowMenu)return;' +
+  'const __jsOut=__jsE=>{if(!(__jsE.target&&__jsE.target.closest&&' +
+  '__jsE.target.closest(".admin-row-menu")))__jsCloseRow()};' +
+  'document.addEventListener("pointerdown",__jsOut);' +
+  'return()=>document.removeEventListener("pointerdown",__jsOut)},[__jsRowMenu]);' +
+  'W.useEffect(()=>{if(!__jsPending)return;const __jsOverflow=document.body.style.overflow;' +
+  'document.body.style.overflow="hidden";return()=>{document.body.style.overflow=__jsOverflow}},[__jsPending]);';
+
+patch(
+  "close the admin row menu on outside click or escape",
+  [previousRowMenuEffect, accountOutsideEffect],
+  rowMenuAndModalEffects,
+);
+
+// Extra "Manage" column header on the members table.
+patch(
+  "add the admin manage column header",
+  'Y.jsx("th",{scope:"col",children:"Latest"})]})}),',
+  'Y.jsx("th",{scope:"col",children:"Latest"}),' +
+    'Y.jsx("th",{scope:"col",className:"admin-actions-head",children:"Manage"})]})}),',
+);
+
+// The per-row actions cell: a "⋯" trigger opening a menu of member actions.
+const previousActionsCell =
+  'Y.jsx("td",{className:"admin-actions-cell",children:' +
+  'Y.jsxs("div",{className:"admin-row-menu",children:[' +
+  'Y.jsx("button",{type:"button",className:"admin-row-trigger","aria-haspopup":"menu",' +
+  '"aria-expanded":__jsRowMenu===__jsU.id,"aria-label":`Manage ${__jsU.name}`,' +
+  'onClick:()=>__jsSetRowMenu(__jsRowMenu===__jsU.id?"":__jsU.id),children:"\\u22EF"}),' +
+  '__jsRowMenu===__jsU.id?Y.jsxs("div",{className:"admin-row-pop",role:"menu",' +
+  '"aria-label":`Manage ${__jsU.name}`,children:[' +
+  'Y.jsxs("button",{type:"button",role:"menuitem",className:"admin-row-item",' +
+  'disabled:!__jsU.access_code,onClick:()=>__jsCopy("code:"+__jsU.id,__jsU.access_code),' +
+  'children:[Y.jsx("span",{children:"Access code"}),' +
+  'Y.jsx("code",{children:__jsU.access_code||"None"}),' +
+  '__jsCopied==="code:"+__jsU.id?Y.jsx("small",{children:"Copied"}):null]}),' +
+  'Y.jsxs("button",{type:"button",role:"menuitem",className:"admin-row-item",' +
+  'disabled:!__jsU.email,onClick:()=>__jsCopy("email:"+__jsU.id,__jsU.email),' +
+  'children:[Y.jsx("span",{children:"Copy email"}),' +
+  '__jsCopied==="email:"+__jsU.id?Y.jsx("small",{children:"Copied"}):null]}),' +
+  '__jsU.status!=="Revoked"?Y.jsx("button",{type:"button",role:"menuitem",className:"admin-row-item",' +
+  'disabled:!!__jsManageBusy,onClick:()=>__jsManage(__jsU.id,__jsU.status==="Paused"?"resume":"pause"),' +
+  'children:__jsU.status==="Paused"?"Resume delivery":"Pause delivery"}):null,' +
+  'Y.jsx("button",{type:"button",role:"menuitem",className:"admin-row-item",' +
+  'disabled:!!__jsManageBusy||!__jsU.is_admin&&!__jsU.access_code,' +
+  'onClick:()=>__jsManage(__jsU.id,__jsU.is_admin?"unset_admin":"set_admin"),' +
+  'children:__jsU.is_admin?"Remove admin":"Make admin"}),' +
+  'Y.jsx("button",{type:"button",role:"menuitem",className:"admin-row-item is-danger",' +
+  'disabled:!!__jsManageBusy,onClick:()=>__jsSetPending({id:__jsU.id,op:"revoke",' +
+  'title:"Revoke access",confirm:"Revoke access",' +
+  'body:`This blocks ${__jsU.name} from signing in and revokes their access code. You can re-invite them later.`}),' +
+  'children:"Revoke access"}),' +
+  'Y.jsx("button",{type:"button",role:"menuitem",className:"admin-row-item is-danger",' +
+  'disabled:!!__jsManageBusy,onClick:()=>__jsSetPending({id:__jsU.id,op:"delete",' +
+  'title:"Delete member",confirm:"Delete member",' +
+  'body:`This removes ${__jsU.name} from Job Scout and revokes their access code. The record is archived in Notion for 30 days.`}),' +
+  'children:"Delete member"})]}):null]})})';
+
+const actionsCell =
+  'Y.jsx("td",{className:"admin-actions-cell",children:' +
+  'Y.jsxs("div",{className:"admin-row-menu",children:[' +
+  'Y.jsx(Ut.button,{type:"button",className:"admin-row-trigger","aria-haspopup":"menu",' +
+  '"aria-expanded":__jsRowMenu===__jsU.id,"aria-label":`Manage ${__jsU.name}`,' +
+  'onClick:__jsE=>__jsToggleRow(__jsU.id,__jsE.currentTarget),' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+  'children:"\\u22EF"}),' +
+  'Y.jsx(Bc,{mode:"wait",initial:!1,children:__jsRowMenu===__jsU.id?' +
+  'Y.jsxs(Ut.div,{ref:__jsRowMenuRef,className:"admin-row-pop",role:"menu",' +
+  '"aria-label":`Manage ${__jsU.name}`,initial:a?{opacity:0}:{opacity:0,y:-6,scale:.98},' +
+  'animate:{opacity:1,y:0,scale:1},exit:a?{opacity:0}:{opacity:0,y:-4,scale:.985},' +
+  'transition:{type:"spring",stiffness:180,damping:24},onKeyDown:__jsRowKey,children:[' +
+  'Y.jsxs(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,className:"admin-row-item",' +
+  'disabled:!__jsU.access_code,onClick:()=>__jsCopy("code:"+__jsU.id,__jsU.access_code),' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+  'children:[Y.jsx("span",{children:"Access code"}),' +
+  'Y.jsx("code",{children:__jsU.access_code||"None"}),' +
+  '__jsCopied==="code:"+__jsU.id?Y.jsx("small",{role:"status","aria-live":"polite",children:"Copied"}):null]}),' +
+  'Y.jsxs(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,className:"admin-row-item",' +
+  'disabled:!__jsU.email,onClick:()=>__jsCopy("email:"+__jsU.id,__jsU.email),' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+  'children:[Y.jsx("span",{children:"Copy email"}),' +
+  '__jsCopied==="email:"+__jsU.id?Y.jsx("small",{role:"status","aria-live":"polite",children:"Copied"}):null]}),' +
+  '__jsU.status!=="Revoked"?Y.jsx(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,' +
+  'className:"admin-row-item",disabled:!!__jsManageBusy,' +
+  'onClick:()=>__jsManage(__jsU.id,__jsU.status==="Paused"?"resume":"pause"),' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+  'children:__jsU.status==="Paused"?"Resume delivery":"Pause delivery"}):null,' +
+  'Y.jsx(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,className:"admin-row-item",' +
+  'disabled:!!__jsManageBusy||!__jsU.is_admin&&!__jsU.access_code,' +
+  'onClick:()=>__jsManage(__jsU.id,__jsU.is_admin?"unset_admin":"set_admin"),' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+  'children:__jsU.is_admin?"Remove admin":"Make admin"}),' +
+  'Y.jsx(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,className:"admin-row-item is-danger",' +
+  'disabled:!!__jsManageBusy,onClick:__jsE=>__jsOpenPending({id:__jsU.id,op:"revoke",' +
+  'title:"Revoke access",confirm:"Revoke access",' +
+  'body:`This blocks ${__jsU.name} from signing in and revokes their access code. You can re-invite them later.`},' +
+  '__jsE.currentTarget),whileTap:a?void 0:{scale:.97},' +
+  'transition:{type:"spring",stiffness:400,damping:28},children:"Revoke access"}),' +
+  'Y.jsx(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,className:"admin-row-item is-danger",' +
+  'disabled:!!__jsManageBusy,onClick:__jsE=>__jsOpenPending({id:__jsU.id,op:"delete",' +
+  'title:"Delete member",confirm:"Delete member",' +
+  'body:`This removes ${__jsU.name} from Job Scout and revokes their access code. The record is archived in Notion for 30 days.`},' +
+  '__jsE.currentTarget),whileTap:a?void 0:{scale:.97},' +
+  'transition:{type:"spring",stiffness:400,damping:28},children:"Delete member"})]' +
+  '},"row-menu-"+__jsU.id):null})]})})';
+
+patch(
+  "add the admin manage actions cell",
+  [
+    'Y.jsx("td",{className:"admin-latest",children:__jsAdminDate(__jsU.latest_recommendation_at)}),' +
+      `${previousActionsCell}]},__jsU.id||__jsU.email))`,
+    'Y.jsx("td",{className:"admin-latest",children:__jsAdminDate(__jsU.latest_recommendation_at)})]},__jsU.id||__jsU.email))',
+  ],
+  'Y.jsx("td",{className:"admin-latest",children:__jsAdminDate(__jsU.latest_recommendation_at)}),' +
+    `${actionsCell}]},__jsU.id||__jsU.email))`,
+);
+
+// The management error banner and the destructive-action confirmation modal, added
+// as siblings inside the loaded-stats fragment.
+const previousManageModal =
+  '__jsManageError?Y.jsx("div",{className:"admin-manage-error",role:"alert",children:__jsManageError}):null,' +
+  '__jsPending?Y.jsx("div",{className:"admin-modal-backdrop",role:"presentation",' +
+  'onClick:__jsE=>{if(__jsE.target===__jsE.currentTarget)__jsSetPending(null)},children:' +
+  'Y.jsxs("div",{className:"admin-modal",role:"dialog","aria-modal":!0,"aria-labelledby":"admin-modal-title",' +
+  'onKeyDown:__jsE=>{if(__jsE.key==="Escape")__jsSetPending(null)},children:[' +
+  'Y.jsx("h2",{id:"admin-modal-title",children:__jsPending.title}),' +
+  'Y.jsx("p",{children:__jsPending.body}),' +
+  'Y.jsxs("div",{className:"admin-modal-actions",children:[' +
+  'Y.jsx("button",{type:"button",className:"admin-modal-cancel",' +
+  'onClick:()=>__jsSetPending(null),children:"Cancel"}),' +
+  'Y.jsx("button",{type:"button",className:"admin-modal-confirm",autoFocus:!0,' +
+  'disabled:!!__jsManageBusy,onClick:()=>__jsManage(__jsPending.id,__jsPending.op),' +
+  'children:__jsManageBusy?"Working\\u2026":__jsPending.confirm})]})]})}):null';
+
+const manageModal =
+  '__jsManageError?Y.jsx("div",{className:"admin-manage-error",role:"alert",children:__jsManageError}):null,' +
+  'Y.jsx(Bc,{mode:"wait",initial:!1,children:__jsPending?' +
+  'Y.jsx(Ut.div,{className:"admin-modal-backdrop",role:"presentation",' +
+  'initial:{opacity:0},animate:{opacity:1},exit:{opacity:0},' +
+  'transition:{type:"spring",stiffness:180,damping:24},' +
+  'onClick:__jsE=>{if(__jsE.target===__jsE.currentTarget)__jsClosePending()},children:' +
+  'Y.jsxs(Ut.div,{ref:__jsModalRef,className:"admin-modal",role:"dialog","aria-modal":!0,' +
+  '"aria-labelledby":"admin-modal-title",initial:a?{opacity:0}:{opacity:0,y:8,scale:.97},' +
+  'animate:{opacity:1,y:0,scale:1},exit:a?{opacity:0}:{opacity:0,y:6,scale:.985},' +
+  'transition:{type:"spring",stiffness:180,damping:24},onKeyDown:__jsTrapPending,children:[' +
+  'Y.jsx("h2",{id:"admin-modal-title",children:__jsPending.title}),' +
+  'Y.jsx("p",{children:__jsPending.body}),' +
+  'Y.jsxs("div",{className:"admin-modal-actions",children:[' +
+  'Y.jsx(Ut.button,{type:"button",className:"admin-modal-cancel",' +
+  'onClick:()=>__jsClosePending(),whileTap:a?void 0:{scale:.97},' +
+  'transition:{type:"spring",stiffness:400,damping:28},children:"Cancel"}),' +
+  'Y.jsx(Ut.button,{type:"button",className:"admin-modal-confirm",autoFocus:!0,' +
+  'disabled:!!__jsManageBusy,onClick:()=>__jsManage(__jsPending.id,__jsPending.op),' +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+  'children:__jsManageBusy?"Working\\u2026":__jsPending.confirm})]})]})},"admin-confirm"):null})';
+
+patch(
+  "render the admin management confirmation modal",
+  [
+    'available yet."})]}),' + previousManageModal + ']}) : __jsAdminError?',
+    'available yet."})]})]}) : __jsAdminError?',
+  ],
+  `available yet."})]}),${manageModal}]}) : __jsAdminError?`,
+);
+
+// ---------------------------------------------------------------------------
 // One badge row under every title: freshness, workplace, and link status.
 //
 // Four things converge here, so this replacement is the single owner of the
@@ -1579,6 +1880,40 @@ const adminAndAccountStyles =
   ".admin-state.is-error{justify-content:space-between;border-color:#e0cfc8;background:var(--clay-pale)}" +
   ".admin-state button{min-height:44px;flex:0 0 auto;border:1px solid #7e4639;border-radius:9px;background:var(--surface);" +
   "color:#7e4639;padding:10px 14px;font-size:12px;font-weight:700}" +
+  ".admin-actions-head{width:1%}.admin-actions-cell{text-align:right;white-space:nowrap}" +
+  ".admin-row-menu{position:relative;display:inline-flex}" +
+  ".admin-row-trigger{display:inline-flex;width:44px;height:44px;align-items:center;justify-content:center;" +
+  "border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink-soft);" +
+  "font-size:18px;line-height:1;cursor:pointer}" +
+  ".admin-row-trigger:hover,.admin-row-trigger:focus-visible{background:var(--green-pale);color:var(--green-deep);border-color:var(--green-pale)}" +
+  ".admin-row-trigger[aria-expanded=true]{background:var(--green-pale);color:var(--green-deep);box-shadow:0 0 0 3px var(--green-pale)}" +
+  ".admin-row-pop{position:absolute;top:50px;right:0;z-index:40;display:grid;min-width:236px;gap:1px;" +
+  "border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:6px;" +
+  "box-shadow:0 18px 44px #211f1c24;text-align:left}" +
+  ".admin-row-item{display:flex;min-height:44px;align-items:center;gap:8px;width:100%;border:0;" +
+  "border-radius:8px;background:transparent;color:var(--ink);padding:9px 10px;font-size:12px;" +
+  "font-weight:600;text-align:left;cursor:pointer}" +
+  ".admin-row-item span{flex:1 1 auto}" +
+  ".admin-row-item code{font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink-soft);letter-spacing:.02em}" +
+  ".admin-row-item small{color:var(--green-deep);font-size:10px;font-weight:700}" +
+  ".admin-row-item:hover,.admin-row-item:focus-visible{background:var(--green-pale);color:var(--green-deep)}" +
+  ".admin-row-item:disabled{opacity:.5;cursor:not-allowed}" +
+  ".admin-row-item.is-danger{color:#7e4639}" +
+  ".admin-row-item.is-danger:hover,.admin-row-item.is-danger:focus-visible{background:var(--clay-pale);color:#6c382e}" +
+  ".admin-manage-error{margin-top:14px;border:1px solid #e0cfc8;border-radius:12px;background:var(--clay-pale);" +
+  "padding:13px 15px;color:#6c382e;font-size:12px;font-weight:600}" +
+  ".admin-modal-backdrop{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:#211f1c4d;padding:20px}" +
+  ".admin-modal{width:100%;max-width:420px;border:1px solid var(--line);border-radius:16px;background:var(--surface);" +
+  "padding:22px;box-shadow:0 30px 70px #211f1c33}" +
+  ".admin-modal h2{margin:0 0 8px;font:600 20px/1.2 Gelasio,Georgia,serif;letter-spacing:-.02em}" +
+  ".admin-modal p{margin:0 0 18px;color:var(--ink-soft);font-size:13px;line-height:1.5}" +
+  ".admin-modal-actions{display:flex;justify-content:flex-end;gap:10px}" +
+  ".admin-modal-actions button{min-height:44px;border-radius:10px;padding:11px 16px;font-size:13px;font-weight:700;cursor:pointer}" +
+  ".admin-modal-cancel{border:1px solid var(--line);background:var(--surface);color:var(--ink)}" +
+  ".admin-modal-cancel:hover,.admin-modal-cancel:focus-visible{background:var(--paper-deep)}" +
+  ".admin-modal-confirm{border:1px solid #7e4639;background:#7e4639;color:#fff}" +
+  ".admin-modal-confirm:hover,.admin-modal-confirm:focus-visible{background:#6c382e}" +
+  ".admin-modal-confirm:disabled{opacity:.6;cursor:not-allowed}" +
   "@media(max-width:780px){.account-menu{position:fixed;top:58px;right:12px;min-width:210px}" +
   ".admin-heading{align-items:flex-start}.admin-scope{display:none}" +
   ".admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}" +
@@ -1586,13 +1921,19 @@ const adminAndAccountStyles =
   ".admin-state{align-items:flex-start;flex-direction:column}.admin-state.is-error{justify-content:flex-start}}" +
   "@media(max-width:420px){.admin-stat-grid{gap:8px}.admin-stat-card strong{font-size:27px}" +
   ".admin-table-card{margin-right:-2px;margin-left:-2px}}" +
-  "@media(prefers-reduced-motion:reduce){.account-menu,.account-menu-trigger,.admin-stat-card,.admin-state{" +
+  "@media(prefers-reduced-motion:reduce){.account-menu,.account-menu-trigger,.admin-stat-card,.admin-state," +
+  ".admin-row-pop,.admin-row-trigger,.admin-row-item,.admin-modal-backdrop,.admin-modal{" +
   "transition:none!important;transform:none!important}}";
 
 const adminStyleMarker = "/* --- Account menu and admin recommendation dashboard --- */";
-const adminStyleTerminator =
+const previousAdminStyleTerminator =
   "@media(prefers-reduced-motion:reduce){.account-menu,.account-menu-trigger,.admin-stat-card,.admin-state{" +
   "transition:none!important;transform:none!important}}";
+const adminStyleTerminator =
+  "@media(prefers-reduced-motion:reduce){.account-menu,.account-menu-trigger,.admin-stat-card,.admin-state," +
+  ".admin-row-pop,.admin-row-trigger,.admin-row-item,.admin-modal-backdrop,.admin-modal{" +
+  "transition:none!important;transform:none!important}}";
+const adminStyleTerminators = [adminStyleTerminator, previousAdminStyleTerminator];
 
 function adminStyleBlocks(source) {
   const blocks = [];
@@ -1600,11 +1941,14 @@ function adminStyleBlocks(source) {
   while (true) {
     const start = source.indexOf(adminStyleMarker, cursor);
     if (start < 0) return blocks;
-    const terminator = source.indexOf(adminStyleTerminator, start);
-    if (terminator < 0) {
+    const terminatorMatch = adminStyleTerminators
+      .map((value) => ({ value, index: source.indexOf(value, start) }))
+      .filter(({ index }) => index >= 0)
+      .sort((left, right) => left.index - right.index)[0];
+    if (!terminatorMatch) {
       throw new Error("Found an unterminated account menu/admin dashboard CSS block.");
     }
-    const end = terminator + adminStyleTerminator.length;
+    const end = terminatorMatch.index + terminatorMatch.value.length;
     blocks.push({ start, end });
     cursor = end;
   }
@@ -1641,6 +1985,16 @@ const idempotencyMarkers = new Map([
     "__jsTimer=window.setInterval(__jsPoll,5000)",
   ],
   ["fix session-length copy in settings", "settings-account-moved"],
+  // The member-management patches inject inside these three replacements, so their
+  // full `to` strings are no longer contiguous once applied. Match a stable inner
+  // marker instead to keep them idempotent.
+  ["load protected admin recommendation stats", "__jsLoadAdmin=async()=>"],
+  ["render the protected recommendation analytics view", 'className:"admin-table-card"'],
+  ["add admin member-management handlers", "__jsManageMsg=__jsC=>"],
+  [
+    "activate admin loading and close the account menu outside",
+    'if(c!=="Admin"||!__jsIsAdmin||__jsAdminStats||__jsAdminBusy)return',
+  ],
 ]);
 
 for (const { name, from, to, target } of patches) {
@@ -1670,6 +2024,7 @@ if (
 }
 
 for (const [target, path] of Object.entries(targetPaths)) {
+  if (target === "css") sources[target] = `${sources[target].trimEnd()}\n`;
   await writeFile(path, sources[target]);
 }
 
