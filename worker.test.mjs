@@ -349,6 +349,7 @@ test("a stored region splits back into the parts the location selects need", () 
     state: "Georgia",
     country: "",
   });
+  assert.deepEqual(parseRegions("Oakland"), { city: "Oakland", state: "", country: "" });
   assert.deepEqual(parseRegions(""), { city: "", state: "", country: "" });
   assert.deepEqual(parseRegions(undefined), { city: "", state: "", country: "" });
 });
@@ -358,6 +359,49 @@ test("a multi-city region string restores its first city for legacy controls", (
     parseRegions("Oakland, California, United States; Austin, Texas, United States"),
     { city: "Oakland", state: "California", country: "United States" },
   );
+});
+
+test("broad preferred locations restore without becoming phantom cities", () => {
+  for (const country of ["Romania", "European Union", "Remote"]) {
+    assert.deepEqual(parseRegions(`${country}; Oakland, California, United States`), {
+      city: "", state: "", country,
+    });
+  }
+  assert.deepEqual(parseRegions("Cluj, Romania"), { city: "", state: "Cluj", country: "Romania" });
+  assert.deepEqual(parseRegions("California, United States"), { city: "", state: "California", country: "United States" });
+});
+
+test("candidate properties retain mixed preferred location scopes", () => {
+  const regions = "Romania; Cluj, Romania; European Union; Bucharest, Bucharest, Romania";
+  const properties = candidateProps({ regions });
+  assert.equal(plainText(properties.Regions), regions);
+  assert.deepEqual(parseRegions(plainText(properties.Regions)), { city: "", state: "", country: "Romania" });
+});
+
+test("Remote location forces remote work for new and partial preference saves", () => {
+  const existing = { regions: "Romania; Remote", notes: "Keywords: platform\nWork mode: hybrid" };
+  for (const payload of [
+    { regions: "Romania; Remote", remote: "No", work_modes: ["onsite", "hybrid"] },
+    { work_modes: ["onsite", "hybrid"], remote: "No" },
+    { frequency: "Daily" },
+  ]) {
+    const properties = candidateProps(payload, existing);
+    assert.deepEqual(properties["Remote OK"], { select: { name: "Yes" } });
+    assert.match(plainText(properties.Notes), /^Work modes: remote$/m);
+    assert.doesNotMatch(plainText(properties.Notes), /^Work mode:/m);
+    assert.match(plainText(properties.Notes), /Keywords: platform/);
+  }
+});
+
+test("removing Remote allows office arrangements and does not match remote city names", () => {
+  for (const regions of ["Romania", "Remote, Oregon, United States", ""]) {
+    const properties = candidateProps(
+      { regions, work_modes: ["hybrid"], remote: "No" },
+      { regions: "Remote", notes: "Work modes: remote" },
+    );
+    assert.match(plainText(properties.Notes), /^Work modes: hybrid$/m);
+    assert.deepEqual(properties["Remote OK"], { select: { name: "No" } });
+  }
 });
 
 test("notes parse into labelled entries and tolerate values containing colons", () => {

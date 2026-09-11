@@ -1,3 +1,4 @@
+import { LOCATION_ADDITIONS } from "./location-catalog.mjs";
 import { readFile, writeFile } from "node:fs/promises";
 
 const bundlePath = new URL("./assets/index-BdD4MZod.js", import.meta.url);
@@ -6,6 +7,12 @@ const locationPreferencesPath = new URL("./location-preferences.mjs", import.met
 const parserPath = new URL("./resume-parser.source.js", import.meta.url);
 const readyPath = new URL("./ready-flow.source.js", import.meta.url);
 let bundle = await readFile(bundlePath, "utf8");
+// Replace the catalog by explicit boundaries so repeated builds remain identical.
+const catalogStart = bundle.indexOf("g1={");
+const catalogEnd = bundle.indexOf(",gP=", catalogStart);
+if (catalogStart < 0 || catalogEnd < 0) throw new Error("Could not locate the location catalog.");
+const originalCatalog = (await import("node:vm")).runInNewContext(`(${bundle.slice(catalogStart + 3, catalogEnd)})`);
+bundle = bundle.slice(0, catalogStart) + "g1=" + JSON.stringify({ ...originalCatalog, ...LOCATION_ADDITIONS }) + bundle.slice(catalogEnd);
 const intake = await readFile(sourcePath, "utf8");
 const locationPreferences = (await readFile(locationPreferencesPath, "utf8")).replace(/^export\s+/gm, "");
 const parser = await readFile(parserPath, "utf8");
@@ -176,9 +183,6 @@ if (bundle.includes(standardShellClass)) {
 // replacements cover the dashboard, authentication, onboarding, and feedback
 // surfaces that live outside the maintainable intake component below.
 const motionReplacements = [
-  ['{type:"spring",stiffness:400,damping:28}', '{type:"spring",stiffness:420,damping:32}'],
-  ['{type:"spring",stiffness:180,damping:24}', '{type:"spring",stiffness:320,damping:34}'],
-  ['{type:"spring",stiffness:300,damping:15}', '{type:"spring",stiffness:360,damping:24}'],
   ['{opacity:0,y:8}', '{opacity:0,y:4}'],
   ['{opacity:0,y:10}', '{opacity:0,y:4}'],
   ['{opacity:0,y:-6}', '{opacity:0,y:-3}'],
@@ -266,6 +270,11 @@ if (intakeStart === undefined || end < 0) {
 
 const intakeBlock = `${locationPreferences.trim()}\n${intake.trim()}`;
 bundle = `${bundle.slice(0, intakeStart)}${intakeBlock}${bundle.slice(end)}`;
+
+// Summaries and older callers must preserve country-wide and multi-location choices too.
+bundle = bundle.replaceAll('regions:`${l.city}, ${l.state}, ${l.country}`', 'regions:serializePreferredLocations(normalizePreferredLocations(l))');
+bundle = bundle.replaceAll('children:[l.city,", ",l.state,", ",l.country,l.remote?" · Remote first":""]', 'children:[serializePreferredLocations(normalizePreferredLocations(l)),l.remote?" · Remote first":""]');
+bundle = bundle.replaceAll('children:[l.city,", ",l.state,", ",l.country]', 'children:[serializePreferredLocations(normalizePreferredLocations(l))]');
 
 const readyStart = bundle.indexOf("function AP(");
 const readyEnd = bundle.indexOf("dk.createRoot(", readyStart);

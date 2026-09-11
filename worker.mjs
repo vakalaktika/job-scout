@@ -1,3 +1,4 @@
+import { isPreferredCountry } from "./location-preferences.mjs";
 import { isLinkedInUrl, linkedInJobId, resolveApplyTarget } from "./linkedin-apply-url.mjs";
 import { isPublicHttpUrl } from "./public-url.mjs";
 
@@ -94,13 +95,17 @@ export const splitTerms = (value) =>
 const noteValue = (notes, label) =>
   String(notes ?? "").match(new RegExp(`^${label}:\\s*(.+)$`, "im"))?.[1]?.trim() ?? "";
 
-// Regions stores one or more semicolon-separated "City, State, Country" values.
-// Older controls still need the first city split into its three select values.
+// Compact entries use Country, State/Country, or City/State/Country. Legacy
+// two-part City/State values remain supported until every member has re-saved.
 export const parseRegions = (value) => {
-  const primaryRegion = String(value ?? "").split(";")[0];
+  const primaryRegion = String(value ?? "").split(/;|\n/)[0];
   const parts = primaryRegion
     .split(",")
     .map((part) => part.trim());
+  if (parts.length === 1 && isPreferredCountry(parts[0])) return { city: "", state: "", country: parts[0] || "" };
+  if (parts.length === 2 && isPreferredCountry(parts[1])) {
+    return { city: "", state: parts[0], country: parts[1] };
+  }
   return { city: parts[0] || "", state: parts[1] || "", country: parts[2] || "" };
 };
 
@@ -173,6 +178,14 @@ export function candidateProps(payload, existing = null) {
   } else if (hasField(payload, "work_mode") && ["onsite", "hybrid", "remote"].includes(payload.work_mode)) {
     notes.delete("Work modes");
     notes.set("Work mode", payload.work_mode);
+  }
+  const regions = hasField(payload, "regions") ? join(payload.regions) : existing?.regions;
+  const remoteLocation = String(regions ?? "").split(/;|\n/)
+    .some((region) => region.trim().toLowerCase() === "remote");
+  if (remoteLocation) {
+    notes.delete("Work mode");
+    notes.set("Work modes", "remote");
+    properties["Remote OK"] = select("Yes");
   }
   const after = serializeNotes(notes);
   if (after !== before) properties.Notes = richText(after);

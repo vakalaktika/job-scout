@@ -42,8 +42,14 @@ test("an invited member sets up, reviews, and lands on their job list", async ({
   await page.getByRole("combobox", { name: /^Country/ }).selectOption("United States");
   await page.getByRole("combobox", { name: /State \/ region/ }).selectOption("California");
   await page.getByRole("combobox", { name: /^City/ }).selectOption("Oakland");
-  await page.getByRole("button", { name: "Add city" }).click();
+  await page.getByRole("button", { name: "Add location" }).click();
   await expect(page.locator(".preferred-location-list").getByText("Oakland")).toBeVisible();
+  for (const country of ["Romania", "European Union", "Remote"]) {
+    await page.getByRole("combobox", { name: /^Country/ }).selectOption(country);
+    await page.getByRole("button", { name: "Add location" }).click();
+  }
+  await expect(page.getByRole("checkbox", { name: /On-site/ })).toBeDisabled();
+  await expect(page.getByRole("checkbox", { name: /Remote only/ })).toBeChecked();
   await page.getByRole("button", { name: /^Continue/ }).click();
 
   // Step 4 — filters, which are optional and say so.
@@ -69,7 +75,8 @@ test("an invited member sets up, reviews, and lands on their job list", async ({
   const setup = state.requests.filter((entry) => entry.action === "preferences").at(-1);
   expect(setup.payload.name).toBe("Robin Fields");
   expect(setup.payload.frequency).toBe("Weekly");
-  expect(setup.payload.regions).toContain("Oakland");
+  expect(setup.payload.regions).toBe("Oakland, California, United States; Romania; European Union; Remote");
+  expect(setup.payload.work_modes).toEqual(["remote"]);
   expect(setup.payload.resume_text).toContain("Robin Fields");
 });
 

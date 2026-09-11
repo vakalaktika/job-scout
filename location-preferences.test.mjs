@@ -91,3 +91,7 @@ test("Remote location overrides conflicting saved work arrangements", () => {
   }
   assert.deepEqual(normalizeWorkModes({ ...remote, workMode: "onsite" }), ["remote"]);
 });
+
+test("legacy city-only and city/state strings are not reinterpreted as broad destinations", () => {
+  assert.deepEqual(parsePreferredLocations("Atlanta, Georgia; Oakland"), []);
+});

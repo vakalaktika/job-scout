@@ -54,9 +54,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
       }),
     });
 
-  // Location is chosen, never assumed. Picking a country clears the state and city
-  // below it rather than jumping to whichever happened to be listed first, so a
-  // half-made choice reads as unfinished instead of as a real place.
+  // Picking a country starts a country-wide search; state and city optionally narrow it.
   const __jsPickLocation = (re) => {
     F("");
     __jsSetLocationStatus("");
@@ -64,38 +62,38 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     __jsSetDraftLocation((oe) => ({ ...oe, ...re }));
   };
   const __jsPlaceholder = (re) => Y.jsx("option", { value: "", disabled: true, children: re }, "__jsPlaceholder");
-  const __jsLocationError = "Add at least one city your search should cover.";
-  const __jsLocationMissing = (re) => {
-    const oe = Array.isArray(re.preferredLocations)
-      ? re.preferredLocations.some((ne) => ne && ne.country && ne.state && ne.city)
-      : false;
-    return !oe && (!re.country || !re.state || !re.city);
-  };
+  const __jsLocationError = "Add at least one location your search should cover.";
+  const __jsLocationMissing = (re) => normalizePreferredLocations(re).length === 0;
   const __jsWriteLocations = (re) => {
     const oe = re[0] || { country: "", state: "", city: "" };
     __jsSetLocations(re);
-    e((ne) => ({ ...ne, preferredLocations: re, country: oe.country, state: oe.state, city: oe.city }));
+    e((ne) => {
+      const next = { ...ne, preferredLocations: re, country: oe.country, state: oe.state, city: oe.city };
+      const workModes = normalizeWorkModes(next);
+      return { ...next, workModes, workMode: workModes[0], remote: workModes.includes("remote") };
+    });
   };
   const __jsAddLocation = () => {
-    if (!__jsDraftLocation.country || !__jsDraftLocation.state || !__jsDraftLocation.city) {
-      F("Choose a country, state, and city before adding it.");
+    if (!__jsDraftLocation.country) {
+      F("Choose a country, region, or Remote before adding a location.");
       return;
     }
     const re = addPreferredLocation(__jsLocations, __jsDraftLocation);
     if (re.length === __jsLocations.length) {
-      F(__jsLocations.length >= 5 ? "You can add up to five preferred cities." : "That city is already in your preferred locations.");
+      F(__jsLocations.length >= 5 ? "You can add up to five preferred locations." : "That location is already in your preferred locations.");
       return;
     }
     __jsWriteLocations(re);
     __jsSetDraftLocation({ country: "", state: "", city: "" });
-    __jsSetLocationStatus(`${re[re.length - 1].city} added to preferred locations.`);
+    __jsSetLocationStatus(`${formatPreferredLocation(re[re.length - 1])} added to preferred locations.`);
   };
   const __jsRemoveLocation = (re) => {
     const oe = removePreferredLocation(__jsLocations, re);
     __jsWriteLocations(oe);
-    __jsSetLocationStatus(`${re.city} removed from preferred locations.`);
+    __jsSetLocationStatus(`${formatPreferredLocation(re)} removed from preferred locations.`);
     requestAnimationFrame(() => document.querySelector(".add-location-button")?.focus());
   };
+  const __jsRemoteLocation = hasRemoteLocation(l);
   const __jsWorkModes = normalizeWorkModes(l);
   const __jsWorkModeOptions = [
     { id: "onsite", label: "On-site", copy: "At the workplace" },
@@ -103,6 +101,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
     { id: "remote", label: "Remote only", copy: "No office requirement" },
   ];
   const __jsToggleWorkMode = (re) => {
+    if (__jsRemoteLocation) return;
     F("");
     __jsSetTouched((oe) => (oe.workModes ? oe : { ...oe, workModes: true }));
     const oe = toggleWorkMode(__jsWorkModes, re);
@@ -590,11 +589,11 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
             children: [
               Y.jsxs("legend", {
                 children: [
-                  Y.jsx("span", { children: "Preferred cities" }),
+                  Y.jsx("span", { children: "Preferred locations" }),
                   Y.jsxs("small", { children: [__jsLocations.length, " of 5 added"] }),
                 ],
               }),
-              Y.jsx("p", { className: "location-field-help", children: "Add every city you would genuinely consider. Your scout will search across all of them." }),
+              Y.jsx("p", { className: "location-field-help", children: "Add a city, state, country, or the European Union. Leave state and city open to search the whole area, or add Remote for remote-only roles." }),
               Y.jsx(Bc, {
                 mode: "popLayout",
                 initial: false,
@@ -612,14 +611,14 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                           children: [
                             Y.jsxs("span", {
                               children: [
-                                Y.jsx("strong", { children: re.city }),
-                                Y.jsxs("small", { children: [re.state, ", ", re.country, oe === 0 ? " · Primary" : ""] }),
+                                Y.jsx("strong", { children: re.city || re.state || re.country }),
+                                Y.jsxs("small", { children: [[re.city ? re.state : "", re.state ? re.country : ""].filter(Boolean).join(", ") || (re.country === "Remote" ? "Remote-only roles" : "Entire area"), oe === 0 ? " · Primary" : ""] }),
                               ],
                             }),
                             Y.jsx(Ut.button, {
                               type: "button",
                               onClick: () => __jsRemoveLocation(re),
-                              "aria-label": `Remove ${re.city}, ${re.state}`,
+                              "aria-label": `Remove ${formatPreferredLocation(re)}`,
                               whileTap: s ? undefined : { scale: 0.97 },
                               transition: Tr,
                               children: "Remove",
@@ -634,7 +633,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                       animate: { opacity: 1 },
                       exit: { opacity: 0 },
                       transition: Tr,
-                      children: "No cities added yet. Use the fields below to add your first.",
+                      children: "No locations added yet. Use the fields below to add your first.",
                     }),
               }),
               Y.jsxs("div", {
@@ -645,11 +644,11 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                     children: [
                       Y.jsxs("label", {
                         children: [
-                          Y.jsx("span", { children: "Country" }),
+                          Y.jsx("span", { children: "Country / region" }),
                           Y.jsx("select", {
                             value: __jsDraftLocation.country,
                             onChange: (re) => __jsPickLocation({ country: re.target.value, state: "", city: "" }),
-                            children: [__jsPlaceholder("Select a country"), ...Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re))],
+                            children: [__jsPlaceholder("Select a country, region, or Remote"), ...Object.keys(g1).map((re) => Y.jsx("option", { children: re }, re))],
                           }),
                         ],
                       }),
@@ -658,9 +657,9 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                           Y.jsx("span", { children: "State / region" }),
                           Y.jsx("select", {
                             value: __jsDraftLocation.state,
-                            disabled: !__jsDraftLocation.country,
+                            disabled: !Object.keys(O).length,
                             onChange: (re) => __jsPickLocation({ state: re.target.value, city: "" }),
-                            children: [__jsPlaceholder(__jsDraftLocation.country ? "Select a state or region" : "Choose a country first"), ...Object.keys(O).map((re) => Y.jsx("option", { children: re }, re))],
+                            children: [Y.jsx("option", { value: "", children: __jsDraftLocation.country ? "All states / regions" : "Choose a country first" }), ...Object.keys(O).map((re) => Y.jsx("option", { children: re }, re))],
                           }),
                         ],
                       }),
@@ -671,7 +670,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                             value: __jsDraftLocation.city,
                             disabled: !__jsDraftLocation.state,
                             onChange: (re) => __jsPickLocation({ city: re.target.value }),
-                            children: [__jsPlaceholder(__jsDraftLocation.state ? "Select a city" : "Choose a state or region first"), ...X.map((re) => Y.jsx("option", { children: re }, re))],
+                            children: [Y.jsx("option", { value: "", children: __jsDraftLocation.state ? "All cities" : "Choose a state or region first" }), ...X.map((re) => Y.jsx("option", { children: re }, re))],
                           }),
                         ],
                       }),
@@ -685,7 +684,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                     whileHover: s || __jsLocations.length >= 5 ? undefined : { y: -2 },
                     whileTap: s || __jsLocations.length >= 5 ? undefined : { scale: 0.97 },
                     transition: Tr,
-                    children: __jsLocations.length >= 5 ? "City limit reached" : "Add city",
+                    children: __jsLocations.length >= 5 ? "Location limit reached" : "Add location",
                   }),
                 ],
               }),
@@ -696,7 +695,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
             className: "wizard-fieldset work-mode-fieldset",
             children: [
               Y.jsx("legend", { children: "Work arrangement" }),
-              Y.jsx("p", { className: "location-field-help", children: "Choose every setup you would consider. Your scout can surface whichever becomes available first." }),
+              Y.jsx("p", { className: "location-field-help", children: __jsRemoteLocation ? "Remote is in your preferred locations, so only remote roles are included. Remove Remote to enable On-site and Hybrid." : "Choose every setup you would consider. Your scout can surface whichever becomes available first." }),
               Y.jsx("div", {
                 className: "work-mode-options",
                 role: "group",
@@ -707,6 +706,7 @@ function TP({ profile: l, onChange: e, inviteCode: t, sessionToken: n, onSubmitt
                     role: "checkbox",
                     "aria-checked": __jsWorkModes.includes(re.id),
                     "data-work-mode": re.id,
+                    disabled: __jsRemoteLocation && re.id !== "remote",
                     className: __jsWorkModes.includes(re.id) ? "selected" : "",
                     onClick: () => __jsToggleWorkMode(re.id),
                     whileTap: s ? undefined : { scale: 0.97 },

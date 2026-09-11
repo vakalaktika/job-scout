@@ -525,6 +525,15 @@ throws instead of being patched blind.
 The cache-busting query string in `index.html` (e.g. `?v=mobile-tab-discovery`) is bumped
 when the bundle changes.
 
+Location editing and onboarding share the same form. `location-catalog.mjs` adds
+Romanian cities grouped by county, the European Union, and Remote to the existing
+country catalog during the intake patch. State and city are optional: saved `Regions`
+entries are separated by semicolons and contain `Country`, `State, Country`, or
+`City, State, Country`. `location-preferences.mjs` owns this serialization and the
+supported-country check that distinguishes broad choices from older incomplete city
+entries. Adding Remote forces remote-only work arrangements in both the form and
+Worker persistence; removing it enables the office controls again.
+
 `patch-dashboard.mjs` covers the dashboard component, which has no source at all — it
 exists only as minified code. Each fix is an exact-string replacement carrying a comment
 explaining why it exists. Every patch is idempotent (re-running reports `skipped`) and
