@@ -1,3 +1,4 @@
+import { normalizePreferredLocations } from "./location-preferences.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -162,10 +163,11 @@ if (locationMissingStart < 0) {
   throw new Error("Could not find the location requirement in the current bundle.");
 }
 const __jsLocationMissing = new Function(
+  "normalizePreferredLocations",
   `${bundle.slice(locationMissingStart, bundle.indexOf("const __jsWriteLocations", locationMissingStart))} return __jsLocationMissing;`,
-)();
+)(normalizePreferredLocations);
 
-test("a location is only complete once country, state, and city are all chosen", () => {
+test("a city or broader destination satisfies the location requirement", () => {
   assert.equal(__jsLocationMissing({ country: "United States", state: "Texas", city: "Austin" }), false);
   assert.equal(
     __jsLocationMissing({
@@ -178,12 +180,16 @@ test("a location is only complete once country, state, and city are all chosen",
   );
 });
 
-test("a half-made location choice is refused", () => {
+test("an empty or malformed location is refused", () => {
   for (const partial of [
     { country: "", state: "", city: "" },
-    { country: "United States", state: "", city: "" },
-    { country: "United States", state: "Texas", city: "" },
+    { country: "", state: "Texas", city: "" },
+    { country: "United States", state: "", city: "Austin" },
   ]) {
     assert.equal(__jsLocationMissing(partial), true, `${JSON.stringify(partial)} should not pass as a location`);
   }
+});
+
+test("country-wide and region-wide selections can continue", () => {
+  for (const location of [{country:"Romania"}, {country:"Romania",state:"Cluj"}, {country:"European Union"}, {country:"Remote"}]) assert.equal(__jsLocationMissing(location), false);
 });

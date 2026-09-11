@@ -8,10 +8,10 @@ const css = await readFile(new URL("./assets/index-uR5-NbPW.css", import.meta.ur
 const index = await readFile(new URL("./index.html", import.meta.url), "utf8");
 
 test("the shipped intake exposes multiple preferred cities", () => {
-  assert.match(bundle, /Preferred cities/);
-  assert.match(bundle, /Add city/);
+  assert.match(bundle, /Preferred locations/);
+  assert.match(bundle, /Add location/);
   assert.match(bundle, /mode: "popLayout"/);
-  assert.match(bundle, /aria-label": `Remove \$\{re\.city\}, \$\{re\.state\}`/);
+  assert.match(bundle, /aria-label": `Remove \$\{formatPreferredLocation\(re\)\}`/);
   assert.match(css, /\.preferred-location-list/);
 });
 

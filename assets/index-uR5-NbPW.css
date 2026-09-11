@@ -161,6 +161,7 @@
 .work-mode-fieldset>legend{margin-bottom:6px}
 .work-mode-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:13px}
 .work-mode-options>button{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:start;gap:9px;min-height:68px;border:1px solid var(--line);border-radius:10px;background:var(--canvas);color:var(--ink);padding:13px;text-align:left}
+.work-mode-options>button:disabled{opacity:.5;cursor:not-allowed}
 .work-mode-options>button.selected{border-color:#b9d1c1;background:var(--green-pale);color:var(--green-deep);box-shadow:inset 0 0 0 1px #d4e3d8}
 .work-mode-options>button>span:last-child{display:flex;min-width:0;flex-direction:column;gap:3px}
 .work-mode-options strong{font-size:13px;line-height:1.3}

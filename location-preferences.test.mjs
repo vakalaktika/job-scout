@@ -63,3 +63,35 @@ test("work arrangements toggle independently but never leave the search with non
   assert.deepEqual(toggleWorkMode(["onsite", "hybrid"], "onsite"), ["hybrid"]);
   assert.deepEqual(toggleWorkMode(["hybrid"], "hybrid"), ["hybrid"]);
 });
+
+const romania = { city: "", state: "", country: "Romania" };
+const cluj = { city: "", state: "Cluj", country: "Romania" };
+const eu = { city: "", state: "", country: "European Union" };
+const remote = { city: "", state: "", country: "Remote" };
+
+test("country, state, EU, and Remote preferences round trip alongside legacy cities", () => {
+  const locations = [oakland, romania, cluj, eu, remote];
+  const stored = "Oakland, California, United States; Romania; Cluj, Romania; European Union; Remote";
+  assert.deepEqual(normalizePreferredLocations({ preferredLocations: locations }), locations);
+  assert.equal(serializePreferredLocations(locations), stored);
+  assert.deepEqual(parsePreferredLocations(stored), locations);
+});
+
+test("broader locations can be added, deduplicated, and removed", () => {
+  assert.deepEqual(addPreferredLocation([], romania), [romania]);
+  assert.deepEqual(addPreferredLocation([romania], { country: " romania " }), [romania]);
+  assert.deepEqual(removePreferredLocation([romania, eu], romania), [eu]);
+  assert.deepEqual(addPreferredLocation([], { city: "Cluj-Napoca", country: "Romania" }), []);
+  assert.deepEqual(addPreferredLocation([], { state: "Cluj" }), []);
+});
+
+test("Remote location overrides conflicting saved work arrangements", () => {
+  for (const workModes of [["onsite"], ["onsite", "hybrid"], ["remote", "hybrid"]]) {
+    assert.deepEqual(normalizeWorkModes({ preferredLocations: [romania, remote], workModes }), ["remote"]);
+  }
+  assert.deepEqual(normalizeWorkModes({ ...remote, workMode: "onsite" }), ["remote"]);
+});
+
+test("legacy city-only and city/state strings are not reinterpreted as broad destinations", () => {
+  assert.deepEqual(parsePreferredLocations("Atlanta, Georgia; Oakland"), []);
+});

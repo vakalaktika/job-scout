@@ -91,7 +91,7 @@ function AP({
                     Y.jsx("span", { children: "Where" }),
                     Y.jsxs("strong", {
                       children: [
-                        __jsReadyLocations.map((location) => location.city).join(", "),
+                        __jsReadyLocations.map(formatPreferredLocation).join(", "),
                         " · ",
                         __jsReadyWorkModeLabel,
                       ],

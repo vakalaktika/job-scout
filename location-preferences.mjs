@@ -1,5 +1,9 @@
 // Preferred location helpers are shared by the readable intake source and its tests.
 const MAX_PREFERRED_LOCATIONS = 5;
+const PREFERRED_COUNTRIES = new Set([
+  "united states", "canada", "mexico", "romania", "european union", "remote",
+]);
+export const isPreferredCountry = (value = "") => PREFERRED_COUNTRIES.has(value.toLowerCase());
 const WORK_MODE_ORDER = ["onsite", "hybrid", "remote"];
 const WORK_MODES = new Set(WORK_MODE_ORDER);
 
@@ -10,7 +14,7 @@ const cleanLocation = (location = {}) => ({
 });
 
 const isCompleteLocation = (location) =>
-  Boolean(location.city && location.state && location.country);
+  Boolean(location.country && (!location.city || location.state));
 
 const locationKey = (location) =>
   [location.city, location.state, location.country].join("|").toLocaleLowerCase();
@@ -50,9 +54,15 @@ export const removePreferredLocation = (locations, candidate) => {
   );
 };
 
+export const formatPreferredLocation = ({ city, state, country }) =>
+  [city, state, country].filter(Boolean).join(", ");
+
+export const hasRemoteLocation = (profile = {}) =>
+  normalizePreferredLocations(profile).some(({ country }) => country.toLowerCase() === "remote");
+
 export const serializePreferredLocations = (locations) =>
   normalizePreferredLocations({ preferredLocations: locations })
-    .map(({ city, state, country }) => `${city}, ${state}, ${country}`)
+    .map(formatPreferredLocation)
     .join("; ");
 
 export const parsePreferredLocations = (value) =>
@@ -60,14 +70,15 @@ export const parsePreferredLocations = (value) =>
     preferredLocations: String(value || "")
       .split(/;|\n/)
       .map((entry) => {
-        const [city = "", state = "", country = ""] = entry
-          .split(",")
-          .map((part) => part.trim());
+        const parts = entry.split(",").map((part) => part.trim());
+        if (parts.length > 3 || (parts.length < 3 && !isPreferredCountry(parts.at(-1)))) return {};
+        const [country = "", state = "", city = ""] = parts.reverse();
         return { city, state, country };
       }),
   });
 
 export const normalizeWorkModes = (profile = {}) => {
+  if (hasRemoteLocation(profile)) return ["remote"];
   const explicit = Array.isArray(profile.workModes)
     ? profile.workModes
     : String(profile.workModes || "")
