@@ -5,39 +5,43 @@ Replaces WebSearch in the Job Scout routine with direct, dated sources. Python 3
 ## Run
 
 ```
-python3 scout.py --roles "senior qa,qa engineer,sdet" --loc "US,EU,Remote" --remote \
-    --max-age 4 --exclude-file /tmp/sent.txt > /tmp/shortlist.json
+python3 scout.py --roles '\b(senior qa|qa engineer|sdet)\b' --exclude-title 'intern|junior' \
+    --loc 'united states|europe|emea|worldwide|anywhere' --remote --max-age 4 \
+    --exclude-file /tmp/sent.txt --watchlist watchlist.json --limit 40 > /tmp/shortlist.json
 ```
 
 | Flag | Meaning |
 |---|---|
-| `--roles` | Comma-separated phrases. A title matches when every word of a phrase is in it. |
-| `--loc` | Comma-separated. `US`, `EU`, `Europe`, `Remote` and plain place names are understood. |
-| `--remote` | Candidate wants remote only: on-site/hybrid postings are dropped. |
-| `--max-age` | Days. Default 4 (blank freshness). `0` = no cutoff (freshness "15+"). |
+| `--roles` | Case-insensitive regex matched against the title. Required. |
+| `--exclude-title` | Regex; matching titles are dropped. |
+| `--loc` | Case-insensitive regex matched against location/region text. A remote posting with no stated region always passes. |
+| `--remote` | Remote-only: drop on-site/hybrid postings. |
+| `--max-age` | Days. Default 4. `0` = no cutoff. The routine uses 60 for "15+". Undated postings are kept (`age_days: null`). |
+| `--keywords` | Comma list of search words for eJobs and BestJobs. Without it those two boards are skipped. |
 | `--exclude-file` | One already-sent URL per line (see `sent_urls.py`). |
-| `--include-undated` | Keep postings with no date (BestJobs). Flagged `date_trusted: false`. |
+| `--watchlist` | Path to `watchlist.json` (default: next to the script). |
 | `--sources` | Subset of `remotive,arbeitnow,remoteok,himalayas,justjoin,landing,ejobs,bestjobs,ats`. |
-| `--no-verify` | Skip the URL check. |
+| `--limit`, `--no-verify` | Cap the shortlist; skip the URL check. |
 | `--check-watchlist` | Report dead/empty slugs in `watchlist.json`, then exit. |
 
-Output: JSON array, newest first. Fields: `title, company, url, location, remote, region, posted, source,
-note, date_trusted, verified, verify_note`. Per-source counts and drop reasons go to stderr.
-A full run takes about 12 s over about 11,000 postings.
+Output: `{"jobs": [...], "sources": {...}}`, jobs newest first. Job fields: `title, company, url, location,
+remote, region, posted, age_days, source, salary, note, date_trusted, verified, verify_note`.
+`sources` maps each source to its posting count or `ERROR ...`. Drop reasons go to stderr.
+A full run takes about 12 s over about 25,000 postings.
 
 ## Reading the output
 
-- `verified: true`: URL loaded and showed no "closed/expired" text. `false` postings are already removed.
-- `verified: null`: could not be checked (403 bot block, timeout). Confirm once with WebFetch before dropping.
-- `date_trusted: false`: Himalayas `pubDate` is a refresh date, BestJobs has no date. Never use these to
-  prove freshness; confirm the date on the page or skip.
+- `verified: true`: URL loaded and showed no "closed/expired" text.
+- `verified: false`, `verify_note: "http 403"`: bot block, not proof of closure. Confirm once with WebFetch.
+  Other dead pages (404, closure text, unreachable) are removed before output.
+- `date_trusted: false`: Himalayas `pubDate` is a refresh date, BestJobs has no date. Confirm the real
+  date on the page before relying on it.
 - `note`: eligibility caveats (for example JustJoin.it "remote" usually means remote within Poland).
 
 ## Files
 
 - `sent_urls.py`: saved Notion Sent Postings query result -> `--exclude-file`.
 - `watchlist.json`: Greenhouse/Lever/Ashby board slugs. Add employers the candidates target.
-- `ROUTINE_PROMPT_PATCH.md`: replacement text for steps B-D of the routine prompt.
 
 ## Known gaps
 
