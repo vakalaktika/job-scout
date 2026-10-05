@@ -2,10 +2,10 @@
 """Job Scout fetcher: dated job postings from direct JSON/HTML sources, no web search.
 
 Usage:
-  python3 scout.py --roles "senior qa,qa engineer" --loc "US,EU,Remote" --remote \
-      --max-age 4 --exclude-file /tmp/sent.txt
+  python3 scout.py --roles '\b(senior qa|qa engineer|sdet)\b' --loc 'united states|europe|worldwide|anywhere' \
+      --remote --max-age 4 --exclude-file /tmp/sent.txt
 
-Prints a JSON array to stdout (newest first). Progress and per-source stats go to stderr.
+Prints {"jobs": [...], "sources": {...}} to stdout (jobs newest first). Progress and per-source stats go to stderr.
 Python 3.8+, standard library only.
 """
 import argparse
@@ -70,6 +70,21 @@ def parse_dt(v):
         return None
 
 
+def fmt_range(lo, hi, cur, per=""):
+    if not (lo or hi):
+        return ""
+    a, b = (int(lo) if lo else None), (int(hi) if hi else None)
+    rng = "%s-%s" % (a, b) if a and b and a != b else str(a or b)
+    return ("%s %s %s" % (rng, cur or "", ("/ " + per) if per else "")).replace("  ", " ").strip()
+
+
+def jj_salary(p):
+    for e in p.get("employmentTypes") or []:
+        if e.get("from") or e.get("to"):
+            return fmt_range(e.get("from"), e.get("to"), (e.get("currency") or "").upper(), e.get("unit") or "")
+    return ""
+
+
 def stale_page(items, args):
     """True when a newest-first page holds nothing inside the freshness window (stop paging)."""
     c = getattr(args, "cutoff", None)
@@ -79,7 +94,7 @@ def stale_page(items, args):
 
 
 def posting(source, title, company, url, location="", remote=False, posted=None, trusted=True,
-            region="", note=""):
+            region="", note="", salary=""):
     return {
         "title": html.unescape(str(title or "")).strip(),
         "company": html.unescape(str(company or "")).strip(),
@@ -90,6 +105,7 @@ def posting(source, title, company, url, location="", remote=False, posted=None,
         "posted": posted.isoformat() if posted else None,
         "source": source,
         "note": note,
+        "salary": salary,
         "date_trusted": bool(trusted and posted),
     }
 
@@ -100,7 +116,8 @@ def src_remotive(_a):
     for p in get_json("https://remotive.com/api/remote-jobs")["jobs"]:
         out.append(posting("remotive", p["title"], p["company_name"], p["url"],
                            p.get("candidate_required_location", ""), True,
-                           parse_dt(p.get("publication_date")), region=p.get("candidate_required_location", "")))
+                           parse_dt(p.get("publication_date")), region=p.get("candidate_required_location", ""),
+                           salary=p.get("salary") or ""))
     return out
 
 
@@ -142,7 +159,8 @@ def src_himalayas(a):
         for p in jobs:
             reg = ", ".join(p.get("locationRestrictions") or [])
             page.append(posting("himalayas", p["title"], p.get("companyName"), p.get("applicationLink") or p.get("guid"),
-                                reg, True, parse_dt(p.get("pubDate")), trusted=False, region=reg))
+                                reg, True, parse_dt(p.get("pubDate")), trusted=False, region=reg,
+                                salary=fmt_range(p.get("minSalary"), p.get("maxSalary"), p.get("currency"), p.get("salaryPeriod"))))
         out.extend(page)
         if len(jobs) < 20 or stale_page(page, a):
             break
@@ -163,7 +181,7 @@ def src_justjoin(a):
                                "https://justjoin.it/job-offer/" + p["slug"],
                                loc + ", Poland", p.get("workplaceType") == "remote",
                                parse_dt(p.get("publishedAt")),
-                               note="Polish board: remote usually means remote within Poland; confirm work authorization"))
+                               salary=jj_salary(p), note="Polish board: remote usually means remote within Poland; confirm work authorization"))
         return out
 
     with cf.ThreadPoolExecutor(5) as ex:
@@ -180,14 +198,16 @@ def src_landing(_a):
         for p in jobs:
             locs = ", ".join("%s %s" % (l.get("city", ""), l.get("country_code", "")) for l in p.get("locations") or [])
             out.append(posting("landing.jobs", p["title"], (p["url"].split("/at/")[1].split("/")[0] if "/at/" in p["url"] else ""),
-                               p["url"], locs, p.get("remote"), parse_dt(p.get("published_at"))))
+                               p["url"], locs, p.get("remote"), parse_dt(p.get("published_at")),
+                           salary=fmt_range(p.get("gross_salary_low"), p.get("gross_salary_high"), p.get("currency_code"), "year")))
         if len(jobs) < 50:
             break
     return out
 
 
 def _roles_list(args):
-    return [r.strip() for r in args.roles.split(",") if r.strip()]
+    """Search words for the HTML boards (eJobs, BestJobs): --keywords only; none = skip those boards."""
+    return [r.strip() for r in (args.keywords or "").split(",") if r.strip()]
 
 
 def src_ejobs(args):
@@ -251,8 +271,8 @@ def src_bestjobs(args):
     return out
 
 
-def src_ats(_a):
-    path = os.path.join(HERE, "watchlist.json")
+def src_ats(a):
+    path = getattr(a, "watchlist", None) or os.path.join(HERE, "watchlist.json")
     try:
         wl = json.load(open(path))
     except Exception:
@@ -299,46 +319,18 @@ SOURCES = {
 
 
 # --------------------------------------------------------------------------- filters
-def tokens(s):
-    return re.findall(r"[a-z0-9+#.]+", s.lower())
+def role_match(title, rx):
+    return bool(rx.search(title))
 
 
-def role_match(title, roles):
-    tt = set(tokens(title))
-    tstr = " ".join(tokens(title))
-    for r in roles:
-        rt = tokens(r)
-        if rt and all(t in tt or t in tstr for t in rt):
-            return True
-    return False
-
-
-def loc_terms(loc):
-    return [t.strip().lower() for t in re.split(r"[,/;|]", loc or "") if t.strip()]
-
-
-def geo_hit(t, text):
-    if t in ("us", "usa", "united states", "america", "north america"):
-        return bool(re.search(r"\b(us|usa|united states|north america|americas)\b", text) or
-                    re.search(r"\b(%s)\b" % "|".join(US_STATES), text))
-    if t in ("eu", "europe", "emea", "european union"):
-        return any(re.search(r"\b%s\b" % re.escape(c), text) for c in EU)
-    return bool(re.search(r"\b%s\b" % re.escape(t), text))
-
-
-def loc_match(p, terms, remote_ok):
-    """Remote postings must still fit the candidate's geography when the board states a region."""
-    text = (p["location"] + " " + p["region"]).lower()
-    geo = [t for t in terms if t != "remote"]
-    wants_remote = "remote" in terms or remote_ok
-    if p["remote"]:
-        if not wants_remote:
-            return any(geo_hit(t, text) for t in geo) if geo else False
-        wide = (not text.strip()) or any(w in text for w in WORLDWIDE)
-        return wide or not geo or any(geo_hit(t, text) for t in geo)
-    if not terms:
+def loc_match(p, rx):
+    """--loc is a regex over location text. A remote posting with no stated region fits anywhere."""
+    text = (p["location"] + " " + p["region"]).strip()
+    if not rx:
         return True
-    return any(geo_hit(t, text) for t in geo)
+    if p["remote"] and not text:
+        return True
+    return bool(rx.search(text))
 
 
 def load_excludes(path):
@@ -369,10 +361,10 @@ def verify(p):
         body = get(p["url"], timeout=20, headers={"Accept": "text/html,application/json"})
     except urllib.error.HTTPError as e:
         if e.code in (401, 403, 429):
-            return None, "http %d (bot block; confirm once with WebFetch)" % e.code
+            return False, "http %d" % e.code  # bot block, not proof of closure; routine confirms with WebFetch
         return False, "http %d" % e.code
     except Exception as e:
-        return None, "unreachable: %s" % type(e).__name__
+        return False, "unreachable: %s" % type(e).__name__
     # Marker text must come from visible HTML; SPA bundles carry the same phrases inside <script>.
     low = re.sub(r"<(script|style)\b.*?</\1>", " ", body, flags=re.S | re.I).lower()
     for m in DEAD:
@@ -408,25 +400,33 @@ def check_watchlist():
 # --------------------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--check-watchlist", action="store_true", help="report which watchlist.json slugs return jobs, then exit")
-    ap.add_argument("--roles", required=False, default="", help="comma-separated role phrases; every word must appear in the title")
-    ap.add_argument("--loc", default="", help="comma-separated locations; EU, US and Remote are understood")
-    ap.add_argument("--remote", action="store_true", help="candidate wants remote only: drop on-site/hybrid postings")
-    ap.add_argument("--max-age", type=float, default=4, help="days; 0 = no cutoff (candidate freshness '15+')")
+    ap.add_argument("--check-watchlist", action="store_true", help="report dead/empty watchlist slugs, then exit")
+    ap.add_argument("--roles", default="", help="case-insensitive regex matched against the title")
+    ap.add_argument("--exclude-title", default="", help="regex; titles matching it are dropped")
+    ap.add_argument("--loc", default="", help="case-insensitive regex matched against location/region text")
+    ap.add_argument("--remote", action="store_true", help="remote-only: drop on-site/hybrid postings")
+    ap.add_argument("--max-age", type=float, default=4, help="days; 0 = no cutoff (routine uses 60 for '15+')")
+    ap.add_argument("--keywords", default="", help="comma list of search words for eJobs/BestJobs (Romania scopes)")
     ap.add_argument("--exclude-file", help="file with one already-sent URL per line")
-    ap.add_argument("--include-undated", action="store_true", help="keep postings with no date (flagged date_trusted=false)")
+    ap.add_argument("--watchlist", help="path to watchlist.json (default: next to this script)")
+    ap.add_argument("--include-undated", action="store_true", default=True,
+                    help="keep postings with no date (flagged date_trusted=false, age_days=null)")
     ap.add_argument("--sources", default=",".join(SOURCES), help="comma list: " + ",".join(SOURCES))
     ap.add_argument("--limit", type=int, default=40)
     ap.add_argument("--no-verify", action="store_true")
-    ap.add_argument("--stats", action="store_true", help="print per-source counts to stderr")
     args = ap.parse_args()
     if args.check_watchlist:
         return check_watchlist()
     if not args.roles.strip():
         ap.error("--roles is required")
-
+    try:
+        rx_roles = re.compile(args.roles, re.I)
+        rx_ex = re.compile(args.exclude_title, re.I) if args.exclude_title.strip() else None
+        rx_loc = re.compile(args.loc, re.I) if args.loc.strip() else None
+    except re.error as e:
+        ap.error("bad regex: %s" % e)
     args.cutoff = NOW - dt.timedelta(days=args.max_age) if args.max_age > 0 else None
-    roles, terms, excl = _roles_list(args), loc_terms(args.loc), load_excludes(args.exclude_file)
+    excl = load_excludes(args.exclude_file)
     names = [s for s in args.sources.split(",") if s in SOURCES]
 
     allp, stats = [], {}
@@ -439,35 +439,40 @@ def main():
                 stats[n] = len(r)
                 allp.extend(r)
             except Exception as e:
-                stats[n] = "ERR %s" % type(e).__name__
-    kept, drop = [], {"role": 0, "age": 0, "loc": 0, "sent": 0, "dupe": 0}
+                stats[n] = "ERROR %s" % type(e).__name__
+    kept, drop = [], {}
     seen = set()
     cutoff = args.cutoff
+
+    def dropped(why):
+        drop[why] = drop.get(why, 0) + 1
+
     allp.sort(key=lambda p: p["posted"] or "", reverse=True)
     for p in allp:
-        if not p["url"] or not role_match(p["title"], roles):
-            drop["role"] += 1
+        if not p["url"] or not role_match(p["title"], rx_roles) or (rx_ex and rx_ex.search(p["title"])):
+            dropped("role")
             continue
         d = parse_dt(p["posted"])
-        if cutoff and ((d and d < cutoff) or (not d and not args.include_undated)):
-            drop["age"] += 1
+        if cutoff and d and d < cutoff:
+            dropped("age")
             continue
         if args.remote and not p["remote"]:
-            drop["onsite"] = drop.get("onsite", 0) + 1
+            dropped("onsite")
             continue
-        if not loc_match(p, terms, args.remote):
-            drop["loc"] += 1
+        if not loc_match(p, rx_loc):
+            dropped("loc")
             continue
         key = norm_url(p["url"])
         if key in excl:
-            drop["sent"] += 1
+            dropped("sent")
             continue
         # Same role listed once per city (or re-posted) collapses to its newest copy.
-        dkey = (p["company"].lower(), " ".join(tokens(p["title"])))
+        dkey = (p["company"].lower(), re.sub(r"\W+", " ", p["title"].lower()).strip())
         if key in seen or dkey in seen:
-            drop["dupe"] += 1
+            dropped("dupe")
             continue
         seen.update((key, dkey))
+        p["age_days"] = round((NOW - d).total_seconds() / 86400, 1) if d else None
         kept.append(p)
     kept = kept[: args.limit]
 
@@ -477,10 +482,11 @@ def main():
         with cf.ThreadPoolExecutor(8) as ex:
             for p, (ok, note) in zip(kept, ex.map(verify, kept)):
                 p["verified"], p["verify_note"] = ok, note
-        kept = [p for p in kept if p["verified"] is not False]
+        # Clearly dead pages are removed here; a 403 stays so the routine can confirm it by WebFetch.
+        kept = [p for p in kept if p["verified"] or p["verify_note"].startswith("http 403")]
 
     print("scanned %d postings; dropped %s; sources %s" % (len(allp), drop, stats), file=sys.stderr)
-    json.dump(kept, sys.stdout, ensure_ascii=False, indent=1)
+    json.dump({"jobs": kept, "sources": stats}, sys.stdout, ensure_ascii=False, indent=1)
     print()
 
 
