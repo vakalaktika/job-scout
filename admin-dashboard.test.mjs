@@ -363,6 +363,8 @@ test("the shipped dashboard exposes the admin profile export controls", async ()
   assert.match(bundle, /disabled:__jsExportBusy\|\|!__jsSelected\.size\|\|__jsSelected\.size>25/);
   assert.match(bundle, /"Up to 25 per export"/);
   assert.match(bundle, /member_lookup_failed:/);
+  // An un-redeployed Worker answers admin_export with invalid_code; say so.
+  assert.match(bundle, /invalid_code:"The Worker doesn\\u2019t have this action yet/);
   assert.match(stylesheet, /\.admin-bulk-bar\{/);
   assert.match(stylesheet, /\.admin-select-target\{[^}]*min-height:44px/);
   assert.match(stylesheet, /\.admin-bulk-export\{[^}]*min-height:44px/);

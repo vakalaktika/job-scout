@@ -826,6 +826,7 @@ patch(
     'too_many_members:"Choose 25 members or fewer per export.",' +
     'unknown_format:"Choose Markdown or HTML before exporting.",' +
     'member_lookup_failed:"Member records couldn\\u2019t be read just now. Try again in a moment.",' +
+    'invalid_code:"The Worker doesn\\u2019t have this action yet. Deploy worker.mjs, then try again.",' +
     'member_not_found:"That member is no longer available.",',
 );
 
