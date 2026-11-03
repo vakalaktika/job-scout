@@ -140,6 +140,27 @@
               applyManage(payload.op, payload.member_id);
               return respond(buildStats());
             }
+            if (action === "admin_export") {
+              let payload = {};
+              try { payload = JSON.parse(body); } catch {}
+              const ids = Array.isArray(payload.member_ids) ? payload.member_ids : [];
+              const users = ids.map((id) => buildStats().stats.users.find((u) => u.id === id)).filter(Boolean);
+              const html = payload.format === "html";
+              const content = html
+                ? `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Preview export</title></head><body>${users.map((u) => `<article><h1>${u.name}</h1><p>${u.email}</p></article>`).join("")}</body></html>`
+                : users.map((u) => `# ${u.name}\n\n${u.email}\n`).join("\n---\n\n");
+              return respond({
+                ok: true,
+                format: payload.format,
+                mime: html ? "text/html;charset=utf-8" : "text/markdown;charset=utf-8",
+                filename: users.length === 1
+                  ? `job-scout-profile-preview.${html ? "html" : "md"}`
+                  : `job-scout-profiles-${users.length}-members-preview.${html ? "html" : "md"}`,
+                generated_at: new Date().toISOString(),
+                content,
+                members: users.map((u) => ({ id: u.id, name: u.name, narrative: "ready" })),
+              });
+            }
             if (action === "scout_status") return respond(scoutStatusResponse);
             console.warn("[preview] unmocked action:", action, body);
             return respond({ ok: false, error: "not_mocked_in_preview" });
@@ -150,8 +171,8 @@
         };
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-BdD4MZod.js?v=admin-stats-menu"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-uR5-NbPW.css?v=admin-stats-menu">
+    <script type="module" crossorigin src="./assets/index-BdD4MZod.js?v=admin-export-20261103"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-uR5-NbPW.css?v=admin-export-20261103">
   </head>
   <body>
     <div id="root"></div>

@@ -199,6 +199,32 @@ async function handleApi(payload) {
     return [200, { ok: true, stats: state.adminStats }];
   }
 
+  if (action === "admin_export") {
+    if (!state.member?.is_admin) return [403, { ok: false, error: "admin_forbidden" }];
+    const format = String(payload.format || "");
+    if (!["markdown", "html"].includes(format)) return [400, { ok: false, error: "unknown_format" }];
+    const ids = Array.isArray(payload.member_ids) ? payload.member_ids.map(String) : [];
+    if (!ids.length) return [400, { ok: false, error: "members_required" }];
+    const users = ids.map((id) => state.adminStats?.users?.find((user) => user.id === id));
+    const missing = users.findIndex((user) => !user);
+    if (missing >= 0) return [404, { ok: false, error: "member_not_found", member_id: ids[missing] }];
+    const extension = format === "html" ? "html" : "md";
+    const slug = users[0].name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const generatedAt = state.adminStats.generated_at;
+    const day = generatedAt.slice(0, 10);
+    return [200, {
+      ok: true,
+      format,
+      mime: format === "html" ? "text/html;charset=utf-8" : "text/markdown;charset=utf-8",
+      filename: users.length === 1
+        ? `job-scout-profile-${slug}-${day}.${extension}`
+        : `job-scout-profiles-${users.length}-members-${day}.${extension}`,
+      generated_at: generatedAt,
+      content: users.map((user) => `# ${user.name}\n\n${user.email}\n`).join("\n---\n\n"),
+      members: users.map((user) => ({ id: user.id, name: user.name, narrative: state.exportNarrative || "ready" })),
+    }];
+  }
+
   if (action === "run_scout_once") {
     if (!state.firstScout.can_retry && state.firstScout.status !== "available") {
       return [200, { ok: true, first_scout: state.firstScout, already_requested: true }];

@@ -1,6 +1,15 @@
 import { isPreferredCountry } from "./location-preferences.mjs";
 import { isLinkedInUrl, linkedInJobId, resolveApplyTarget } from "./linkedin-apply-url.mjs";
 import { isPublicHttpUrl } from "./public-url.mjs";
+import {
+  EXPORT_FORMATS,
+  EXPORT_MEMBER_LIMIT,
+  buildProfileExport,
+  mapWithConcurrency,
+  profileExportFilename,
+} from "./profile-export.mjs";
+import { renderProfileHtml, renderProfileMarkdown } from "./profile-export-render.mjs";
+import { buildNarrativeRequest, parseNarrativeResponse } from "./profile-narrative.mjs";
 
 // ORIGIN is the browser origin for CORS and nothing else. An origin has no path
 // by definition and an Access-Control-Allow-Origin carrying one is invalid, so
@@ -24,6 +33,13 @@ const MAX_POSTING_CHARACTERS = 24000;
 const MAX_RESUME_CHARACTERS = 24000;
 const MIN_POSTING_CHARACTERS = 400;
 const DEFAULT_BRIEF_MODEL = "gpt-5.4-nano";
+// Profile exports write one narrative per member. Three in flight keeps a 25-member
+// export inside the Worker's wall-clock budget without hammering the API; the
+// budget is checked before each call starts so a slow batch degrades to
+// stats-only sections instead of failing the whole file.
+const EXPORT_NARRATIVE_CONCURRENCY = 3;
+const EXPORT_NARRATIVE_BUDGET_MS = 45000;
+const EXPORT_MIME = { markdown: "text/markdown;charset=utf-8", html: "text/html;charset=utf-8" };
 const ROUTINE_ANTHROPIC_VERSION = "2023-06-01";
 const ROUTINE_ANTHROPIC_BETA = "experimental-cc-routine-2026-04-01";
 const FIRST_SCOUT_STATUS = {
@@ -1633,6 +1649,125 @@ async function loadAdminRecommendationStats(env) {
   );
 }
 
+// One scan of the sent-postings table, bucketed by member. loadMemberJobs pages
+// the whole table per call, so an export of several members would otherwise
+// repeat the same scan once per member.
+async function loadSentPostingsByEmail(env) {
+  const pages = await queryDatabasePages(env, SENT_POSTINGS_DB, {
+    sorts: [{ property: "Date sent", direction: "descending" }],
+  });
+  const byEmail = new Map();
+  for (const page of pages) {
+    const job = recommendationStatsJob(page);
+    const key = normalizedEmail(job.candidate_email);
+    if (!key) continue;
+    byEmail.set(key, [...(byEmail.get(key) || []), job]);
+  }
+  return byEmail;
+}
+
+export async function generateProfileNarrative(env, { profile, resumeText }, fetcher = fetch) {
+  if (!env.OPENAI_API_KEY) throw new Error("openai_api_key_missing");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    const response = await fetcher("https://api.openai.com/v1/responses", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+        ...(env.OPENAI_PROJECT ? { "OpenAI-Project": env.OPENAI_PROJECT } : {}),
+      },
+      body: JSON.stringify(
+        buildNarrativeRequest({
+          profile: redactProfileForNarrative(profile),
+          resumeText: redactResumeContactDetails(resumeText),
+          model: env.OPENAI_EXPORT_MODEL || env.OPENAI_BRIEF_MODEL || DEFAULT_BRIEF_MODEL,
+        }),
+      ),
+    });
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 160);
+      throw new Error(`openai_${response.status}:${detail}`);
+    }
+    return parseNarrativeResponse(await response.json());
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+const NARRATIVE_UNAVAILABLE = (reason) => ({ status: "unavailable", reason, text: "" });
+
+// The reason is printed inside the exported file, so it is a fixed code and never
+// the upstream response body (a 401 body can quote the key prefix).
+const narrativeFailureCode = (error) => {
+  const message = String(error?.message || error || "");
+  if (error?.name === "AbortError") return "narrative_timeout";
+  if (message.startsWith("openai_")) return "openai_error";
+  if (/^narrative_[a-z_]+$/.test(message)) return message;
+  return "narrative_failed";
+};
+
+// Free text the member typed (pass notes, steer-away terms) can carry contact
+// details just like a résumé, so it gets the same redaction before leaving.
+const redactProfileForNarrative = (profile) => ({
+  ...profile,
+  match_context: profile.match_context.map(redactResumeContactDetails),
+  preferences: {
+    ...profile.preferences,
+    steer_away_terms: redactResumeContactDetails(profile.preferences.steer_away_terms),
+  },
+});
+
+async function exportNarratives(env, drafts, resumes, wantNarrative) {
+  if (!wantNarrative) return drafts.map(() => NARRATIVE_UNAVAILABLE("narrative_skipped"));
+  if (!env.OPENAI_API_KEY) return drafts.map(() => NARRATIVE_UNAVAILABLE("openai_api_key_missing"));
+  const deadline = Date.now() + EXPORT_NARRATIVE_BUDGET_MS;
+  return mapWithConcurrency(drafts, EXPORT_NARRATIVE_CONCURRENCY, async (profile, index) => {
+    if (Date.now() > deadline) return NARRATIVE_UNAVAILABLE("narrative_deadline");
+    try {
+      const text = await generateProfileNarrative(env, { profile, resumeText: resumes[index] });
+      return { status: "ready", reason: "", text };
+    } catch (error) {
+      console.error("Profile narrative failed", safeBriefError(error));
+      return NARRATIVE_UNAVAILABLE(narrativeFailureCode(error));
+    }
+  });
+}
+
+// Ids are interpolated into Notion paths, so anything outside a page-id
+// alphabet is dropped before it can steer the request elsewhere.
+const MEMBER_ID_PATTERN = /^[\w-]{1,64}$/;
+const MEMBER_ID_INPUT_LIMIT = 200;
+
+// Unlike adminTargetCandidate, a lookup failure here is kept apart from "not a
+// candidate": a Notion 429 on one of twenty parallel reads must not come back as
+// "that member was deleted".
+async function exportTargetCandidate(env, candidateId) {
+  try {
+    const page = await notion(env, `pages/${candidateId}`, "GET");
+    return isCandidatePage(page) ? page : null;
+  } catch (error) {
+    if (/->\s*404\b/.test(String(error?.message || ""))) return null;
+    throw error;
+  }
+}
+
+const uniqueMemberIds = (value) => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  return value
+    .slice(0, MEMBER_ID_INPUT_LIMIT)
+    .map((id) => String(id ?? "").trim())
+    .filter((id) => {
+      const key = normalizedNotionId(id);
+      if (!MEMBER_ID_PATTERN.test(id) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+};
+
 async function ensureMagicProperties(env) {
   await notion(env, `databases/${CAND_DB}`, "PATCH", {
     properties: { "Magic nonce": { rich_text: {} } },
@@ -2188,6 +2323,65 @@ export default {
           }
         }
         return json({ ok: true, stats: await loadAdminRecommendationStats(env) });
+      }
+      if (payload.action === "admin_export") {
+        const candidate = await authenticatedCandidate(env, payload.session_token);
+        if (!candidate) return json({ ok: false, error: "invalid_session" }, 401);
+        if (!(await isAdminCandidate(env, candidate))) {
+          return json({ ok: false, error: "admin_forbidden" }, 403);
+        }
+        const format = String(payload.format || "");
+        if (!EXPORT_FORMATS.includes(format)) return json({ ok: false, error: "unknown_format" }, 400);
+        const memberIds = uniqueMemberIds(payload.member_ids);
+        if (!memberIds.length) return json({ ok: false, error: "members_required" }, 400);
+        if (memberIds.length > EXPORT_MEMBER_LIMIT) {
+          return json({ ok: false, error: "too_many_members", limit: EXPORT_MEMBER_LIMIT }, 400);
+        }
+        // The whole export is atomic: a stale id means the admin's table is out of
+        // date, and a file silently missing one member would be worse than a retry.
+        let pages;
+        try {
+          pages = await mapWithConcurrency(memberIds, 3, (id) => exportTargetCandidate(env, id));
+        } catch (error) {
+          console.error("Unable to read members for export", String(error?.message || error));
+          return json({ ok: false, error: "member_lookup_failed" }, 502);
+        }
+        const missing = pages.findIndex((page) => !page);
+        if (missing >= 0) {
+          return json({ ok: false, error: "member_not_found", member_id: memberIds[missing] }, 404);
+        }
+        const members = pages.map(memberState);
+        const jobsByEmail = await loadSentPostingsByEmail(env);
+        const resumes = await mapWithConcurrency(members, 3, (member) =>
+          loadCandidateResume(env, member.id).catch((error) => {
+            console.error("Unable to load résumé for export", String(error?.message || error));
+            return "";
+          }),
+        );
+        const generatedAt = new Date().toISOString();
+        const drafts = members.map((member, index) =>
+          buildProfileExport({
+            member,
+            jobs: jobsByEmail.get(normalizedEmail(member.email)) || [],
+            resumeText: resumes[index],
+            generatedAt,
+          }),
+        );
+        const narratives = await exportNarratives(env, drafts, resumes, payload.narrative !== false);
+        const exports = drafts.map((draft, index) => ({ ...draft, narrative: narratives[index] }));
+        const content =
+          format === "html"
+            ? renderProfileHtml(exports, { generatedAt })
+            : renderProfileMarkdown(exports, { generatedAt });
+        return json({
+          ok: true,
+          format,
+          mime: EXPORT_MIME[format],
+          filename: profileExportFilename(exports, format, generatedAt),
+          generated_at: generatedAt,
+          content,
+          members: exports.map(({ id, name, narrative }) => ({ id, name, narrative: narrative.status })),
+        });
       }
       if (payload.action === "scout_status") {
         const candidate = await authenticatedCandidate(env, payload.session_token);
