@@ -45,8 +45,10 @@ test("new interaction motion stays transform and opacity based", () => {
 // query string is the only thing telling a browser it has an old copy. It has to
 // move with every release, and both assets have to move together.
 test("the page cache key changes with the admin dashboard bundle", () => {
-  assert.match(index, /index-BdD4MZod\.js\?v=admin-stats-menu/);
-  assert.match(index, /index-uR5-NbPW\.css\?v=admin-stats-menu/);
+  const [, scriptKey] = index.match(/index-BdD4MZod\.js\?v=([\w-]+)/) || [];
+  const [, styleKey] = index.match(/index-uR5-NbPW\.css\?v=([\w-]+)/) || [];
+  assert.equal(scriptKey, "admin-export-20261103");
+  assert.equal(styleKey, scriptKey);
 });
 
 // The magic link is single-use, so two consumers race to spend it and the loser

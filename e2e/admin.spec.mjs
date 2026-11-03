@@ -168,3 +168,67 @@ test("the destructive confirmation traps focus, closes with Escape, and deletes 
     payload: expect.objectContaining({ op: "delete", member_id: "cand-member" }),
   }));
 });
+
+test("selected members export as one Markdown file and the header checkbox mirrors the selection", async ({ page, request }) => {
+  const current = await workerState(request);
+  await resetWorker(request, {
+    member: { ...current.member, id: "cand-admin", is_admin: true },
+    adminStats,
+    exportNarrative: "unavailable",
+  });
+  await openDashboard(page);
+  await page.getByRole("button", { name: /^Admin$/ }).click();
+
+  const exportButton = page.getByRole("button", { name: /^Export selected/ });
+  await expect(exportButton).toBeDisabled();
+  const selectAll = page.getByRole("checkbox", { name: "Select all members" });
+
+  await page.getByRole("checkbox", { name: "Select Jordan Lee" }).check();
+  await page.getByRole("checkbox", { name: "Select Taylor Green" }).check();
+  await expect(selectAll).toHaveJSProperty("indeterminate", true);
+  await expect(page.getByText("2 selected")).toBeVisible();
+  await page.getByRole("combobox", { name: "Format" }).selectOption("markdown");
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Export selected (2)" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("job-scout-profiles-2-members-2026-08-28.md");
+  await expect(page.getByRole("status").filter({ hasText: "Exported 2 profiles. AI summary unavailable for 2." })).toBeVisible();
+
+  const state = await workerState(request);
+  expect(state.requests).toContainEqual(expect.objectContaining({
+    action: "admin_export",
+    payload: expect.objectContaining({ member_ids: ["cand-member", "cand-new"], format: "markdown" }),
+  }));
+
+  await selectAll.check();
+  await expect(page.getByText("3 selected")).toBeVisible();
+  await selectAll.uncheck();
+  await expect(exportButton).toBeDisabled();
+});
+
+test("the row menu exports one member as HTML and reports a failed export", async ({ page, request }) => {
+  const current = await workerState(request);
+  await resetWorker(request, {
+    member: { ...current.member, id: "cand-admin", is_admin: true },
+    adminStats,
+  });
+  await openDashboard(page);
+  await page.getByRole("button", { name: /^Admin$/ }).click();
+
+  const trigger = page.getByRole("button", { name: "Manage Jordan Lee" });
+  await trigger.click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("menuitem", { name: "Export profile" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("job-scout-profile-jordan-lee-2026-08-28.html");
+  await expect(trigger).toBeFocused();
+  await expect(page.getByRole("status").filter({ hasText: "Exported 1 profile." })).toBeVisible();
+
+  await request.post("/__test/state", { data: { failures: { admin_export: { status: 500, error: "server_error" } } } });
+  await trigger.click();
+  await page.getByRole("menuitem", { name: "Export profile" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "That action didn’t go through. Try again." })).toBeVisible();
+});

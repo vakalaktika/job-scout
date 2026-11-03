@@ -346,6 +346,10 @@ steer-away rules applied. In the dashboard the member can:
 .
 ├── worker.mjs              # Cloudflare Worker — the entire backend API
 ├── worker.test.mjs         # node:test suite for the Worker's pure logic (no network)
+├── profile-export.mjs      # Recruiter profile export: data shaping and saved-vs-passed stats
+├── profile-export-render.mjs # Markdown and self-contained HTML renderers for the export
+├── profile-narrative.mjs   # Request/response contract for the export's model-written summary
+├── admin-export.test.mjs   # node:test suite for the admin_export action against stubbed Notion
 ├── dashboard-helpers.test.mjs  # node:test suite for the helpers patched into the bundle
 ├── first-scout-ui.test.mjs # shipped CTA, polling, motion, and reduced-motion contract
 ├── resume-parser.test.mjs  # node:test suite for the resume parser and its shipped artifact
@@ -395,6 +399,9 @@ to the GitHub Pages origin. Every request is a JSON body with an `action` (and e
 | `job_application` | session token | Set the posting's application status to one of `Applied`, `Interviewing`, `Offer`, `Rejected`, `No response` (ownership-checked by email). An empty status clears the tracking. `Applied at` is stamped on the first move into a status and preserved through later ones. |
 | `job_brief` | session token | Force brief enrichment for a single posting the member owns and return the updated public job. |
 | `magic_request` | email | Send a one-time sign-in link to the email on a candidate's profile. Always returns `{ ok: true }` regardless of whether the email matches, so it can't be used to probe which emails have accounts. |
+| `admin_stats` | session token with Admin | Return all-time delivery and response counts per member for the Admin tab. |
+| `admin_manage` | session token with Admin | Pause, resume, revoke, delete, or toggle admin on one member (`op`, `member_id`). Self-destructive ops are refused. |
+| `admin_export` | session token with Admin | Render a recruiter-facing profile for `member_ids[]` (up to 25) as one `markdown` or `html` file (`format`). Returns `{ filename, mime, content, members[] }`. The short model-written summary is best-effort: when OpenAI is unconfigured, slow, or fails, that section reads "AI summary unavailable." and the export still succeeds. Pass `narrative: false` to skip it. |
 | `magic_consume` | magic token | Exchange a valid, unexpired, unconsumed magic token for a full member session. The app calls this on load when the URL carries `?login=`, strips the token from the address bar first, and falls through to the invite gate if the link has expired or was already used. |
 
 ### Authentication
@@ -742,11 +749,24 @@ that code's linked candidate the Admin tab, untick it to remove access. A revoke
 never admin regardless of the checkbox. The check runs on every authorization and fails
 closed, so a candidate with no Admin-ticked, non-revoked code sees no Admin tab.
 
+From the Admin tab an admin can export a recruiter-facing profile for one member (row
+menu → **Export profile**) or several (tick the rows → **Export selected**) as Markdown or
+as a self-contained HTML page that prints cleanly to PDF. The file carries the member's
+contact details, every preference and filter they set (roles, keywords, seniority,
+locations, work modes, pay range, posting age, travel, steer-away terms), the pass
+reasons they have given, their raw notes, the résumé text stored on their candidate
+page, a saved-versus-passed breakdown (counts, top companies, domains, locations,
+workplace mix, salary ranges, pass-reason tally, and both job lists), and a short
+model-written summary of what they are looking for. Several members go into one file
+with a table of contents and a page break per member. Exports contain personal data by
+design; the Worker never logs their content.
+
 Non-secret Worker vars (in `wrangler.jsonc`, overridable):
 
 | Var | Default | Purpose |
 |---|---|---|
 | `OPENAI_BRIEF_MODEL` | `gpt-5.4-nano` | model used for brief enrichment |
+| `OPENAI_EXPORT_MODEL` | _(unset → `OPENAI_BRIEF_MODEL`)_ | model used for the profile-export summary; a missing `OPENAI_API_KEY` only removes that summary, never the export |
 | `BRIEF_ENRICH_LIMIT` | `4` | max briefs enriched per session request (clamped 1–6) |
 | `FIRST_SCOUT_ROUTINE_ID` | `trig_01LZtNUf7LVFzw3C2Fyy9QEw` | dispatcher routine fired by the one-time gate |
 | `OPENAI_PROJECT` | _(unset)_ | optional `OpenAI-Project` header |

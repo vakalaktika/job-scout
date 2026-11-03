@@ -801,6 +801,135 @@ patch(
 );
 
 // ---------------------------------------------------------------------------
+// Recruiter profile export. An admin ticks one or more members (or picks
+// "Export profile" from a row menu) and gets a single Markdown or HTML file
+// rendered by the Worker's admin_export action. Every patch below anchors on
+// text the member-management patches leave behind, so none of their constants
+// need to change and the shipped bundle stays patchable in place.
+// ---------------------------------------------------------------------------
+patch(
+  "add admin profile-export state",
+  '[__jsManageError,__jsSetManageError]=W.useState(""),',
+  '[__jsManageError,__jsSetManageError]=W.useState(""),' +
+    "[__jsSelected,__jsSetSelected]=W.useState(()=>new Set())," +
+    '[__jsExportFormat,__jsSetExportFormat]=W.useState("html"),' +
+    "[__jsExportBusy,__jsSetExportBusy]=W.useState(!1)," +
+    '[__jsExportError,__jsSetExportError]=W.useState(""),' +
+    '[__jsExportNote,__jsSetExportNote]=W.useState(""),' +
+    "__jsSelectAllRef=W.useRef(null),",
+);
+
+patch(
+  "add admin profile-export error messages",
+  'member_not_found:"That member is no longer available.",',
+  'members_required:"Select at least one member to export.",' +
+    'too_many_members:"Choose 25 members or fewer per export.",' +
+    'unknown_format:"Choose Markdown or HTML before exporting.",' +
+    'member_lookup_failed:"Member records couldn\\u2019t be read just now. Try again in a moment.",' +
+    'member_not_found:"That member is no longer available.",',
+);
+
+const exportHandlers =
+  "__jsToggleSelected=__jsId=>__jsSetSelected(__jsS=>{const __jsN=new Set(__jsS);" +
+  "__jsN.has(__jsId)?__jsN.delete(__jsId):__jsN.add(__jsId);return __jsN})," +
+  "__jsToggleAll=()=>__jsSetSelected(__jsS=>__jsAdminStats&&__jsS.size===__jsAdminStats.users.length?" +
+  "new Set():new Set((__jsAdminStats?__jsAdminStats.users:[]).map(__jsU=>__jsU.id)))," +
+  "__jsDownload=(__jsName,__jsText,__jsMime)=>{const __jsHref=URL.createObjectURL(new Blob([__jsText],{type:__jsMime}))," +
+  '__jsA=document.createElement("a");__jsA.href=__jsHref,__jsA.download=__jsName,__jsA.rel="noopener",' +
+  "document.body.appendChild(__jsA),__jsA.click(),__jsA.remove()," +
+  "window.setTimeout(()=>URL.revokeObjectURL(__jsHref),1e3)}," +
+  "__jsExport=async(__jsIds)=>{if(__jsExportBusy||!__jsIds.length)return;" +
+  '__jsSetExportBusy(!0),__jsSetExportError(""),__jsSetExportNote("");try{' +
+  'const __jsR=await fetch(I3,{method:"POST",headers:{"Content-Type":"application/json"},' +
+  'body:JSON.stringify({action:"admin_export",member_ids:__jsIds,format:__jsExportFormat,narrative:!0,session_token:n})}),' +
+  "__jsD=await __jsR.json();" +
+  'if(!__jsR.ok||!__jsD.ok||typeof __jsD.content!=="string")throw new Error(__jsD.error||"admin_export_failed");' +
+  "__jsDownload(__jsD.filename,__jsD.content,__jsD.mime);" +
+  'const __jsM=__jsD.members||[],__jsMissing=__jsM.filter(__jsX=>__jsX.narrative!=="ready").length;' +
+  '__jsSetExportNote(`Exported ${__jsM.length} profile${__jsM.length===1?"":"s"}.${__jsMissing?` AI summary unavailable for ${__jsMissing}.`:""}`)' +
+  "}catch(__jsE){console.error(__jsE),__jsSetExportError(__jsManageMsg(__jsE&&__jsE.message))}" +
+  "finally{__jsSetExportBusy(!1)}},";
+
+patch(
+  "add admin profile-export handlers",
+  'finally{__jsSetManageBusy(""),__jsSetPending(null),__jsCloseRow(__jsOp!=="delete")}},',
+  `finally{__jsSetManageBusy(""),__jsSetPending(null),__jsCloseRow(__jsOp!=="delete")}},${exportHandlers}`,
+);
+
+// Keep the selection honest: drop ids that vanished from a reloaded table and
+// mirror the partial state onto the header checkbox.
+const exportEffects =
+  "W.useEffect(()=>{if(!__jsAdminStats)return;__jsSetSelected(__jsS=>{" +
+  "const __jsIds=new Set(__jsAdminStats.users.map(__jsU=>__jsU.id))," +
+  "__jsN=new Set([...__jsS].filter(__jsId=>__jsIds.has(__jsId)));" +
+  "return __jsN.size===__jsS.size?__jsS:__jsN})},[__jsAdminStats]);" +
+  "W.useEffect(()=>{const __jsBox=__jsSelectAllRef.current;if(!__jsBox)return;" +
+  "const __jsTotal=__jsAdminStats?__jsAdminStats.users.length:0;" +
+  "__jsBox.indeterminate=__jsSelected.size>0&&__jsSelected.size<__jsTotal},[__jsSelected,__jsAdminStats]);";
+
+patch(
+  "prune and mirror the admin export selection",
+  'document.body.style.overflow="hidden";return()=>{document.body.style.overflow=__jsOverflow}},[__jsPending]);',
+  'document.body.style.overflow="hidden";return()=>{document.body.style.overflow=__jsOverflow}},[__jsPending]);' +
+    exportEffects,
+);
+
+patch(
+  "add the admin select-all column header",
+  'Y.jsx("th",{scope:"col",children:"Member"}),',
+  'Y.jsx("th",{scope:"col",className:"admin-select-head",children:' +
+    'Y.jsx("label",{className:"admin-select-target",children:' +
+    'Y.jsx("input",{ref:__jsSelectAllRef,type:"checkbox",className:"admin-select",' +
+    "checked:!!__jsAdminStats.users.length&&__jsSelected.size===__jsAdminStats.users.length," +
+    'onChange:__jsToggleAll,"aria-label":"Select all members"})})}),' +
+    'Y.jsx("th",{scope:"col",children:"Member"}),',
+);
+
+patch(
+  "add the admin row selection cell",
+  'Y.jsxs("tr",{children:[Y.jsx("th",{scope:"row",children:Y.jsxs("div",{className:"admin-member"',
+  'Y.jsxs("tr",{className:__jsSelected.has(__jsU.id)?"is-selected":void 0,children:[' +
+    'Y.jsx("td",{className:"admin-select-cell",children:' +
+    'Y.jsx("label",{className:"admin-select-target",children:' +
+    'Y.jsx("input",{type:"checkbox",className:"admin-select",checked:__jsSelected.has(__jsU.id),' +
+    "onChange:()=>__jsToggleSelected(__jsU.id)," +
+    '"aria-label":`Select ${__jsU.name}`})})}),' +
+    'Y.jsx("th",{scope:"row",children:Y.jsxs("div",{className:"admin-member"',
+);
+
+const exportToolbar =
+  'Y.jsxs("div",{className:"admin-bulk-bar",role:"group","aria-label":"Export selected members",children:[' +
+  'Y.jsx("span",{className:"admin-bulk-count","aria-live":"polite",children:`${__jsSelected.size} selected`}),' +
+  '__jsSelected.size>25?Y.jsx("span",{className:"admin-bulk-limit",role:"status",children:"Up to 25 per export"}):null,' +
+  'Y.jsxs("label",{className:"admin-bulk-format",children:["Format",' +
+  'Y.jsxs("select",{value:__jsExportFormat,onChange:__jsE=>__jsSetExportFormat(__jsE.target.value),' +
+  "disabled:__jsExportBusy,children:[" +
+  'Y.jsx("option",{value:"html",children:"HTML (prints to PDF)"}),' +
+  'Y.jsx("option",{value:"markdown",children:"Markdown"})]})]}),' +
+  'Y.jsx(Ut.button,{type:"button",className:"admin-bulk-export",' +
+  "disabled:__jsExportBusy||!__jsSelected.size||__jsSelected.size>25,onClick:()=>__jsExport([...__jsSelected])," +
+  'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+  'children:__jsExportBusy?"Exporting\\u2026":`Export selected (${__jsSelected.size})`}),' +
+  '__jsExportNote?Y.jsx("p",{className:"admin-bulk-note",role:"status",children:__jsExportNote}):null,' +
+  '__jsExportError?Y.jsx("p",{className:"admin-bulk-error",role:"alert",children:__jsExportError}):null]}),';
+
+patch(
+  "add the admin export toolbar",
+  'Y.jsx("p",{children:`Updated ${__jsAdminDate(__jsAdminStats.generated_at)}`})]}),',
+  'Y.jsx("p",{children:`Updated ${__jsAdminDate(__jsAdminStats.generated_at)}`})]}),' + exportToolbar,
+);
+
+patch(
+  "add the export-profile row-menu item",
+  'children:__jsU.is_admin?"Remove admin":"Make admin"}),',
+  'children:__jsU.is_admin?"Remove admin":"Make admin"}),' +
+    'Y.jsx(Ut.button,{type:"button",role:"menuitem",tabIndex:-1,className:"admin-row-item",' +
+    "disabled:__jsExportBusy,onClick:()=>{__jsCloseRow(!0),__jsExport([__jsU.id])}," +
+    'whileTap:a?void 0:{scale:.97},transition:{type:"spring",stiffness:400,damping:28},' +
+    'children:"Export profile"}),',
+);
+
+// ---------------------------------------------------------------------------
 // One badge row under every title: freshness, workplace, and link status.
 //
 // Four things converge here, so this replacement is the single owner of the
@@ -1859,7 +1988,7 @@ const adminAndAccountStyles =
   ".admin-table-heading h2{margin:5px 0 0;font:600 20px/1.2 Gelasio,Georgia,serif;letter-spacing:-.025em}" +
   ".admin-table-heading>p{margin:0;color:var(--ink-faint);font-size:11px;font-weight:600}" +
   ".admin-table-scroll{overflow-x:auto}" +
-  ".admin-table-card table{width:100%;min-width:700px;border-collapse:collapse;font-size:12px}" +
+  ".admin-table-card table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px}" +
   ".admin-table-card th,.admin-table-card td{padding:14px 11px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}" +
   ".admin-table-card thead th{background:var(--paper-deep);color:var(--ink-faint);font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}" +
   ".admin-table-card th:first-child,.admin-table-card td:first-child{text-align:left}" +
@@ -1914,10 +2043,30 @@ const adminAndAccountStyles =
   ".admin-modal-confirm{border:1px solid #7e4639;background:#7e4639;color:#fff}" +
   ".admin-modal-confirm:hover,.admin-modal-confirm:focus-visible{background:#6c382e}" +
   ".admin-modal-confirm:disabled{opacity:.6;cursor:not-allowed}" +
+  ".admin-select-head,.admin-select-cell{width:1%;padding:0;text-align:center}" +
+  ".admin-table-card th[scope=row],.admin-table-card .admin-select-head+th{text-align:left}" +
+  ".admin-select-target{display:grid;min-width:44px;min-height:44px;place-items:center;cursor:pointer}" +
+  ".admin-select{width:20px;height:20px;margin:0;accent-color:var(--green);cursor:pointer}" +
+  ".admin-select:focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px}" +
+  ".admin-table-card tbody tr.is-selected{background:var(--green-pale)}" +
+  ".admin-bulk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:12px 22px;" +
+  "border-bottom:1px solid var(--line);background:var(--paper-deep)}" +
+  ".admin-bulk-count{color:var(--ink-soft);font-size:12px;font-weight:700}" +
+  ".admin-bulk-limit{color:#6c382e;font-size:12px;font-weight:600}" +
+  ".admin-bulk-format{display:inline-flex;align-items:center;gap:8px;color:var(--ink-soft);font-size:12px;font-weight:600}" +
+  ".admin-bulk-format select{min-height:44px;border:1px solid var(--line);border-radius:9px;background:var(--surface);" +
+  "color:var(--ink);padding:0 10px;font-size:12px;font-weight:600}" +
+  ".admin-bulk-export{min-height:44px;margin-left:auto;border:1px solid var(--green-deep);border-radius:9px;" +
+  "background:var(--green-deep);color:#fff;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer}" +
+  ".admin-bulk-export:hover,.admin-bulk-export:focus-visible{background:var(--green)}" +
+  ".admin-bulk-export:disabled{opacity:.5;cursor:not-allowed}" +
+  ".admin-bulk-note,.admin-bulk-error{flex-basis:100%;margin:0;font-size:12px;font-weight:600}" +
+  ".admin-bulk-note{color:var(--green-deep)}.admin-bulk-error{color:#6c382e}" +
   "@media(max-width:780px){.account-menu{position:fixed;top:58px;right:12px;min-width:210px}" +
   ".admin-heading{align-items:flex-start}.admin-scope{display:none}" +
   ".admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}" +
   ".admin-stat-card{padding:15px}.admin-table-heading{align-items:flex-start;flex-direction:column;padding:18px}" +
+  ".admin-bulk-bar{padding:12px 18px}.admin-bulk-export{margin-left:0;width:100%}" +
   ".admin-state{align-items:flex-start;flex-direction:column}.admin-state.is-error{justify-content:flex-start}}" +
   "@media(max-width:420px){.admin-stat-grid{gap:8px}.admin-stat-card strong{font-size:27px}" +
   ".admin-table-card{margin-right:-2px;margin-left:-2px}}" +
@@ -1991,6 +2140,8 @@ const idempotencyMarkers = new Map([
   ["load protected admin recommendation stats", "__jsLoadAdmin=async()=>"],
   ["render the protected recommendation analytics view", 'className:"admin-table-card"'],
   ["add admin member-management handlers", "__jsManageMsg=__jsC=>"],
+  // The export-profile menu item is inserted inside the actions cell.
+  ["add the admin manage actions cell", 'className:"admin-row-trigger"'],
   [
     "activate admin loading and close the account menu outside",
     'if(c!=="Admin"||!__jsIsAdmin||__jsAdminStats||__jsAdminBusy)return',

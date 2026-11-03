@@ -347,6 +347,27 @@ test("the shipped dashboard exposes the admin member-management controls", async
   assert.match(stylesheet, /\.admin-row-trigger\{[^}]*width:44px;height:44px/);
 });
 
+test("the shipped dashboard exposes the admin profile export controls", async () => {
+  const bundle = await readFile(new URL("./assets/index-BdD4MZod.js", import.meta.url), "utf8");
+  const stylesheet = await readFile(new URL("./assets/index-uR5-NbPW.css", import.meta.url), "utf8");
+
+  assert.match(bundle, /action:"admin_export",member_ids:__jsIds,format:__jsExportFormat,narrative:!0,session_token:n/);
+  assert.match(bundle, /"Export profile"/);
+  assert.match(bundle, /"aria-label":"Select all members"/);
+  assert.match(bundle, /"aria-label":`Select \$\{__jsU\.name\}`/);
+  assert.match(bundle, /__jsExport=async\(/);
+  assert.match(bundle, /URL\.createObjectURL\(new Blob\(/);
+  assert.match(bundle, /className:"admin-bulk-bar",role:"group"/);
+  assert.match(bundle, /__jsBox\.indeterminate=/);
+  assert.match(bundle, /"HTML \(prints to PDF\)"/);
+  assert.match(bundle, /disabled:__jsExportBusy\|\|!__jsSelected\.size\|\|__jsSelected\.size>25/);
+  assert.match(bundle, /"Up to 25 per export"/);
+  assert.match(bundle, /member_lookup_failed:/);
+  assert.match(stylesheet, /\.admin-bulk-bar\{/);
+  assert.match(stylesheet, /\.admin-select-target\{[^}]*min-height:44px/);
+  assert.match(stylesheet, /\.admin-bulk-export\{[^}]*min-height:44px/);
+});
+
 const codePage = ({ id, code, candidateId, status = "Active", admin = false }) => ({
   id,
   properties: {
@@ -648,6 +669,9 @@ test("dashboard patch remains idempotent when applied to the shipped assets", as
 
     const bundle = await readFile(join(tempAssets, "index-BdD4MZod.js"), "utf8");
     assert.equal(bundle.match(/__jsManageMsg=__jsC=>/g)?.length, 1);
+    assert.equal(bundle.match(/__jsExport=async\(/g)?.length, 1);
+    assert.equal(bundle.match(/"Export profile"/g)?.length, 1);
+    assert.equal(bundle.match(/"aria-label":"Select all members"/g)?.length, 1);
   } finally {
     await rm(tempDirectory, { recursive: true, force: true });
   }
