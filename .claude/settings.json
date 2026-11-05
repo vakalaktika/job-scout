@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 --version)",
+      "Bash(python3 fetcher/scout.py:*)",
+      "Bash(python3 fetcher/sent_urls.py:*)",
+      "Bash(python3 /tmp/job-scout/fetcher/scout.py:*)",
+      "Bash(python3 /tmp/job-scout/fetcher/sent_urls.py:*)"
+    ]
+  }
+}

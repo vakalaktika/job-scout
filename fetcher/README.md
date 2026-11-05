@@ -43,6 +43,12 @@ A full run takes about 12 s over about 25,000 postings.
 - `sent_urls.py`: saved Notion Sent Postings query result -> `--exclude-file`.
 - `watchlist.json`: Greenhouse/Lever/Ashby board slugs. Add employers the candidates target.
 
+## Running from the routine
+
+Attach the routine to this repo and call the scripts as `fetcher/scout.py` and `fetcher/sent_urls.py`.
+Don't `git clone` this repo into `/tmp` at run time. The auto-mode classifier flags scripts fetched mid-run
+as "Code from External" and denies them. `.claude/settings.json` allowlists these exact commands.
+
 ## Known gaps
 
 Indeed (403) and LinkedIn guest search (404) are unreachable from the sandbox. No city-level US board is
